@@ -1,0 +1,14 @@
+build/
+build-*/
+sdkconfig
+sdkconfig.old
+managed_components/
+__pycache__/
+*.pyc
+.DS_Store
+device-backups/
+.env
+.env.*
+secrets/
+credentials.json
+credentials.yaml
