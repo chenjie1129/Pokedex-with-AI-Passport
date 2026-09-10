@@ -32,13 +32,16 @@ The bestiary stores:
 
 - Charmander discovery state;
 - capture count and last local place ID;
-- a bounded encounter-ID ledger for idempotency;
+- a 16-entry rolling encounter-ID window for recent-event idempotency;
 - schema version and CRC-32 in its encoded form.
 
 Capture is transactional. The service builds a copy, asks the storage adapter
 to persist that copy, and mutates live state only after persistence succeeds.
 Duplicate encounter IDs return success-equivalent idempotency without writing
-or incrementing the count.
+or incrementing the count. The rolling window does not cap lifetime progress:
+after it fills, each new capture replaces the oldest encounter ID while the
+32-bit capture count continues to increase. Schema v2 keeps the encoded blob at
+156 bytes and migrates valid schema-v1 snapshots during decode.
 
 ### Game loop
 
