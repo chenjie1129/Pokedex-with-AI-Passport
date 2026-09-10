@@ -1,0 +1,50 @@
+{
+  "objective": "Deliver the W1 hardware-independent environment foundation.",
+  "risk_tier": "L3",
+  "claims": [
+    {
+      "id": "privacy",
+      "statement": "Persisted place data contains keyed AP tokens, never raw network identifiers.",
+      "checks": [
+        "SipHash reference-vector and key-isolation tests pass.",
+        "Persistence headers and codec contain no SSID or BSSID fields."
+      ]
+    },
+    {
+      "id": "location",
+      "statement": "Location decisions implement the documented thresholds, confirmation delay, scan semantics, and lock.",
+      "checks": [
+        "Location and fingerprint Host tests pass.",
+        "A new place cannot be committed before a consistent scan after 20 seconds."
+      ]
+    },
+    {
+      "id": "wild",
+      "statement": "Wild rewards cannot settle more than once per 30-minute cooldown, including conservative restart handling.",
+      "checks": [
+        "Wild reward Host tests pass."
+      ]
+    },
+    {
+      "id": "persistence",
+      "statement": "Place catalog encoding is versioned, checksummed, bounded, and rejects ambiguous records.",
+      "checks": [
+        "Codec round-trip, corruption, duplicate ID, and duplicate token tests pass."
+      ]
+    },
+    {
+      "id": "build",
+      "statement": "All W1 Host targets compile cleanly and pass sanitizer-backed tests.",
+      "checks": [
+        "A clean tools/test-host.sh run exits successfully."
+      ]
+    }
+  ],
+  "max_attempts": 2,
+  "non_goals": [
+    "Device Wi-Fi BSP integration",
+    "NVS adapter implementation",
+    "Firmware build and flashing",
+    "Game UI, spawning, capture, and bestiary"
+  ]
+}

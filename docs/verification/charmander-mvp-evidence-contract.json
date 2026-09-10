@@ -1,0 +1,52 @@
+{
+  "objective": "Deliver an acceptance-ready place-to-Charmander capture loop.",
+  "risk_tier": "L2",
+  "claims": [
+    {
+      "id": "domain-loop",
+      "statement": "A confirmed place can start a Charmander encounter, capture it, and open its bestiary record.",
+      "checks": [
+        "city_mvp_scenario exits successfully and reports bestiary_count 1.",
+        "game loop Host tests pass."
+      ]
+    },
+    {
+      "id": "transaction",
+      "statement": "Capture success is visible only after durable persistence and can be retried after storage failure.",
+      "checks": [
+        "Bestiary and game loop storage-failure tests pass.",
+        "Duplicate encounter tests retain capture_count 1."
+      ]
+    },
+    {
+      "id": "capture",
+      "statement": "Capture timing, miss, timeout, and three-attempt escape behavior are deterministic.",
+      "checks": [
+        "Capture engine and game loop boundary tests pass."
+      ]
+    },
+    {
+      "id": "browser-acceptance",
+      "statement": "The local Passport simulator can be clicked through the four requested steps.",
+      "checks": [
+        "Browser interaction reaches bestiary with Charmander captured.",
+        "Reload preserves capture_count 1.",
+        "Browser console contains no errors."
+      ]
+    },
+    {
+      "id": "regression",
+      "statement": "The W1 location and privacy foundation remains healthy.",
+      "checks": [
+        "All sanitizer-backed Host tests pass."
+      ]
+    }
+  ],
+  "max_attempts": 2,
+  "non_goals": [
+    "Bulbasaur and Squirtle playable content",
+    "ESP-IDF firmware build or flashing",
+    "Physical device validation",
+    "Production Pokemon licensing decision"
+  ]
+}

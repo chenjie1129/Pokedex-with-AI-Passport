@@ -440,10 +440,44 @@ The MVP is complete when all five conditions are true:
 5. A person unfamiliar with the project can complete the loop within three
    minutes.
 
+## Development
+
+The W1 hardware-independent domain foundation lives in
+`components/city_domain`. It provides keyed Wi-Fi fingerprinting, place
+classification, the location-mode state machine, versioned place-profile
+encoding, and the Wild Mode reward cooldown.
+
+Run the Host test suite:
+
+```sh
+./tools/test-host.sh
+```
+
+See [W1 Environment Foundation](docs/architecture/w1-environment-foundation.md)
+for data-flow, persistence, and integration contracts.
+
+### Charmander capture MVP
+
+The first playable vertical slice now covers:
+
+1. confirm a place;
+2. encounter Charmander;
+3. throw a ball in a timing window;
+4. persist and open the bestiary entry.
+
+Run the browser acceptance simulator:
+
+```sh
+python3 -m http.server 4173 --directory demo
+```
+
+Then open `http://127.0.0.1:4173`. See
+[Charmander Capture MVP](docs/architecture/charmander-capture-mvp.md) for the
+domain state machine and firmware integration boundary.
+
 ## References
 
 - Original Chinese proposal:
   <https://my.feishu.cn/wiki/XSr5wfrmxiy1bskO2UDcB6lnnxg>
 - Existing foundation:
   <https://github.com/chenjie1129/MayDayFansInTraePassport>
-
