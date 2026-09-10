@@ -1,0 +1,13 @@
+idf_component_register(
+    SRCS
+        "main.c"
+        "assets/charmander_sprite.c"
+    INCLUDE_DIRS
+        "."
+        "assets"
+    REQUIRES
+        bsp
+        city_domain
+        esp_timer
+        nvs_flash
+)

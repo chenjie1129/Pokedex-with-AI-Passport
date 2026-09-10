@@ -1,0 +1,50 @@
+cmake_minimum_required(VERSION 3.16)
+project(city_spirits_host_tests C)
+
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_C_EXTENSIONS OFF)
+
+option(CITY_ENABLE_SANITIZERS "Enable address and undefined sanitizers" OFF)
+
+enable_testing()
+
+add_library(city_domain STATIC
+    ../components/city_domain/src/bestiary_service.c
+    ../components/city_domain/src/capture_engine.c
+    ../components/city_domain/src/game_loop.c
+    ../components/city_domain/src/location_mode.c
+    ../components/city_domain/src/place_fingerprint.c
+    ../components/city_domain/src/place_profile_codec.c
+    ../components/city_domain/src/privacy_tokenizer.c
+    ../components/city_domain/src/wild_reward_guard.c
+)
+target_include_directories(city_domain PUBLIC
+    ../components/city_domain/include
+)
+target_compile_options(city_domain PRIVATE -Wall -Wextra -Werror -Wpedantic)
+
+if(CITY_ENABLE_SANITIZERS AND CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")
+    target_compile_options(city_domain PRIVATE -fsanitize=address,undefined)
+    target_link_options(city_domain PRIVATE -fsanitize=address,undefined)
+endif()
+
+function(add_city_test target source)
+    add_executable(${target} ${source})
+    target_link_libraries(${target} PRIVATE city_domain)
+    target_compile_options(${target} PRIVATE -Wall -Wextra -Werror -Wpedantic)
+    if(CITY_ENABLE_SANITIZERS AND CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")
+        target_compile_options(${target} PRIVATE -fsanitize=address,undefined)
+        target_link_options(${target} PRIVATE -fsanitize=address,undefined)
+    endif()
+    add_test(NAME ${target} COMMAND ${target})
+endfunction()
+
+add_city_test(test_privacy_tokenizer test_privacy_tokenizer.c)
+add_city_test(test_place_fingerprint test_place_fingerprint.c)
+add_city_test(test_location_mode test_location_mode.c)
+add_city_test(test_wild_reward_guard test_wild_reward_guard.c)
+add_city_test(test_capture_engine test_capture_engine.c)
+add_city_test(test_bestiary_service test_bestiary_service.c)
+add_city_test(test_game_loop test_game_loop.c)
+add_city_test(city_mvp_scenario ../tools/city_mvp_scenario.c)

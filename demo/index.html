@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pokédex</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+<main class="workspace">
+  <section class="device-stage" aria-label="AI Passport simulator">
+    <div class="device">
+      <div class="speaker" aria-hidden="true"></div>
+      <div class="screen" id="screen" data-state="arrival">
+        <header class="screen-header">
+          <span class="brand">Pokédex</span>
+          <span class="battery" aria-label="电量 86%">
+            <span class="battery-icon" aria-hidden="true"></span>
+            86%
+          </span>
+        </header>
+
+        <div class="screen-content">
+          <p class="eyebrow" id="eyebrow">PLACE 01</p>
+          <h1 id="title" aria-live="polite">发现新的地点信号</h1>
+          <canvas id="scene" width="240" height="166" aria-label="Game scene"></canvas>
+          <div class="capture-meter" id="captureMeter" hidden>
+            <div class="target-zone"></div>
+            <div class="capture-marker" id="captureMarker"></div>
+          </div>
+          <p class="message" id="message" aria-live="polite">准备扫描周围环境</p>
+          <p class="meta" id="meta">按 OK 开始</p>
+        </div>
+
+        <footer class="screen-footer">
+          <span id="screenAction">OK · 扫描</span>
+          <span id="saveState">本地保存</span>
+        </footer>
+      </div>
+
+      <div class="controls" aria-label="Passport controls">
+        <button class="control control-up" id="upButton" title="向上" aria-label="向上">
+          <span aria-hidden="true">▲</span>
+        </button>
+        <button class="control control-ok" id="okButton" title="确认" aria-label="确认">
+          <span aria-hidden="true">●</span>
+        </button>
+        <button class="control control-down" id="downButton" title="向下" aria-label="向下">
+          <span aria-hidden="true">▼</span>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <aside class="trace" id="debugPanel" aria-label="体验进度" hidden>
+    <div class="trace-heading">
+      <div>
+        <p class="trace-kicker">MVP ACCEPTANCE</p>
+        <h2>单次捕获闭环</h2>
+      </div>
+      <button class="reset-button" id="resetButton" title="重置进度" aria-label="重置进度">
+        ↻
+      </button>
+    </div>
+    <ol class="trace-list">
+      <li data-step="place"><span>01</span><strong>到达地点</strong><small>等待环境确认</small></li>
+      <li data-step="encounter"><span>02</span><strong>遇见小火龙</strong><small>地点触发遭遇</small></li>
+      <li data-step="capture"><span>03</span><strong>投出精灵球</strong><small>命中捕获窗口</small></li>
+      <li data-step="bestiary"><span>04</span><strong>查看图鉴</strong><small>确认本地记录</small></li>
+    </ol>
+    <div class="evidence">
+      <span>CAPTURE COUNT</span>
+      <strong id="captureCount">0</strong>
+    </div>
+  </aside>
+</main>
+
+<script type="module" src="./app.js"></script>
+</body>
+</html>
