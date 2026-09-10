@@ -1,4 +1,5 @@
 #include "bestiary_service.h"
+#include "bsp_bestiary_store.h"
 
 #include <inttypes.h>
 #include <stdbool.h>
@@ -52,6 +53,82 @@ static bool load_snapshot(
     return nvs_get_blob(handle, TEST_KEY, encoded, &length) == ESP_OK &&
            length == sizeof(encoded) &&
            city_bestiary_decode(encoded, length, bestiary);
+}
+
+static void test_legacy_store_migration(void)
+{
+    const bsp_bestiary_store_t migration_store = {
+        .namespace_name = "city_mig_tst",
+        .blob_key = "snapshot",
+        .legacy_count_key = "caught_004",
+    };
+
+    nvs_handle_t handle;
+    if (nvs_open(
+            migration_store.namespace_name,
+            NVS_READWRITE,
+            &handle) != ESP_OK ||
+        nvs_erase_all(handle) != ESP_OK ||
+        nvs_set_u32(
+            handle, migration_store.legacy_count_key, 4U) != ESP_OK ||
+        nvs_commit(handle) != ESP_OK) {
+        fail("migration_seed");
+    }
+    nvs_close(handle);
+
+    city_bestiary_t migrated_bestiary;
+    bool migrated = false;
+    if (bsp_bestiary_store_load(
+            &migration_store,
+            &migrated_bestiary,
+            &migrated) != ESP_OK ||
+        !migrated ||
+        migrated_bestiary.charmander.capture_count != 4U ||
+        migrated_bestiary.charmander.last_place_id != UINT16_MAX ||
+        migrated_bestiary.ledger_count != 0U) {
+        fail("legacy_migration");
+    }
+
+    if (city_bestiary_capture(
+            &migrated_bestiary,
+            UINT64_C(8001),
+            CITY_SPECIES_CHARMANDER,
+            1U,
+            bsp_bestiary_store_persist,
+            (void *)&migration_store) != CITY_BESTIARY_APPLIED) {
+        fail("migrated_capture");
+    }
+
+    city_bestiary_t restored;
+    migrated = true;
+    if (bsp_bestiary_store_load(
+            &migration_store, &restored, &migrated) != ESP_OK ||
+        migrated || restored.charmander.capture_count != 5U ||
+        restored.charmander.last_place_id != 1U ||
+        restored.ledger_count != 1U) {
+        fail("migrated_restore");
+    }
+
+    uint32_t legacy_count = 0U;
+    if (nvs_open(
+            migration_store.namespace_name,
+            NVS_READWRITE,
+            &handle) != ESP_OK ||
+        nvs_get_u32(
+            handle,
+            migration_store.legacy_count_key,
+            &legacy_count) != ESP_ERR_NVS_NOT_FOUND ||
+        nvs_erase_key(handle, migration_store.blob_key) != ESP_OK ||
+        nvs_commit(handle) != ESP_OK) {
+        fail("migration_cleanup");
+    }
+    nvs_close(handle);
+    ESP_LOGI(
+        TAG,
+        "DEVICE_MIGRATION_PASS legacy=4 count=%" PRIu32
+        " ledger=%u old_key=removed",
+        restored.charmander.capture_count,
+        restored.ledger_count);
 }
 
 static void run_first_boot(device_store_t *store)
@@ -150,6 +227,7 @@ void app_main(void)
     if (nvs_flash_init() != ESP_OK) {
         fail("nvs_init");
     }
+    test_legacy_store_migration();
 
     device_store_t store;
     if (nvs_open(

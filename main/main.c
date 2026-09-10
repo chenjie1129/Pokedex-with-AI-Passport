@@ -1,3 +1,4 @@
+#include "bsp_bestiary_store.h"
 #include "bsp_button.h"
 #include "bsp_display.h"
 #include "bsp_i2c.h"
@@ -11,7 +12,6 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "lvgl.h"
-#include "nvs.h"
 #include "nvs_flash.h"
 
 #include <stdbool.h>
@@ -48,7 +48,10 @@ static const char *TAG = "pokedex";
 static ui_state_t s_state;
 static uint64_t s_state_started_ms;
 static uint8_t s_attempts = 3;
-static uint32_t s_capture_count;
+static city_bestiary_t s_bestiary;
+static bool s_bestiary_ready;
+static bool s_save_in_progress;
+static uint64_t s_encounter_id;
 static bool s_throw_hit;
 static city_capture_round_t s_round;
 
@@ -369,10 +372,21 @@ static void build_bestiary(void)
     label_at(tag, "FIRE", &lv_font_montserrat_14, 0xFFFFFF, 2, 5, 48);
 
     char count[32];
-    snprintf(count, sizeof(count), "CAUGHT  %lu", (unsigned long)s_capture_count);
+    snprintf(
+        count, sizeof(count), "CAUGHT  %lu",
+        (unsigned long)s_bestiary.charmander.capture_count);
     label_at(s_field, count, &lv_font_montserrat_14,
              COLOR_INK, 127, 57, 88);
-    label_at(s_field, "PLACE 01", &lv_font_montserrat_14,
+
+    char place[32];
+    if (s_bestiary.charmander.last_place_id == UINT16_MAX) {
+        snprintf(place, sizeof(place), "PLACE  --");
+    } else {
+        snprintf(
+            place, sizeof(place), "PLACE  %02u",
+            s_bestiary.charmander.last_place_id);
+    }
+    label_at(s_field, place, &lv_font_montserrat_14,
              COLOR_MUTED, 127, 82, 88);
     label_at(s_screen, "Discovered 1 / 3", &lv_font_montserrat_14,
              COLOR_MUTED, 10, 251, 220);
@@ -440,7 +454,7 @@ static void build_state(void)
         "STATE %s attempts=%u capture_count=%lu",
         state_name(s_state),
         s_attempts,
-        (unsigned long)s_capture_count);
+        (unsigned long)s_bestiary.charmander.capture_count);
 }
 
 static void set_state(ui_state_t state)
@@ -460,42 +474,97 @@ static void start_capture_round(void)
     set_state(UI_AIM);
 }
 
+static uint64_t new_encounter_id(void)
+{
+    uint64_t encounter_id = ((uint64_t)esp_random() << 32U) |
+                            (uint32_t)esp_timer_get_time();
+    return encounter_id == 0U ? 1U : encounter_id;
+}
+
 static bool save_capture(void)
 {
-    nvs_handle_t handle;
-    esp_err_t err = nvs_open("pokedex", NVS_READWRITE, &handle);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "NVS open failed: %s", esp_err_to_name(err));
+    if (!s_bestiary_ready || s_encounter_id == 0U) {
+        ESP_LOGE(TAG, "Bestiary unavailable; capture not persisted");
         return false;
     }
 
-    uint32_t next = s_capture_count + 1U;
-    err = nvs_set_u32(handle, "caught_004", next);
-    if (err == ESP_OK) {
-        err = nvs_commit(handle);
-    }
-    nvs_close(handle);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "NVS commit failed: %s", esp_err_to_name(err));
+    const city_bestiary_result_t result = city_bestiary_capture(
+        &s_bestiary,
+        s_encounter_id,
+        CITY_SPECIES_CHARMANDER,
+        1U,
+        bsp_bestiary_store_persist,
+        (void *)&BSP_BESTIARY_STORE_DEFAULT);
+    if (result != CITY_BESTIARY_APPLIED &&
+        result != CITY_BESTIARY_DUPLICATE) {
+        ESP_LOGE(TAG, "Capture commit rejected: result=%d", (int)result);
         return false;
     }
-    s_capture_count = next;
-    ESP_LOGI(TAG, "CAPTURE_COMMITTED species=004 count=%lu",
-             (unsigned long)s_capture_count);
+
+    ESP_LOGI(
+        TAG,
+        "CAPTURE_COMMITTED species=004 count=%lu encounter=%016llx result=%s",
+        (unsigned long)s_bestiary.charmander.capture_count,
+        (unsigned long long)s_encounter_id,
+        result == CITY_BESTIARY_APPLIED ? "applied" : "duplicate");
     return true;
 }
 
-static void load_capture_count(void)
+static void save_capture_task(void *argument)
 {
-    nvs_handle_t handle;
-    if (nvs_open("pokedex", NVS_READONLY, &handle) != ESP_OK) {
-        s_capture_count = 0;
+    (void)argument;
+    const bool saved = save_capture();
+
+    while (!bsp_lvgl_lock(1000)) {
+        ESP_LOGW(TAG, "Waiting to publish save result");
+    }
+    s_save_in_progress = false;
+    set_state(saved ? UI_CAPTURED : UI_STORAGE_ERROR);
+    bsp_lvgl_unlock();
+    vTaskDelete(NULL);
+}
+
+static bool request_capture_save(void)
+{
+    if (s_save_in_progress) {
+        return true;
+    }
+
+    s_save_in_progress = true;
+    if (xTaskCreate(
+            save_capture_task,
+            "bestiary_save",
+            4096,
+            NULL,
+            4,
+            NULL) != pdPASS) {
+        s_save_in_progress = false;
+        ESP_LOGE(TAG, "Failed to create bestiary save task");
+        return false;
+    }
+    return true;
+}
+
+static void load_bestiary(void)
+{
+    city_bestiary_init(&s_bestiary);
+    bool migrated = false;
+    const esp_err_t err = bsp_bestiary_store_load(
+        &BSP_BESTIARY_STORE_DEFAULT, &s_bestiary, &migrated);
+    if (err != ESP_OK) {
+        s_bestiary_ready = false;
+        ESP_LOGE(TAG, "Bestiary load failed: %s", esp_err_to_name(err));
         return;
     }
-    if (nvs_get_u32(handle, "caught_004", &s_capture_count) != ESP_OK) {
-        s_capture_count = 0;
-    }
-    nvs_close(handle);
+
+    s_bestiary_ready = true;
+    ESP_LOGI(
+        TAG,
+        "BESTIARY_READY schema=%u count=%lu ledger=%u migrated=%u",
+        s_bestiary.schema_version,
+        (unsigned long)s_bestiary.charmander.capture_count,
+        s_bestiary.ledger_count,
+        migrated ? 1U : 0U);
 }
 
 static void update_aim(uint64_t now)
@@ -568,14 +637,17 @@ static void tick(lv_timer_t *timer)
     uint64_t now = now_ms();
 
     if (s_state == UI_SCANNING && now - s_state_started_ms >= 900U) {
+        s_attempts = 3U;
+        s_encounter_id = new_encounter_id();
         set_state(UI_ENCOUNTER);
     } else if (s_state == UI_AIM) {
         update_aim(now);
     } else if (s_state == UI_THROWING) {
         update_throw(now);
     } else if (s_state == UI_CATCHING &&
-               now - s_state_started_ms >= CATCH_MS) {
-        set_state(save_capture() ? UI_CAPTURED : UI_STORAGE_ERROR);
+               now - s_state_started_ms >= CATCH_MS &&
+               !request_capture_save()) {
+        set_state(UI_STORAGE_ERROR);
     }
 }
 
@@ -621,7 +693,9 @@ static void on_button(bsp_btn_t button, bsp_btn_ev_t event, void *user)
         set_state(UI_ARRIVAL);
         break;
     case UI_STORAGE_ERROR:
-        set_state(save_capture() ? UI_CAPTURED : UI_STORAGE_ERROR);
+        if (!request_capture_save()) {
+            set_state(UI_STORAGE_ERROR);
+        }
         break;
     default:
         break;
@@ -634,11 +708,12 @@ void app_main(void)
     ESP_LOGI(TAG, "Pokedex AI Passport boot");
     ESP_LOGI(TAG, "wake_cause=%d", (int)esp_sleep_get_wakeup_cause());
 
+    city_bestiary_init(&s_bestiary);
     esp_err_t nvs_err = nvs_flash_init();
     if (nvs_err != ESP_OK) {
         ESP_LOGE(TAG, "NVS init failed: %s", esp_err_to_name(nvs_err));
     } else {
-        load_capture_count();
+        load_bestiary();
     }
 
     ESP_ERROR_CHECK(bsp_i2c_init());
@@ -659,5 +734,5 @@ void app_main(void)
     }
 
     ESP_LOGI(TAG, "READY display=1 buttons=1 capture_count=%lu",
-             (unsigned long)s_capture_count);
+             (unsigned long)s_bestiary.charmander.capture_count);
 }

@@ -55,6 +55,10 @@ const city_species_definition_t *city_species_definition(
 
 void city_bestiary_init(city_bestiary_t *bestiary);
 
+bool city_bestiary_import_legacy_count(
+    city_bestiary_t *bestiary,
+    uint32_t capture_count);
+
 city_bestiary_result_t city_bestiary_capture(
     city_bestiary_t *bestiary,
     uint64_t encounter_id,

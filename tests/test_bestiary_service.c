@@ -134,6 +134,45 @@ static void test_duplicate_encounter_is_idempotent(void)
     CHECK(probe.calls == 1U);
 }
 
+static void test_legacy_count_import_preserves_unknown_history(void)
+{
+    city_bestiary_t bestiary;
+    CHECK(city_bestiary_import_legacy_count(&bestiary, 4U));
+    CHECK(bestiary.charmander.state == CITY_DISCOVERY_CAPTURED);
+    CHECK(bestiary.charmander.capture_count == 4U);
+    CHECK(bestiary.charmander.last_place_id == UINT16_MAX);
+    CHECK(bestiary.ledger_count == 0U);
+    CHECK(bestiary.ledger_next == 0U);
+
+    uint8_t encoded[CITY_BESTIARY_ENCODED_BYTES];
+    CHECK(city_bestiary_encode(&bestiary, encoded));
+    city_bestiary_t decoded;
+    city_bestiary_init(&decoded);
+    CHECK(city_bestiary_decode(encoded, sizeof(encoded), &decoded));
+    CHECK(memcmp(&decoded, &bestiary, sizeof(bestiary)) == 0);
+
+    persist_probe_t probe = {.succeed = true};
+    CHECK(city_bestiary_capture(
+              &decoded,
+              UINT64_C(9001),
+              CITY_SPECIES_CHARMANDER,
+              1U,
+              persist_probe,
+              &probe) == CITY_BESTIARY_APPLIED);
+    CHECK(decoded.charmander.capture_count == 5U);
+    CHECK(decoded.charmander.last_place_id == 1U);
+    CHECK(decoded.ledger_count == 1U);
+}
+
+static void test_zero_legacy_count_remains_unknown(void)
+{
+    city_bestiary_t bestiary;
+    CHECK(city_bestiary_import_legacy_count(&bestiary, 0U));
+    CHECK(bestiary.charmander.state == CITY_DISCOVERY_UNKNOWN);
+    CHECK(bestiary.charmander.capture_count == 0U);
+    CHECK(!city_bestiary_import_legacy_count(NULL, 1U));
+}
+
 static void test_capture_count_outlives_idempotency_window(void)
 {
     city_bestiary_t bestiary;
@@ -300,6 +339,12 @@ static void test_inconsistent_ledger_is_rejected(void)
 
     uint8_t encoded[CITY_BESTIARY_ENCODED_BYTES];
     CHECK(!city_bestiary_encode(&inconsistent, encoded));
+
+    CHECK(city_bestiary_import_legacy_count(&inconsistent, 4U));
+    inconsistent.ledger_count = 1U;
+    inconsistent.ledger_next = 1U;
+    inconsistent.encounter_ids[0] = 99U;
+    CHECK(!city_bestiary_encode(&inconsistent, encoded));
 }
 
 static void test_invalid_arguments_are_rejected(void)
@@ -343,6 +388,8 @@ int main(void)
     test_catalog_contains_charmander();
     test_capture_commits_only_after_persistence();
     test_duplicate_encounter_is_idempotent();
+    test_legacy_count_import_preserves_unknown_history();
+    test_zero_legacy_count_remains_unknown();
     test_capture_count_outlives_idempotency_window();
     test_full_window_rolls_back_when_persistence_fails();
     test_invalid_place_never_calls_storage();

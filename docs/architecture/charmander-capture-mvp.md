@@ -93,13 +93,18 @@ asset packaging.
 
 ## Firmware integration boundary
 
-The next firmware slice must provide adapters for:
+The production firmware now owns a `city_bestiary_t` read model and delegates
+all durable writes to `bsp_bestiary_store`. The adapter stores the 156-byte,
+checksummed schema-v2 blob under `pokedex/bestiary_004`. If that blob is
+missing, it imports `pokedex/caught_004`, commits the new blob and removes the
+legacy key in the same NVS transaction. Legacy integer records preserve their
+lifetime count without inventing encounter IDs or a place ID.
 
-- Wi-Fi observations into the W1 location engine;
-- monotonic time and random seed;
-- bestiary blob storage through NVS;
-- three button events and LVGL rendering;
-- asynchronous Wi-Fi and NVS work outside the LVGL task.
+Capture settlement runs in a worker task so NVS writes never block the LVGL
+task. The UI transitions to `captured` only after the domain service receives a
+successful durable commit; load or commit failures fail closed. Wi-Fi scanning
+remains a separate asynchronous integration boundary.
 
-No firmware build or physical-device claim is made by this MVP because the
-current development environment does not contain ESP-IDF.
+ESP-IDF 5.5 production builds and ESP32-C3 tests cover legacy migration, blob
+reload after restart, recent-event idempotency and capture counts beyond the
+16-entry rolling window.

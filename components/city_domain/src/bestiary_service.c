@@ -84,9 +84,9 @@ static bool bestiary_is_valid(const city_bestiary_t *bestiary)
     }
     if (bestiary->charmander.state == CITY_DISCOVERY_CAPTURED &&
         (bestiary->charmander.capture_count == 0U ||
-         bestiary->ledger_count == 0U ||
          bestiary->charmander.capture_count < bestiary->ledger_count ||
-         bestiary->charmander.last_place_id == UINT16_MAX)) {
+         (bestiary->ledger_count > 0U &&
+          bestiary->charmander.last_place_id == UINT16_MAX))) {
         return false;
     }
     if (bestiary->charmander.state != CITY_DISCOVERY_CAPTURED &&
@@ -134,6 +134,22 @@ void city_bestiary_init(city_bestiary_t *bestiary)
     bestiary->charmander.species_id = CITY_SPECIES_CHARMANDER;
     bestiary->charmander.state = CITY_DISCOVERY_UNKNOWN;
     bestiary->charmander.last_place_id = UINT16_MAX;
+}
+
+bool city_bestiary_import_legacy_count(
+    city_bestiary_t *bestiary,
+    uint32_t capture_count)
+{
+    if (bestiary == NULL) {
+        return false;
+    }
+
+    city_bestiary_init(bestiary);
+    if (capture_count > 0U) {
+        bestiary->charmander.state = CITY_DISCOVERY_CAPTURED;
+        bestiary->charmander.capture_count = capture_count;
+    }
+    return bestiary_is_valid(bestiary);
 }
 
 city_bestiary_result_t city_bestiary_capture(
