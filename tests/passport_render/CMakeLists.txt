@@ -13,6 +13,7 @@ add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/render.c"
     DEPENDS "${ROOT}/main/main.c" generate.py harness.c)
 add_executable(passport_render "${CMAKE_CURRENT_BINARY_DIR}/render.c"
     "${ROOT}/components/city_domain/src/passport_progress.c"
+    "${ROOT}/components/city_domain/src/user_settings.c"
     "${ROOT}/components/city_domain/src/bestiary_service.c"
     "${ROOT}/components/city_domain/src/wild_reward_guard.c"
     "${ROOT}/components/city_domain/src/pocket_policy.c")

@@ -7,6 +7,7 @@ idf_component_register(
          "src/bsp_battery.c"
          "src/bsp_wifi_scan.c"
          "src/bsp_bestiary_store.c"
+         "src/bsp_settings_store.c"
          "src/bsp_place_identity.c"
          "src/bsp_place_store.c"
     INCLUDE_DIRS "include"

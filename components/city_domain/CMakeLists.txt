@@ -12,5 +12,6 @@ idf_component_register(
         "src/wild_reward_guard.c"
         "src/pocket_policy.c"
         "src/passport_progress.c"
+        "src/user_settings.c"
     INCLUDE_DIRS "include"
 )

@@ -27,3 +27,8 @@ option(CITY_AUDIO_RENDER_SMOKE "Exercise cries and descriptions without saves or
 if(CITY_AUDIO_RENDER_SMOKE)
     target_compile_definitions(${COMPONENT_LIB} PRIVATE CITY_AUDIO_RENDER_SMOKE=1)
 endif()
+
+option(CITY_SETTINGS_SMOKE "Exercise settings on device and restore preferences" OFF)
+if(CITY_SETTINGS_SMOKE)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE CITY_SETTINGS_SMOKE=1)
+endif()

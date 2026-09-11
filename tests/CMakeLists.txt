@@ -74,6 +74,14 @@ add_city_test(test_buddy test_buddy.c)
 
 add_city_test(test_evolution test_evolution.c)
 add_city_test(test_health_and_release test_health_and_release.c)
+add_city_test(test_user_settings test_user_settings.c)
+target_sources(test_user_settings PRIVATE ../components/bsp/src/bsp_settings_store.c)
+target_include_directories(test_user_settings PRIVATE battery_stubs ../components/bsp/include)
+add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/settings_ui.c"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/generate_settings_ui.py"
+        "${CMAKE_CURRENT_SOURCE_DIR}/../main/main.c" "${CMAKE_CURRENT_BINARY_DIR}/settings_ui.c"
+    DEPENDS ../main/main.c generate_settings_ui.py)
+add_city_test(test_settings_ui "${CMAKE_CURRENT_BINARY_DIR}/settings_ui.c")
 
 add_city_test(test_pokemon_audio test_pokemon_audio.c)
 target_sources(test_pokemon_audio PRIVATE ../main/assets/pokemon_cries.c)

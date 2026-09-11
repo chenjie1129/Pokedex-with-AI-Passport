@@ -6,9 +6,17 @@
 #include "freertos/queue.h"
 #include "freertos/task.h"
 #include <string.h>
+#include <stdatomic.h>
 
 static const char *TAG = "pokemon_audio";
 static QueueHandle_t requests;
+static atomic_uint preferences = ATOMIC_VAR_INIT(60U);
+
+static uint8_t effective_volume(void)
+{
+    const unsigned value = atomic_load(&preferences);
+    return (value & 0x100U) ? 0 : (uint8_t)(value & 0xffU);
+}
 
 static void audio_task(void *argument)
 {
@@ -23,15 +31,22 @@ static void audio_task(void *argument)
         uint16_t species_id;
         if (xQueueReceive(requests, &species_id, portMAX_DELAY) != pdTRUE) continue;
         const pokemon_cry_t *cry = pokemon_cry_find(species_id);
-        if (!ready || !cry) continue;
+        if (!ready || !cry || effective_volume() == 0) continue;
         uint16_t pending;
         if (xQueuePeek(requests, &pending, 0) == pdTRUE) continue;
-        bsp_audio_set_volume(45);
+        uint8_t playing_volume = effective_volume();
+        bsp_audio_set_volume(playing_volume);
         ESP_LOGI(TAG, "CRY_START species=%u samples=%u", species_id, (unsigned)cry->sample_count);
         size_t offset = 0;
         bool failed = false;
         while (offset < cry->sample_count) {
             if (xQueuePeek(requests, &pending, 0) == pdTRUE) break;
+            const uint8_t next_volume = effective_volume();
+            if (next_volume == 0) break;
+            if (next_volume != playing_volume) {
+                bsp_audio_set_volume(next_volume);
+                playing_volume = next_volume;
+            }
             size_t count = cry->sample_count - offset;
             if (count > 320) count = 320;
             memcpy(buffer, cry->samples + offset, count * sizeof(int16_t));
@@ -74,4 +89,11 @@ void pokemon_audio_play(uint16_t species_id)
 void pokemon_audio_stop(void)
 {
     pokemon_audio_play(0);
+}
+
+void pokemon_audio_set_preferences(uint8_t volume, bool muted)
+{
+    if (volume > 100) volume = 100;
+    atomic_store(&preferences, volume | (muted ? 0x100U : 0));
+    if (muted || volume == 0) pokemon_audio_stop();
 }

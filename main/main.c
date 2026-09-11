@@ -13,6 +13,8 @@
 #include "roster_sprites.h"
 #include "place_scan_coordinator.h"
 #include "pokemon_audio.h"
+#include "bsp_settings_store.h"
+#include "user_settings.h"
 #ifdef CITY_AUDIO_RENDER_SMOKE
 #include "pokemon_cries.h"
 #endif
@@ -89,6 +91,7 @@ typedef enum {
     UI_RELEASE_PICKER,
     UI_RELEASE_CONFIRM,
     UI_RELEASED,
+    UI_SETTINGS,
 } ui_state_t;
 
 typedef enum {
@@ -118,6 +121,18 @@ static uint16_t s_release_copy_selection;
 static uint32_t s_release_instance_id;
 static uint8_t s_release_selection = 1;
 static uint8_t s_home_selection;
+static city_settings_t s_settings, s_settings_draft;
+static uint8_t s_settings_selection;
+static bool s_settings_editing, s_settings_saving, s_settings_error, s_settings_load_error;
+static QueueHandle_t s_settings_requests, s_settings_results;
+
+typedef struct { city_settings_t settings; esp_err_t error; } settings_result_t;
+
+static const city_settings_t *visible_settings(void)
+{
+    return s_state == UI_SETTINGS ? &s_settings_draft : &s_settings;
+}
+
 static uint8_t s_passport_page;
 static uint8_t s_encounter_selection;
 static city_discovery_state_t s_encounter_previous_state;
@@ -153,6 +168,25 @@ static lv_obj_t *s_ball_button_inner;
 static lv_obj_t *s_status;
 static lv_timer_t *s_tick;
 
+static void apply_settings_preview(void)
+{
+    const city_settings_t *settings = visible_settings();
+    pokemon_audio_set_preferences(settings->volume, settings->muted);
+    bsp_display_backlight(city_settings_backlight(settings, s_pocket.screen_off,
+                                                  city_battery_low(s_battery_soc)));
+}
+
+static void settings_task(void *argument)
+{
+    (void)argument;
+    settings_result_t result;
+    for (;;) {
+        if (xQueueReceive(s_settings_requests, &result.settings, portMAX_DELAY) != pdTRUE) continue;
+        result.error = bsp_settings_save(&result.settings);
+        xQueueOverwrite(s_settings_results, &result);
+    }
+}
+
 static uint64_t now_ms(void)
 {
     return (uint64_t)(esp_timer_get_time() / 1000);
@@ -173,7 +207,7 @@ static const char *state_name(ui_state_t state)
         "place_full", "encounter", "aim", "throwing", "catching",
         "captured", "escaped", "abandoned", "bestiary_list", "bestiary_detail",
         "storage_error", "low_battery", "passport", "evolution", "evolved",
-        "pokemon_actions", "release_picker", "release_confirm", "released",
+        "pokemon_actions", "release_picker", "release_confirm", "released", "settings",
     };
     return names[state];
 }
@@ -377,19 +411,51 @@ static void build_home(void)
         label_at(s_screen, "Bestiary > caught Pokemon",
                  &lv_font_montserrat_14, COLOR_MUTED, 10, 116, 220);
     }
-    const char *titles[] = {"EXPLORE", "BESTIARY", "PASSPORT"};
-    for (unsigned i = 0; i < 3; ++i) {
+    const char *titles[] = {"EXPLORE", "BESTIARY", "PASSPORT", "SETTINGS"};
+    for (unsigned i = 0; i < 4; ++i) {
         lv_obj_t *row = lv_obj_create(s_screen);
         style_plain(row, s_home_selection == i ? 0xE4F4E8 : 0xF7FBF8);
         lv_obj_set_style_radius(row, 8, 0);
         lv_obj_set_style_border_width(row, 1, 0);
         lv_obj_set_style_border_color(row, lv_color_hex(s_home_selection == i ? COLOR_GREEN : 0xD5E0DD), 0);
-        lv_obj_set_pos(row, 10, 158 + i * 32);
-        lv_obj_set_size(row, 220, 28);
-        label_at(row, titles[i], &lv_font_montserrat_14, COLOR_INK, 10, 5, 174);
-        label_at(row, s_home_selection == i ? ">" : "", &lv_font_montserrat_14, COLOR_CORAL, 190, 5, 20);
+        lv_obj_set_pos(row, 10, 158 + i * 26);
+        lv_obj_set_size(row, 220, 24);
+        label_at(row, titles[i], &lv_font_montserrat_14, COLOR_INK, 10, 3, 174);
+        label_at(row, s_home_selection == i ? ">" : "", &lv_font_montserrat_14, COLOR_CORAL, 190, 3, 20);
     }
-    label_at(s_screen, "Hold UP: screen off", &lv_font_montserrat_14, COLOR_MUTED, 10, META_Y, 220);
+    label_at(s_screen, "Hold UP: screen off", &lv_font_montserrat_14, COLOR_MUTED, 10, 265, 220);
+}
+
+static void build_settings(void)
+{
+    const char *action = s_settings_saving ? "SAVING..." : s_settings_editing
+        ? "UP/DN +/-10  OK DONE" : "UP/DN SELECT  OK";
+    s_screen = new_screen("SETTINGS", action);
+    for (unsigned i = 0; i < 5; ++i) {
+        lv_obj_t *row = lv_obj_create(s_screen);
+        const bool selected = i == s_settings_selection;
+        style_plain(row, selected ? 0xE4F4E8 : 0xF7FBF8);
+        lv_obj_set_style_radius(row, 8, 0);
+        lv_obj_set_style_border_width(row, 1, 0);
+        lv_obj_set_style_border_color(row, lv_color_hex(selected ? COLOR_GREEN : 0xD5E0DD), 0);
+        lv_obj_set_pos(row, 10, 78 + i * 32);
+        lv_obj_set_size(row, 220, 28);
+        char text[40];
+        if (i == 0) snprintf(text, sizeof(text), "CRY VOLUME   %u%%", s_settings_draft.volume);
+        else if (i == 1) snprintf(text, sizeof(text), "MUTE   %s", s_settings_draft.muted ? "ON" : "OFF");
+        else if (i == 2) snprintf(text, sizeof(text), "BRIGHTNESS   %u%%", s_settings_draft.brightness);
+        else snprintf(text, sizeof(text), "%s", i == 3 ? "SAVE & BACK" : "CANCEL");
+        label_at(row, text, &lv_font_montserrat_14, COLOR_INK, 8, 5, 190);
+        label_at(row, selected ? (s_settings_editing ? "*" : ">") : "",
+                 &lv_font_montserrat_14, COLOR_CORAL, 195, 5, 16);
+    }
+    const char *message = s_settings_error ? "Save failed. Try Save again" :
+        s_settings_load_error ? "Defaults loaded; save to keep" :
+        city_battery_low(s_battery_soc) ? "Low battery: capped at 30%" :
+        s_settings_draft.muted || s_settings_draft.volume == 0 ? "Cries are silent" :
+        s_settings_editing && s_settings_selection == 0 ? "OK plays a sample cry" : "Changes preview until saved";
+    label_at(s_screen, message, &lv_font_montserrat_14, COLOR_MUTED, 10, 242, 220);
+    label_at(s_screen, "Hold OK: cancel", &lv_font_montserrat_14, COLOR_MUTED, 10, 264, 220);
 }
 
 static void build_passport(void)
@@ -978,6 +1044,9 @@ static void build_state(void)
     case UI_PASSPORT:
         build_passport();
         break;
+    case UI_SETTINGS:
+        build_settings();
+        break;
     case UI_HOME:
         build_home();
         break;
@@ -1083,6 +1152,61 @@ static void set_state(ui_state_t state)
                (previous == UI_ENCOUNTER || previous == UI_BESTIARY_DETAIL)) {
         pokemon_audio_stop();
     }
+}
+
+static void close_settings(void)
+{
+    pokemon_audio_stop();
+    set_state(UI_HOME);
+    apply_settings_preview();
+}
+
+static void handle_settings_button(bsp_btn_t button, bool cancel)
+{
+    if (s_settings_saving) return;
+    if (cancel) { close_settings(); return; }
+    if (s_settings_editing) {
+        if (button == BSP_BTN_UP || button == BSP_BTN_DOWN) {
+            s_settings_draft = city_settings_adjust(s_settings_draft,
+                s_settings_selection == 2, button == BSP_BTN_UP ? 10 : -10);
+            apply_settings_preview();
+        } else if (button == BSP_BTN_OK) {
+            s_settings_editing = false;
+            if (s_settings_selection == 0)
+                pokemon_audio_play(s_bestiary.buddy_species_id ? s_bestiary.buddy_species_id : CITY_SPECIES_PIKACHU);
+        }
+    } else if (button == BSP_BTN_UP || button == BSP_BTN_DOWN) {
+        s_settings_selection = city_passport_turn_page(s_settings_selection, 5, button == BSP_BTN_DOWN);
+    } else if (button == BSP_BTN_OK) {
+        if (s_settings_selection == 0 || s_settings_selection == 2) s_settings_editing = true;
+        else if (s_settings_selection == 1) {
+            s_settings_draft = city_settings_toggle_mute(s_settings_draft);
+            apply_settings_preview();
+        } else if (s_settings_selection == 4) { close_settings(); return; }
+        else {
+            if (city_settings_equal(&s_settings, &s_settings_draft) && !s_settings_load_error && !s_settings_error) {
+                close_settings(); return;
+            }
+            pokemon_audio_stop();
+            s_settings_error = false;
+            if (s_settings_requests && xQueueOverwrite(s_settings_requests, &s_settings_draft) == pdTRUE)
+                s_settings_saving = true;
+            else s_settings_error = true;
+        }
+    }
+    set_state(UI_SETTINGS);
+}
+
+static void finish_settings_save(const settings_result_t *result)
+{
+    s_settings_saving = false;
+    s_settings_error = result->error != ESP_OK;
+    if (!s_settings_error) {
+        s_settings = result->settings;
+        s_settings_load_error = false;
+        close_settings();
+        ESP_LOGI(TAG, "SETTINGS_SAVED volume=%u muted=%u brightness=%u", s_settings.volume, s_settings.muted, s_settings.brightness);
+    } else set_state(UI_SETTINGS);
 }
 
 static void start_capture_round(uint64_t now)
@@ -1508,6 +1632,9 @@ static void tick(lv_timer_t *timer)
 {
     (void)timer;
     uint64_t now = now_ms();
+    settings_result_t settings_result;
+    if (s_settings_results && xQueueReceive(s_settings_results, &settings_result, 0) == pdTRUE)
+        finish_settings_save(&settings_result);
     int soc;
     if (s_battery_queue && xQueueReceive(s_battery_queue, &soc, 0) == pdTRUE) {
         s_battery_soc = soc;
@@ -1517,9 +1644,9 @@ static void tick(lv_timer_t *timer)
         lv_label_set_text(s_battery_label, text);
         lv_obj_set_style_text_color(s_battery_label,
             lv_color_hex(city_battery_low(soc) ? COLOR_CORAL : COLOR_MUTED), 0);
-        if (!s_pocket.screen_off) bsp_display_backlight(city_battery_low(soc) ? 30 : 100);
+        if (!s_pocket.screen_off) bsp_display_backlight(city_settings_backlight(visible_settings(), false, city_battery_low(soc)));
     }
-    const bool busy = s_save_in_progress || s_state == UI_SCANNING ||
+    const bool busy = s_settings_saving || s_state == UI_SETTINGS || s_save_in_progress || s_state == UI_SCANNING ||
         s_state == UI_PLACE_PENDING || s_state == UI_ENCOUNTER ||
         s_state == UI_AIM || s_state == UI_THROWING || s_state == UI_CATCHING ||
         s_state == UI_STORAGE_ERROR;
@@ -1584,14 +1711,20 @@ static void on_button(bsp_btn_t button, bsp_btn_ev_t event, void *user)
     if (!bsp_lvgl_lock(500)) return;
     if (event == BSP_BTN_PRESS) {
         if (city_pocket_press(&s_pocket, now_ms())) {
-            bsp_display_backlight(city_battery_low(s_battery_soc) ? 30 : 100);
+            bsp_display_backlight(city_settings_backlight(visible_settings(), false, city_battery_low(s_battery_soc)));
             lv_timer_set_period(s_tick, 33);
             ESP_LOGI(TAG, "SCREEN_WAKE");
         }
         bsp_lvgl_unlock();
         return;
     }
-    if (s_pocket.screen_off || s_pocket.consume_gesture || s_save_in_progress) {
+    if (s_pocket.screen_off || s_pocket.consume_gesture || s_save_in_progress || s_settings_saving) {
+        bsp_lvgl_unlock(); return;
+    }
+    if (s_state == UI_SETTINGS && (event == BSP_BTN_CLICK ||
+        (event == BSP_BTN_LONG && button == BSP_BTN_OK))) {
+        s_pocket.last_activity_ms = now_ms();
+        handle_settings_button(button, event == BSP_BTN_LONG);
         bsp_lvgl_unlock(); return;
     }
     const bool handles_long_ok = event == BSP_BTN_LONG && button == BSP_BTN_OK &&
@@ -1626,7 +1759,7 @@ static void on_button(bsp_btn_t button, bsp_btn_ev_t event, void *user)
 
     if (s_state == UI_HOME) {
         if (button == BSP_BTN_UP || button == BSP_BTN_DOWN) {
-            s_home_selection = city_passport_turn_page(s_home_selection, 3U, button == BSP_BTN_DOWN);
+            s_home_selection = city_passport_turn_page(s_home_selection, 4U, button == BSP_BTN_DOWN);
             set_state(UI_HOME);
         } else if (button == BSP_BTN_OK) {
             if (s_home_selection == 0U) {
@@ -1634,9 +1767,15 @@ static void on_button(bsp_btn_t button, bsp_btn_ev_t event, void *user)
             } else if (s_home_selection == 1U) {
                 s_bestiary_selection = 0U;
                 set_state(UI_BESTIARY_LIST);
-            } else {
+            } else if (s_home_selection == 2U) {
                 s_passport_page = 0U;
                 set_state(UI_PASSPORT);
+            } else {
+                s_settings_draft = s_settings;
+                s_settings_selection = 0;
+                s_settings_editing = false;
+                s_settings_error = false;
+                set_state(UI_SETTINGS);
             }
         }
         bsp_lvgl_unlock();
@@ -1860,6 +1999,21 @@ void app_main(void)
         load_place_data();
     }
 
+    s_settings = city_settings_defaults();
+    s_settings_load_error = bsp_settings_load(&s_settings) != ESP_OK;
+    s_settings_draft = s_settings;
+    pokemon_audio_set_preferences(s_settings.volume, s_settings.muted);
+    s_settings_requests = xQueueCreate(1, sizeof(city_settings_t));
+    s_settings_results = xQueueCreate(1, sizeof(settings_result_t));
+    if (!s_settings_requests || !s_settings_results ||
+        xTaskCreate(settings_task, "settings", 3072, NULL, 2, NULL) != pdPASS) {
+        if (s_settings_requests) vQueueDelete(s_settings_requests);
+        if (s_settings_results) vQueueDelete(s_settings_results);
+        s_settings_requests = NULL; s_settings_results = NULL;
+        ESP_LOGW(TAG, "Settings worker unavailable");
+    }
+    ESP_LOGI(TAG, "SETTINGS_READY volume=%u muted=%u brightness=%u defaults_on_error=%u",
+             s_settings.volume, s_settings.muted, s_settings.brightness, s_settings_load_error);
     ESP_ERROR_CHECK(bsp_i2c_init());
     if (!pokemon_audio_init()) ESP_LOGW(TAG, "Audio worker unavailable");
     s_battery_queue = xQueueCreate(1, sizeof(int));
@@ -1871,7 +2025,7 @@ void app_main(void)
         ESP_LOGE(TAG, "LVGL init failed");
         return;
     }
-    bsp_display_backlight(100);
+    bsp_display_backlight(city_settings_backlight(&s_settings, false, city_battery_low(s_battery_soc)));
 
     if (!bsp_lvgl_lock(1000)) {
         ESP_LOGE(TAG, "Initial UI lock unavailable");
@@ -1883,11 +2037,15 @@ void app_main(void)
         s_pocket.last_activity_ms = s_state_started_ms;
         build_state();
         s_tick = lv_timer_create(tick, 33, NULL);
-#if defined(CITY_CAPTURE_RENDER_SMOKE) || defined(CITY_AUDIO_RENDER_SMOKE)
+#if defined(CITY_CAPTURE_RENDER_SMOKE) || defined(CITY_AUDIO_RENDER_SMOKE) || defined(CITY_SETTINGS_SMOKE)
         lv_timer_pause(s_tick);
 #endif
         bsp_lvgl_unlock();
     }
+
+#ifdef CITY_SETTINGS_SMOKE
+#include "settings_smoke.inc"
+#endif
 
 #ifdef CITY_AUDIO_RENDER_SMOKE
     /* No timers, buttons, scan or persistence writes in this diagnostic. */

@@ -531,5 +531,12 @@ the full type label and one short species fact. All 15 entries use authored
 summaries checked against the official Pokédex; references live in
 [content/species.json](content/species.json). Descriptions are available even
 after a failed capture. This display-only catalog update preserves game rules,
-saved progress and existing controls. Settings is postponed while the core
-Pokédex experience is tested.
+saved progress and existing controls.
+
+Settings: open **Home → Settings** to adjust cry volume (0–100%), toggle mute,
+and set screen brightness (10–100%). Volume and brightness default to 60%;
+mute defaults to off. UP/DOWN selects a row, OK edits a level, UP/DOWN adjusts
+it by 10%, and OK finishes editing (and previews a cry for volume). Choose
+**Save & Back** to keep changes across restarts. **Cancel**, or holding OK,
+restores your saved values. Low battery caps brightness at 30% without changing
+your saved preference. See [settings behavior](docs/architecture/settings.md).

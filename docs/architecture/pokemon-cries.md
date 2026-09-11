@@ -39,7 +39,7 @@ Successful playback drains 120 ms of silence (longer than the six 240-frame
 DMA buffers) before muting, preserving the final samples. Cancellation is
 observed at chunk boundaries; replacement may wait for this silent drain.
 The 20 ms interval is a nominal scheduling bound, not a hard real-time
-guarantee under I2S or scheduler failure. Volume is fixed at 45 percent.
+guarantee under I2S or scheduler failure. Volume and mute follow the saved Settings preferences (60 percent and unmuted by default). The worker rechecks the effective volume between PCM chunks; muting or setting volume to zero cancels pending playback.
 The codec stays configured and muted when idle; this implementation does
 not claim a measured idle-power or battery-life improvement.
 

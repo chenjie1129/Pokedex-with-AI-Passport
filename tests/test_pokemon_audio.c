@@ -50,8 +50,8 @@ esp_err_t bsp_audio_set_format(uint32_t rate, uint8_t bits, uint8_t channels)
 }
 void bsp_audio_set_volume(uint8_t percent)
 {
+    if (percent) { assert(percent <= 100); if (!volume) { ++audible_starts; samples_written = 0; } }
     volume = percent;
-    if (percent) { assert(percent == 45); ++audible_starts; samples_written = 0; }
 }
 esp_err_t bsp_audio_write(const void *pcm, size_t bytes)
 {
@@ -68,7 +68,8 @@ esp_err_t bsp_audio_write(const void *pcm, size_t bytes)
     if (inject) {
         const uint16_t next = inject;
         inject = 0;
-        if (next == UINT16_MAX) pokemon_audio_stop();
+        if (next == UINT16_MAX - 1) pokemon_audio_set_preferences(60, true);
+        else if (next == UINT16_MAX) pokemon_audio_stop();
         else { expected = pokemon_cry_find(next); pokemon_audio_play(next); }
     }
     return write_failure ? ESP_FAIL : ESP_OK;
@@ -80,7 +81,7 @@ static void run_worker(void)
 }
 static void reset(void)
 {
-    requests = NULL; queue_full = false; queue_failure = false; task_failure = false;
+    requests = NULL; atomic_store(&preferences, 60U); queue_full = false; queue_failure = false; task_failure = false;
     codec_failure = false; write_failure = false; queued = 0; inject = 0;
     writes = 0; audible_starts = 0; samples_written = 0; initializations = 0;
 }
@@ -114,6 +115,20 @@ int main(void)
     pokemon_audio_play(1); run_worker(); assert(!writes && initializations == 1);
     reset(); assert(pokemon_audio_init()); expected = pokemon_cry_find(1); write_failure = true;
     pokemon_audio_play(1); run_worker(); assert(writes == 2 && volume == 0);
-    puts("Audio mapping, PCM integrity, bounded writes, cancellation, replacement and failures passed");
+    reset(); assert(pokemon_audio_init()); pokemon_audio_set_preferences(60, true);
+    pokemon_audio_play(1); run_worker(); assert(!writes && !audible_starts);
+    pokemon_audio_set_preferences(60, false); expected = pokemon_cry_find(1);
+    pokemon_audio_play(1); run_worker(); assert(audible_starts == 1);
+    reset(); assert(pokemon_audio_init()); pokemon_audio_set_preferences(0, false);
+    pokemon_audio_play(1); run_worker(); assert(!writes);
+    reset(); assert(pokemon_audio_init()); pokemon_audio_set_preferences(30, false);
+    assert(effective_volume() == 30); expected = pokemon_cry_find(1);
+    pokemon_audio_play(1); run_worker(); assert(audible_starts == 1);
+    pokemon_audio_set_preferences(255, false); assert(effective_volume() == 100);
+    pokemon_audio_set_preferences(30, true); assert(effective_volume() == 0);
+    pokemon_audio_set_preferences(30, false); assert(effective_volume() == 30);
+    reset(); assert(pokemon_audio_init()); expected = pokemon_cry_find(1); inject = UINT16_MAX - 1;
+    pokemon_audio_play(1); run_worker(); assert(audible_starts == 1 && samples_written == 320);
+    puts("Audio mapping, PCM integrity, volume, mute, cancellation and failures passed");
     return 0;
 }

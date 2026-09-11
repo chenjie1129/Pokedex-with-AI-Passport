@@ -4,6 +4,7 @@
 #include "roster_sprites.h"
 #include "passport_progress.h"
 #include "pocket_policy.h"
+#include "user_settings.h"
 #include <stdio.h>
 #include <assert.h>
 #include <string.h>
@@ -21,6 +22,9 @@ static city_creature_stats_t s_current_stats;
 static city_discovery_state_t s_encounter_previous_state;
 static int s_battery_soc = 95;
 static uint8_t s_home_selection, s_passport_page;
+static city_settings_t s_settings_draft;
+static uint8_t s_settings_selection;
+static bool s_settings_editing, s_settings_saving, s_settings_error, s_settings_load_error;
 static city_bestiary_t s_bestiary;
 static bool s_bestiary_ready = true;
 static bool have_places = true;
@@ -60,7 +64,8 @@ static void check_labels(lv_obj_t *o)
 static void snapshot(const char *name, unsigned mode)
 {
     lv_obj_t *old = s_screen;
-    if (mode == 7) build_evolution();
+    if (mode == 13) build_settings();
+    else if (mode == 7) build_evolution();
     else if (mode == 8) build_evolved();
     else if (mode == 9) build_pokemon_actions();
     else if (mode == 10) build_release_picker();
@@ -102,6 +107,23 @@ int main(void)
     snapshot("home-no-buddy", 1);
     snapshot("passport-empty", false);
     snapshot("bestiary-unknown", 3);
+    s_home_selection = 3; snapshot("home-settings", 1); s_home_selection = 0;
+    s_settings_draft = city_settings_defaults();
+    snapshot("settings-default", 13);
+    for (unsigned selected = 0; selected < 5; ++selected) {
+        char name[40]; s_settings_selection = selected;
+        snprintf(name, sizeof(name), "settings-row-%u", selected); snapshot(name, 13);
+    }
+    s_settings_selection = 0; s_settings_editing = true; snapshot("settings-volume-edit", 13);
+    s_settings_draft.volume = 100; s_settings_draft.brightness = 100;
+    snapshot("settings-max", 13);
+    s_settings_draft.muted = true; snapshot("settings-muted", 13);
+    s_settings_editing = false; s_settings_draft.volume = 0; s_settings_draft.brightness = 10;
+    snapshot("settings-min", 13);
+    s_settings_error = true; snapshot("settings-error", 13); s_settings_error = false;
+    s_settings_load_error = true; snapshot("settings-load-error", 13); s_settings_load_error = false;
+    s_settings_saving = true; snapshot("settings-saving", 13); s_settings_saving = false;
+    s_battery_soc = 5; snapshot("settings-low-battery", 13); s_battery_soc = 95;
     /* Information is readable even when an encounter has not been caught. */
     for (unsigned i = 0; i < CITY_SPECIES_COUNT; ++i) {
         assert(city_bestiary_mark_seen(&s_bestiary, city_species_id_at(i), persist, NULL) == CITY_BESTIARY_APPLIED);
