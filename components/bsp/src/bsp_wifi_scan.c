@@ -13,10 +13,22 @@
 
 static const char *TAG = "bsp_wifi";
 
+static void secure_zero(void *data, size_t length)
+{
+    volatile uint8_t *bytes = data;
+    while (length > 0U) {
+        *bytes++ = 0U;
+        --length;
+    }
+}
+
 esp_err_t bsp_wifi_scan_once(bsp_wifi_ap_t *out, size_t max_out, size_t *out_count)
 {
     if (out_count) *out_count = 0;
     if (!out || max_out == 0) return ESP_ERR_INVALID_ARG;
+    const size_t output_capacity =
+        max_out < BSP_WIFI_SCAN_MAX ? max_out : BSP_WIFI_SCAN_MAX;
+    memset(out, 0, output_capacity * sizeof(*out));
 
     // --- 幂等准备共享服务。NVS 异常不擦除分区(仓库约定),直接失败返回。 ---
     esp_err_t err = nvs_flash_init();
@@ -51,7 +63,12 @@ esp_err_t bsp_wifi_scan_once(bsp_wifi_ap_t *out, size_t max_out, size_t *out_cou
     wifi_inited = true;
 
     // 指纹不落 Wi-Fi 配置,全部放 RAM,避免触碰 NVS 中的 Wi-Fi 键。
-    esp_wifi_set_storage(WIFI_STORAGE_RAM);
+    err = esp_wifi_set_storage(WIFI_STORAGE_RAM);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "set_storage 失败: %s", esp_err_to_name(err));
+        ret = err;
+        goto cleanup;
+    }
     err = esp_wifi_set_mode(WIFI_MODE_STA);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "set_mode 失败: %s", esp_err_to_name(err));
@@ -93,21 +110,23 @@ esp_err_t bsp_wifi_scan_once(bsp_wifi_ap_t *out, size_t max_out, size_t *out_cou
         ESP_LOGI(TAG, "扫描到 %u 个 AP", (unsigned)ap_num);
 
         if (ap_num > 0) {
-            wifi_ap_record_t records[BSP_WIFI_SCAN_MAX];
+            wifi_ap_record_t records[BSP_WIFI_SCAN_MAX] = {0};
             uint16_t got = ap_num;
             if (got > BSP_WIFI_SCAN_MAX) got = BSP_WIFI_SCAN_MAX;
             err = esp_wifi_scan_get_ap_records(&got, records);
             if (err != ESP_OK) {
+                secure_zero(records, sizeof(records));
                 ret = err;
                 goto cleanup;
             }
-            size_t n = (got < max_out) ? got : max_out;
+            size_t n = (got < output_capacity) ? got : output_capacity;
             for (size_t i = 0; i < n; i++) {
                 memcpy(out[i].bssid, records[i].bssid, sizeof(out[i].bssid));
                 out[i].rssi = records[i].rssi;
                 out[i].channel = records[i].primary;
             }
             if (out_count) *out_count = n;
+            secure_zero(records, sizeof(records));
         }
     }
     ret = ESP_OK;
@@ -116,11 +135,17 @@ cleanup:
     // 无论成败都释放协议栈:scan_stop -> stop -> deinit -> 销毁 netif。
     // 注意:必须在 deinit 前取走扫描结果(上面已拷贝)。
     if (wifi_started) {
-        esp_wifi_scan_stop();
-        esp_wifi_stop();
+        (void)esp_wifi_scan_stop();
+        err = esp_wifi_stop();
+        if (ret == ESP_OK && err != ESP_OK) {
+            ret = err;
+        }
     }
     if (wifi_inited) {
-        esp_wifi_deinit();
+        err = esp_wifi_deinit();
+        if (ret == ESP_OK && err != ESP_OK) {
+            ret = err;
+        }
     }
     if (sta) {
         esp_netif_destroy_default_wifi(sta);

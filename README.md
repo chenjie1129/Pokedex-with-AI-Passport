@@ -456,6 +456,12 @@ Run the Host test suite:
 See [W1 Environment Foundation](docs/architecture/w1-environment-foundation.md)
 for data-flow, persistence, and integration contracts.
 
+Install the current firmware on another compatible AI Passport with the
+[Device Installation Guide](docs/device-installation-guide.md).
+
+The production integration work for real Wi-Fi place recognition is specified
+in the [T08 Real Place Integration Plan](docs/architecture/t08-real-place-integration.md).
+
 ### Charmander capture MVP
 
 The first playable vertical slice now covers:

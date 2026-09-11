@@ -5,6 +5,7 @@
 #include "capture_engine.h"
 #include "game_loop.h"
 #include "charmander_sprite.h"
+#include "place_scan_coordinator.h"
 
 #include "esp_log.h"
 #include "esp_random.h"
@@ -34,6 +35,13 @@
 typedef enum {
     UI_HOME = 0,
     UI_SCANNING,
+    UI_PLACE_PENDING,
+    UI_PLACE_GRAY,
+    UI_PLACE_WILD,
+    UI_PLACE_UNSTABLE,
+    UI_PLACE_ERROR,
+    UI_PLACE_STORAGE_ERROR,
+    UI_PLACE_FULL,
     UI_ENCOUNTER,
     UI_AIM,
     UI_THROWING,
@@ -66,6 +74,8 @@ static uint64_t s_encounter_sequence;
 static bool s_throw_hit;
 static city_capture_round_t s_round;
 static uint64_t s_capture_deadline_ms;
+static bool s_place_data_ready;
+static uint16_t s_current_place_id = CITY_PLACE_INVALID_ID;
 
 static lv_obj_t *s_screen;
 static lv_obj_t *s_field;
@@ -89,9 +99,11 @@ static uint64_t now_ms(void)
 static const char *state_name(ui_state_t state)
 {
     static const char *const names[] = {
-        "home", "scanning", "encounter", "aim", "throwing",
-        "catching", "captured", "escaped", "bestiary_list",
-        "bestiary_detail", "storage_error",
+        "home", "scanning", "place_pending", "place_gray", "place_wild",
+        "place_unstable", "place_error", "place_storage_error",
+        "place_full", "encounter", "aim", "throwing", "catching",
+        "captured", "escaped", "bestiary_list", "bestiary_detail",
+        "storage_error",
     };
     return names[state];
 }
@@ -306,6 +318,21 @@ static void build_scanning(void)
     lv_obj_set_size(ring, 82, 82);
     lv_obj_set_pos(ring, 69, 39);
     label_at(ring, "...", &lv_font_montserrat_20, 0x247052, 18, 22, 46);
+}
+
+static void build_place_status(
+    const char *title,
+    const char *action,
+    const char *message)
+{
+    s_screen = new_screen(title, action);
+    s_field = create_field(s_screen);
+    label_at(
+        s_field, "?", &lv_font_montserrat_20,
+        COLOR_CORAL, 90, 48, 40);
+    label_at(
+        s_screen, message, &lv_font_montserrat_14,
+        COLOR_MUTED, 10, 251, 220);
 }
 
 static void build_encounter(void)
@@ -573,6 +600,34 @@ static void build_state(void)
     case UI_SCANNING:
         build_scanning();
         break;
+    case UI_PLACE_PENDING:
+        build_place_status(
+            "NEW PLACE?", "VERIFYING", "Waiting for a second scan");
+        break;
+    case UI_PLACE_GRAY:
+        build_place_status(
+            "SIGNAL UNCLEAR", "OK  HOME", "Move a little and try again");
+        break;
+    case UI_PLACE_WILD:
+        build_place_status(
+            "NO PLACE FOUND", "OK  HOME", "Not enough Wi-Fi evidence");
+        break;
+    case UI_PLACE_UNSTABLE:
+        build_place_status(
+            "PLACE CHANGED", "OK  HOME", "Environment did not stabilize");
+        break;
+    case UI_PLACE_ERROR:
+        build_place_status(
+            "SCAN FAILED", "OK  RETRY", "Wi-Fi scan was not completed");
+        break;
+    case UI_PLACE_STORAGE_ERROR:
+        build_place_status(
+            "PLACE SAVE FAILED", "OK  RETRY", "New place was not recorded");
+        break;
+    case UI_PLACE_FULL:
+        build_place_status(
+            "PLACE MEMORY FULL", "OK  HOME", "No place record was overwritten");
+        break;
     case UI_ENCOUNTER:
         build_encounter();
         break;
@@ -668,7 +723,8 @@ static bool persist_discovery(void)
 
 static bool persist_capture(void)
 {
-    if (!s_bestiary_ready || s_encounter_sequence == 0U) {
+    if (!s_bestiary_ready || s_encounter_sequence == 0U ||
+        s_current_place_id == CITY_PLACE_INVALID_ID) {
         ESP_LOGE(TAG, "Bestiary unavailable; capture not persisted");
         return false;
     }
@@ -677,7 +733,7 @@ static bool persist_capture(void)
         &s_bestiary,
         s_encounter_sequence,
         CITY_SPECIES_CHARMANDER,
-        1U,
+        s_current_place_id,
         bsp_bestiary_store_persist,
         (void *)&BSP_BESTIARY_STORE_DEFAULT);
     if (result != CITY_BESTIARY_APPLIED &&
@@ -768,6 +824,94 @@ static void load_bestiary(void)
         migrated ? 1U : 0U);
 }
 
+static void load_place_data(void)
+{
+    s_place_data_ready = false;
+
+    bool identity_created = false;
+    bool catalog_found = false;
+    uint16_t place_count = 0U;
+    const esp_err_t err = place_scan_coordinator_start(
+        &PLACE_SCAN_COORDINATOR_CONFIG_DEFAULT,
+        &identity_created, &catalog_found, &place_count);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Place scan unavailable: %s", esp_err_to_name(err));
+        return;
+    }
+
+    s_place_data_ready = true;
+    ESP_LOGI(
+        TAG,
+        "PLACE_DATA_READY identity_created=%u catalog_found=%u places=%u",
+        identity_created ? 1U : 0U,
+        catalog_found ? 1U : 0U,
+        place_count);
+}
+
+static void begin_place_scan(void)
+{
+    s_current_place_id = CITY_PLACE_INVALID_ID;
+    if (!s_place_data_ready || !place_scan_coordinator_request()) {
+        set_state(UI_PLACE_ERROR);
+        return;
+    }
+    set_state(UI_SCANNING);
+}
+
+static void handle_place_result(const place_scan_result_t *result)
+{
+    if (result == NULL) {
+        return;
+    }
+    ESP_LOGI(
+        TAG,
+        "PLACE_RESULT kind=%d place_id=%u score=%u aps=%u duration_ms=%lu "
+        "heap_before=%lu heap_after=%lu heap_min=%lu error=%s",
+        (int)result->kind,
+        result->place_id,
+        result->confidence_permille,
+        result->ap_count,
+        (unsigned long)result->duration_ms,
+        (unsigned long)result->free_heap_before,
+        (unsigned long)result->free_heap_after,
+        (unsigned long)result->minimum_free_heap,
+        esp_err_to_name(result->error));
+
+    switch (result->kind) {
+    case PLACE_RESULT_KNOWN:
+    case PLACE_RESULT_NEW_CONFIRMED:
+        s_current_place_id = result->place_id;
+        s_attempts = CITY_GAME_CAPTURE_ATTEMPTS;
+        if (s_current_place_id == CITY_PLACE_INVALID_ID ||
+            !new_encounter_sequence(&s_encounter_sequence) ||
+            !request_bestiary_write(WRITE_DISCOVERY)) {
+            set_state(UI_STORAGE_ERROR);
+        }
+        break;
+    case PLACE_RESULT_CANDIDATE_WAIT:
+        set_state(UI_PLACE_PENDING);
+        break;
+    case PLACE_RESULT_GRAY:
+        set_state(UI_PLACE_GRAY);
+        break;
+    case PLACE_RESULT_WILD:
+        set_state(UI_PLACE_WILD);
+        break;
+    case PLACE_RESULT_UNSTABLE:
+        set_state(UI_PLACE_UNSTABLE);
+        break;
+    case PLACE_RESULT_SCAN_ERROR:
+        set_state(UI_PLACE_ERROR);
+        break;
+    case PLACE_RESULT_STORAGE_ERROR:
+        set_state(UI_PLACE_STORAGE_ERROR);
+        break;
+    case PLACE_RESULT_CAPACITY_FULL:
+        set_state(UI_PLACE_FULL);
+        break;
+    }
+}
+
 static void update_aim(uint64_t now)
 {
     if (now >= s_capture_deadline_ms) {
@@ -852,13 +996,10 @@ static void tick(lv_timer_t *timer)
     (void)timer;
     uint64_t now = now_ms();
 
-    if (s_state == UI_SCANNING &&
-        now - s_state_started_ms >= 900U &&
-        !s_save_in_progress) {
-        s_attempts = 3U;
-        if (!new_encounter_sequence(&s_encounter_sequence) ||
-            !request_bestiary_write(WRITE_DISCOVERY)) {
-            set_state(UI_STORAGE_ERROR);
+    if (s_state == UI_SCANNING || s_state == UI_PLACE_PENDING) {
+        place_scan_result_t result;
+        if (place_scan_coordinator_receive(&result)) {
+            handle_place_result(&result);
         }
     } else if (s_state == UI_AIM) {
         update_aim(now);
@@ -899,7 +1040,7 @@ static void on_button(bsp_btn_t button, bsp_btn_ev_t event, void *user)
             set_state(UI_HOME);
         } else if (button == BSP_BTN_OK) {
             if (s_home_selection == 0U) {
-                set_state(UI_SCANNING);
+                begin_place_scan();
             } else {
                 s_bestiary_selection = 0U;
                 set_state(UI_BESTIARY_LIST);
@@ -933,6 +1074,16 @@ static void on_button(bsp_btn_t button, bsp_btn_ev_t event, void *user)
     }
 
     switch (s_state) {
+    case UI_PLACE_ERROR:
+    case UI_PLACE_STORAGE_ERROR:
+        begin_place_scan();
+        break;
+    case UI_PLACE_GRAY:
+    case UI_PLACE_WILD:
+    case UI_PLACE_UNSTABLE:
+    case UI_PLACE_FULL:
+        set_state(UI_HOME);
+        break;
     case UI_ENCOUNTER:
         start_capture_session();
         break;
@@ -971,6 +1122,7 @@ void app_main(void)
         ESP_LOGE(TAG, "NVS init failed: %s", esp_err_to_name(nvs_err));
     } else {
         load_bestiary();
+        load_place_data();
     }
 
     ESP_ERROR_CHECK(bsp_i2c_init());
@@ -990,6 +1142,9 @@ void app_main(void)
         bsp_lvgl_unlock();
     }
 
-    ESP_LOGI(TAG, "READY display=1 buttons=1 capture_count=%lu",
-             (unsigned long)s_bestiary.charmander.capture_count);
+    ESP_LOGI(
+        TAG,
+        "READY display=1 buttons=1 capture_count=%lu place_data=%u",
+        (unsigned long)s_bestiary.charmander.capture_count,
+        s_place_data_ready ? 1U : 0U);
 }

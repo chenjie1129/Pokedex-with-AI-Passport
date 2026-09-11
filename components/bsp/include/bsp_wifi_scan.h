@@ -29,8 +29,9 @@ typedef struct {
 //   out       调用方提供的数组,容量 >= max_out
 //   max_out   数组容量
 //   out_count 可选,返回实际填入的 AP 数(扫描到 0 个时为 0)
+// 调用方必须在生成不可逆 AP Token 后立即安全清零 out；不得持久化或记录 BSSID。
 // 返回:
 //   ESP_OK            扫描流程完成(即使 0 个 AP);
-//   其他              Wi-Fi 初始化/扫描失败;此时协议栈仍保证已释放。
+//   其他              Wi-Fi 初始化、扫描或清理失败；函数仍会尝试完整释放协议栈。
 //   NVS 分区异常时不擦除用户数据(遵循仓库约定),直接返回错误。
 esp_err_t bsp_wifi_scan_once(bsp_wifi_ap_t *out, size_t max_out, size_t *out_count);

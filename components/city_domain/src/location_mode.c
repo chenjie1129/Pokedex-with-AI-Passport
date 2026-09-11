@@ -18,6 +18,14 @@ static void clear_candidate(city_location_state_t *state)
     memset(&state->candidate, 0, sizeof(state->candidate));
 }
 
+static bool location_lock_is_active(
+    const city_location_state_t *state,
+    uint64_t now_ms)
+{
+    return state->mode == CITY_LOCATION_KNOWN_PLACE &&
+           now_ms < state->locked_until_ms;
+}
+
 static city_location_output_t output_from_state(
     const city_location_state_t *state,
     city_location_event_t event)
@@ -59,15 +67,16 @@ city_location_output_t city_location_mode_step(
         return output_from_state(state, CITY_LOCATION_EVENT_SCAN_ERROR);
     }
 
-    if (state->mode == CITY_LOCATION_KNOWN_PLACE &&
-        input->now_ms < state->locked_until_ms) {
-        return output_from_state(state, CITY_LOCATION_EVENT_LOCKED);
-    }
+    const bool lock_active =
+        location_lock_is_active(state, input->now_ms);
 
     if (input->scan_status == CITY_SCAN_EMPTY ||
         (input->scan_status == CITY_SCAN_EVIDENCE &&
          input->fingerprint != NULL &&
          !city_place_fingerprint_is_usable(input->fingerprint))) {
+        if (lock_active) {
+            return output_from_state(state, CITY_LOCATION_EVENT_LOCKED);
+        }
         state->mode = CITY_LOCATION_WILD;
         state->region_id = CITY_PLACE_INVALID_ID;
         state->confidence_permille = 0U;
@@ -85,6 +94,13 @@ city_location_output_t city_location_mode_step(
         city_place_catalog_find(input->catalog, input->fingerprint);
     const city_place_relation_t relation =
         city_place_classify(match.score_permille);
+
+    if (lock_active && match.has_profile &&
+        ((relation == CITY_PLACE_RELATION_KNOWN &&
+          match.place_id == state->region_id) ||
+         relation == CITY_PLACE_RELATION_GRAY)) {
+        return output_from_state(state, CITY_LOCATION_EVENT_LOCKED);
+    }
 
     if (match.has_profile && relation == CITY_PLACE_RELATION_KNOWN) {
         state->mode = CITY_LOCATION_KNOWN_PLACE;
