@@ -40,6 +40,7 @@ const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matc
 
 let state = "home";
 let homeSelection = 0;
+let encounterSelection = 0;
 let bestiarySelection = 0;
 let pendingWrite = null;
 let attempts = 3;
@@ -51,6 +52,8 @@ let throwWillSucceed = false;
 let catchStartedAt = 0;
 let animationFrame = 0;
 let transitionTimers = [];
+let okLongPressTimer = 0;
+let okLongPressTriggered = false;
 let currentPlaceId = 1;
 let currentSpeciesId = 4;
 let currentStats = [39, 52, 43];
@@ -490,14 +493,29 @@ function drawPokeball(x, y, scale = 1) {
   ctx.restore();
 }
 
-function drawEncounter() {
+function drawEncounter(showChoices = true) {
   clearScene();
   drawGround();
   ctx.fillStyle = "rgb(28 76 57 / 20%)";
   ctx.beginPath();
-  ctx.ellipse(120, 132, 49, 9, 0, 0, Math.PI * 2);
+  ctx.ellipse(98, 132, 42, 8, 0, 0, Math.PI * 2);
   ctx.fill();
-  drawSpecies(1.92, 55, 18);
+  drawSpecies(1.72, 36, 22);
+
+  if (!showChoices) {
+    return;
+  }
+  ["捕获", "放弃"].forEach((label, index) => {
+    const selected = encounterSelection === index;
+    roundedRect(148, 79 + index * 39, 82, 32, 7,
+      selected ? "#fff0c8" : "#f7fbf8");
+    ctx.strokeStyle = selected ? "#ef6658" : "#d5e0dd";
+    ctx.lineWidth = selected ? 3 : 1;
+    ctx.strokeRect(149, 80 + index * 39, 80, 30);
+    ctx.fillStyle = "#183238";
+    ctx.font = "800 12px system-ui, sans-serif";
+    ctx.fillText(label, 170, 100 + index * 39);
+  });
 }
 
 function drawCapture() {
@@ -719,6 +737,7 @@ function updateTrace() {
     captured: "capture",
     storageError: "capture",
     escaped: "capture",
+    abandoned: "capture",
     bestiaryList: "bestiary",
     bestiaryDetail: "bestiary",
   };
@@ -765,7 +784,7 @@ function render() {
     : discoveredCount() > 0
       ? "图鉴已发现"
       : "离线模式";
-  const navigable = state === "home" ||
+  const navigable = state === "home" || state === "encounter" ||
     state === "bestiaryList";
   upButton.disabled = !navigable;
   downButton.disabled = !navigable;
@@ -791,16 +810,16 @@ function render() {
   } else if (state === "encounter") {
     eyebrow.textContent = "野外遭遇";
     title.textContent = `野生的${definition.name}出现了`;
-    message.textContent = `${definition.element}属性 · HP/攻击/防御`;
+    message.textContent = encounterSelection === 0 ? "准备捕获" : "保留发现记录并离开";
     meta.textContent = `${currentStats.join("/")} · 地点 ${currentPlaceId}`;
-    screenAction.textContent = "准备捕获";
+    screenAction.textContent = "上下选择 · OK 确认";
     drawEncounter();
   } else if (state === "capture") {
     eyebrow.textContent = `精灵球 × ${attempts}`;
     title.textContent = `瞄准${definition.name}`;
     message.textContent = "捕获环变绿时投球";
-    meta.textContent = "按下确认键投出精灵球";
-    screenAction.textContent = "投球";
+    meta.textContent = "单击 OK 投球 · 长按 OK 放弃";
+    screenAction.textContent = "投球 · 长按放弃";
     drawCapture();
   } else if (state === "throwing") {
     eyebrow.textContent = "第一人称投掷";
@@ -838,7 +857,14 @@ function render() {
     message.textContent = "发现记录仍在图鉴中";
     meta.textContent = "回首页可查看图鉴";
     screenAction.textContent = "返回首页";
-    drawEncounter();
+    drawEncounter(false);
+  } else if (state === "abandoned") {
+    eyebrow.textContent = "已放弃捕获";
+    title.textContent = `离开了${definition.name}`;
+    message.textContent = "发现记录仍保留在图鉴中";
+    meta.textContent = "可以稍后再次探索";
+    screenAction.textContent = "返回首页";
+    drawEncounter(false);
   } else if (state === "bestiaryList") {
     eyebrow.textContent = "本地图鉴";
     title.textContent = "收藏记录";
@@ -848,7 +874,7 @@ function render() {
           ? "???" : species[bestiarySelection].name}`
       : "返回首页";
     meta.textContent = `已发现 ${discoveredCount()} / ${species.length}`;
-    screenAction.textContent = "上下选择 · OK 打开";
+    screenAction.textContent = "上下选择 · 长按 OK 首页";
     drawBestiaryList();
   } else if (state === "bestiaryDetail") {
     const selected = species[bestiarySelection];
@@ -978,6 +1004,25 @@ function throwBall() {
   schedule(finishThrow, reducedMotion ? 140 : THROW_DURATION_MS);
 }
 
+function abandonEncounter() {
+  clearTimers();
+  attempts = 0;
+  markerValue = 0;
+  pendingWrite = null;
+  state = "abandoned";
+  render();
+}
+
+function handleLongOk() {
+  if (state === "capture") {
+    abandonEncounter();
+  } else if (state === "bestiaryList") {
+    bestiarySelection = 0;
+    state = "home";
+    render();
+  }
+}
+
 function handleOk() {
   if (state === "home") {
     if (homeSelection === 1) {
@@ -1000,6 +1045,7 @@ function handleOk() {
       if (persistSeen()) {
         pendingWrite = null;
         attempts = 3;
+        encounterSelection = 0;
         state = "encounter";
       } else {
         state = "storageError";
@@ -1007,7 +1053,11 @@ function handleOk() {
       render();
     }, 1350);
   } else if (state === "encounter") {
-    startCapture();
+    if (encounterSelection === 0) {
+      startCapture();
+    } else {
+      abandonEncounter();
+    }
   } else if (state === "capture") {
     throwBall();
   } else if (state === "captured") {
@@ -1022,7 +1072,7 @@ function handleOk() {
       state = operation === "discovery" ? "encounter" : "captured";
     }
     render();
-  } else if (state === "escaped") {
+  } else if (state === "escaped" || state === "abandoned") {
     state = "home";
     render();
   } else if (state === "bestiaryList") {
@@ -1051,6 +1101,7 @@ function reset() {
   captureMarker.style.left = "0%";
   state = "home";
   homeSelection = 0;
+  encounterSelection = 0;
   bestiarySelection = 0;
   pendingWrite = null;
   render();
@@ -1060,6 +1111,9 @@ function handleDirection() {
   if (state === "home") {
     homeSelection = homeSelection === 0 ? 1 : 0;
     render();
+  } else if (state === "encounter") {
+    encounterSelection = encounterSelection === 0 ? 1 : 0;
+    render();
   } else if (state === "bestiaryList" &&
              species.length > 0) {
     bestiarySelection = (bestiarySelection + 1) % (species.length + 1);
@@ -1067,7 +1121,26 @@ function handleDirection() {
   }
 }
 
-okButton.addEventListener("click", handleOk);
+okButton.addEventListener("pointerdown", () => {
+  okLongPressTriggered = false;
+  window.clearTimeout(okLongPressTimer);
+  okLongPressTimer = window.setTimeout(() => {
+    if (state === "capture" || state === "bestiaryList") {
+      okLongPressTriggered = true;
+      handleLongOk();
+    }
+  }, 650);
+});
+okButton.addEventListener("pointerup", () => window.clearTimeout(okLongPressTimer));
+okButton.addEventListener("pointercancel", () => window.clearTimeout(okLongPressTimer));
+okButton.addEventListener("pointerleave", () => window.clearTimeout(okLongPressTimer));
+okButton.addEventListener("click", () => {
+  if (okLongPressTriggered) {
+    okLongPressTriggered = false;
+    return;
+  }
+  handleOk();
+});
 upButton.addEventListener("click", handleDirection);
 downButton.addEventListener("click", handleDirection);
 resetButton.addEventListener("click", reset);
@@ -1075,6 +1148,14 @@ window.addEventListener("keydown", (event) => {
   if (event.key === "ArrowUp" || event.key === "ArrowDown") {
     event.preventDefault();
     handleDirection();
+  } else if (event.key === "Escape" || event.key.toLowerCase() === "b") {
+    if (state === "capture") {
+      event.preventDefault();
+      abandonEncounter();
+    } else if (state === "bestiaryList") {
+      event.preventDefault();
+      handleLongOk();
+    }
   } else if (event.key === "Enter" || event.key === " ") {
     if (event.target instanceof HTMLButtonElement) {
       return;
@@ -1095,6 +1176,7 @@ window.citySpiritsMvp = {
     currentSpeciesId,
     currentStats: [...currentStats],
     homeSelection,
+    encounterSelection,
     bestiarySelection,
   }),
 };

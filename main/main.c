@@ -68,6 +68,7 @@ typedef enum {
     UI_CATCHING,
     UI_CAPTURED,
     UI_ESCAPED,
+    UI_ABANDONED,
     UI_BESTIARY_LIST,
     UI_BESTIARY_DETAIL,
     UI_STORAGE_ERROR,
@@ -88,6 +89,7 @@ static city_bestiary_t s_bestiary;
 static bool s_bestiary_ready;
 static bool s_save_in_progress;
 static uint8_t s_home_selection;
+static uint8_t s_encounter_selection;
 static uint8_t s_bestiary_selection;
 static write_operation_t s_pending_write;
 static uint64_t s_encounter_sequence;
@@ -131,7 +133,7 @@ static const char *state_name(ui_state_t state)
         "home", "scanning", "place_pending", "place_gray", "place_wild",
         "place_unstable", "place_error", "place_storage_error",
         "place_full", "encounter", "aim", "throwing", "catching",
-        "captured", "escaped", "bestiary_list", "bestiary_detail",
+        "captured", "escaped", "abandoned", "bestiary_list", "bestiary_detail",
         "storage_error",
     };
     return names[state];
@@ -398,9 +400,25 @@ static void build_encounter(void)
         definition->species_id, definition->element,
         s_current_stats.hp, s_current_stats.attack,
         s_current_stats.defense);
-    s_screen = new_screen(title, "OK  CATCH");
+    s_screen = new_screen(title, "UP/DN SELECT  OK CONFIRM");
     s_field = create_field(s_screen);
     create_species(s_field, s_current_species_id, false);
+
+    const char *choices[] = {"CATCH", "LEAVE"};
+    for (uint8_t i = 0U; i < 2U; ++i) {
+        lv_obj_t *choice = lv_obj_create(s_field);
+        const bool selected = s_encounter_selection == i;
+        style_plain(choice, selected ? 0xFFF3CF : 0xF7FBF8);
+        lv_obj_set_style_radius(choice, 6, 0);
+        lv_obj_set_style_border_width(choice, selected ? 2 : 1, 0);
+        lv_obj_set_style_border_color(
+            choice, lv_color_hex(selected ? COLOR_CORAL : 0xD5E0DD), 0);
+        lv_obj_set_size(choice, 78, 28);
+        lv_obj_set_pos(choice, 137, 88 + (int)i * 34);
+        label_at(
+            choice, choices[i], &lv_font_montserrat_14,
+            COLOR_INK, 4, 6, 70);
+    }
     label_at(
         s_screen, meta, &lv_font_montserrat_14,
         COLOR_MUTED, 10, META_Y, 220);
@@ -425,7 +443,7 @@ static void build_aim(void)
         city_species_definition(s_current_species_id);
     char title[32];
     snprintf(title, sizeof(title), "AIM %s", definition->name);
-    s_screen = new_screen(title, "OK  THROW");
+    s_screen = new_screen(title, "OK THROW  HOLD OK LEAVE");
     s_field = create_field(s_screen);
     create_species(s_field, s_current_species_id, true);
 
@@ -507,9 +525,22 @@ static void build_escaped(void)
              COLOR_MUTED, 10, META_Y, 220);
 }
 
+static void build_abandoned(void)
+{
+    const city_species_definition_t *definition =
+        city_species_definition(s_current_species_id);
+    char message[48];
+    snprintf(message, sizeof(message), "You left %s alone", definition->name);
+    s_screen = new_screen("ENCOUNTER ENDED", "OK  HOME");
+    s_field = create_field(s_screen);
+    create_species(s_field, s_current_species_id, false);
+    label_at(s_screen, message, &lv_font_montserrat_14,
+             COLOR_MUTED, 10, META_Y, 220);
+}
+
 static void build_bestiary_list(void)
 {
-    s_screen = new_screen("BESTIARY", "UP/DN SELECT  OK OPEN");
+    s_screen = new_screen("BESTIARY", "UP/DN SELECT  HOLD OK HOME");
     const uint16_t species_ids[CITY_SPECIES_COUNT] = {
         CITY_SPECIES_BULBASAUR,
         CITY_SPECIES_CHARMANDER,
@@ -769,6 +800,9 @@ static void build_state(void)
     case UI_ESCAPED:
         build_escaped();
         break;
+    case UI_ABANDONED:
+        build_abandoned();
+        break;
     case UI_BESTIARY_LIST:
         build_bestiary_list();
         break;
@@ -1009,6 +1043,7 @@ static void handle_place_result(const place_scan_result_t *result)
     case PLACE_RESULT_NEW_CONFIRMED:
         s_current_place_id = result->place_id;
         s_attempts = CITY_GAME_CAPTURE_ATTEMPTS;
+        s_encounter_selection = 0U;
         city_encounter_selection_t selection;
         if (s_current_place_id == CITY_PLACE_INVALID_ID ||
             !new_encounter_sequence(&s_encounter_sequence) ||
@@ -1157,6 +1192,18 @@ static void tick(lv_timer_t *timer)
     }
 }
 
+static void abandon_encounter(void)
+{
+    s_attempts = 0U;
+    s_throw_hit = false;
+    s_round.active = false;
+    s_capture_deadline_ms = 0U;
+    ESP_LOGI(
+        TAG, "ENCOUNTER_ABANDONED species=%03u place_id=%u",
+        s_current_species_id, s_current_place_id);
+    set_state(UI_ABANDONED);
+}
+
 static void throw_ball(void)
 {
     city_capture_result_t result = city_capture_throw(&s_round, now_ms());
@@ -1169,7 +1216,10 @@ static void throw_ball(void)
 static void on_button(bsp_btn_t button, bsp_btn_ev_t event, void *user)
 {
     (void)user;
-    if (event != BSP_BTN_CLICK) {
+    const bool handles_long_ok =
+        event == BSP_BTN_LONG && button == BSP_BTN_OK &&
+        (s_state == UI_AIM || s_state == UI_BESTIARY_LIST);
+    if (event != BSP_BTN_CLICK && !handles_long_ok) {
         return;
     }
     if (!bsp_lvgl_lock(500)) {
@@ -1177,8 +1227,19 @@ static void on_button(bsp_btn_t button, bsp_btn_ev_t event, void *user)
         return;
     }
 
-    ESP_LOGI(TAG, "BUTTON key=%d state=%s",
-             (int)button, state_name(s_state));
+    ESP_LOGI(TAG, "BUTTON key=%d event=%d state=%s",
+             (int)button, (int)event, state_name(s_state));
+    if (handles_long_ok) {
+        if (s_state == UI_AIM) {
+            abandon_encounter();
+        } else {
+            s_bestiary_selection = 0U;
+            set_state(UI_HOME);
+        }
+        bsp_lvgl_unlock();
+        return;
+    }
+
     if (s_state == UI_HOME) {
         if (button == BSP_BTN_UP || button == BSP_BTN_DOWN) {
             s_home_selection = s_home_selection == 0U ? 1U : 0U;
@@ -1191,6 +1252,14 @@ static void on_button(bsp_btn_t button, bsp_btn_ev_t event, void *user)
                 set_state(UI_BESTIARY_LIST);
             }
         }
+        bsp_lvgl_unlock();
+        return;
+    }
+
+    if (s_state == UI_ENCOUNTER &&
+        (button == BSP_BTN_UP || button == BSP_BTN_DOWN)) {
+        s_encounter_selection = s_encounter_selection == 0U ? 1U : 0U;
+        set_state(UI_ENCOUNTER);
         bsp_lvgl_unlock();
         return;
     }
@@ -1246,7 +1315,11 @@ static void on_button(bsp_btn_t button, bsp_btn_ev_t event, void *user)
         set_state(UI_HOME);
         break;
     case UI_ENCOUNTER:
-        start_capture_session();
+        if (s_encounter_selection == 0U) {
+            start_capture_session();
+        } else {
+            abandon_encounter();
+        }
         break;
     case UI_AIM:
         throw_ball();
@@ -1257,6 +1330,7 @@ static void on_button(bsp_btn_t button, bsp_btn_ev_t event, void *user)
         set_state(UI_BESTIARY_DETAIL);
         break;
     case UI_ESCAPED:
+    case UI_ABANDONED:
         set_state(UI_HOME);
         break;
     case UI_BESTIARY_DETAIL:

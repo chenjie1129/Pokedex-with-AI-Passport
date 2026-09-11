@@ -146,6 +146,21 @@ city_game_event_t city_game_begin_capture(
     return CITY_GAME_EVENT_CAPTURE_STARTED;
 }
 
+city_game_event_t city_game_abandon(city_game_session_t *session)
+{
+    if (session == NULL ||
+        (session->stage != CITY_GAME_ENCOUNTER &&
+         session->stage != CITY_GAME_CAPTURE)) {
+        return CITY_GAME_EVENT_INVALID;
+    }
+
+    session->attempts_remaining = 0U;
+    session->capture_round.active = false;
+    session->reward_pending = false;
+    session->stage = CITY_GAME_ABANDONED;
+    return CITY_GAME_EVENT_ABANDONED;
+}
+
 city_game_event_t city_game_throw(
     city_game_session_t *session,
     uint64_t now_ms,
