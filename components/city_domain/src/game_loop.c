@@ -49,11 +49,12 @@ static city_game_event_t persist_pending_reward(
     city_bestiary_persist_fn persist,
     void *context)
 {
-    const city_bestiary_result_t result = city_bestiary_capture(
+    const city_bestiary_result_t result = city_bestiary_capture_with_stats(
         bestiary,
         session->encounter_sequence,
         session->species_id,
         session->place_id,
+        &session->stats,
         persist,
         context);
 
@@ -89,14 +90,38 @@ city_game_event_t city_game_arrive(
     uint64_t encounter_sequence,
     uint32_t seed)
 {
+    const city_species_definition_t *definition =
+        city_species_definition(CITY_SPECIES_CHARMANDER);
+    const city_creature_stats_t stats = {
+        .hp = definition->base_hp,
+        .attack = definition->base_attack,
+        .defense = definition->base_defense,
+    };
+    return city_game_arrive_with_species(
+        session, place_id, CITY_SPECIES_CHARMANDER, &stats,
+        encounter_sequence, seed);
+}
+
+city_game_event_t city_game_arrive_with_species(
+    city_game_session_t *session,
+    uint16_t place_id,
+    uint16_t species_id,
+    const city_creature_stats_t *stats,
+    uint64_t encounter_sequence,
+    uint32_t seed)
+{
     if (session == NULL || session->stage != CITY_GAME_WAITING_FOR_PLACE ||
-        place_id == CITY_PLACE_INVALID_ID || encounter_sequence == 0U) {
+        place_id == CITY_PLACE_INVALID_ID || encounter_sequence == 0U ||
+        city_species_definition(species_id) == NULL || stats == NULL ||
+        stats->hp == 0U || stats->attack == 0U ||
+        stats->defense == 0U) {
         return CITY_GAME_EVENT_INVALID;
     }
 
     session->stage = CITY_GAME_ENCOUNTER;
     session->place_id = place_id;
-    session->species_id = CITY_SPECIES_CHARMANDER;
+    session->species_id = species_id;
+    session->stats = *stats;
     session->encounter_sequence = encounter_sequence;
     session->capture_seed = seed;
     session->attempts_remaining = CITY_GAME_CAPTURE_ATTEMPTS;

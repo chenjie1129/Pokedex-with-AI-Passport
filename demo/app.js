@@ -1,4 +1,4 @@
-const STORAGE_KEY = "city-spirits-passport-mvp";
+const STORAGE_KEY = "city-spirits-passport-mvp-v2";
 const CAPTURE_ATTEMPT_MS = 4200;
 const CAPTURE_BUDGET_MS = 15000;
 const TARGET_START = 25;
@@ -9,8 +9,18 @@ const device = document.querySelector(".device");
 const screen = document.querySelector("#screen");
 const canvas = document.querySelector("#scene");
 const ctx = canvas.getContext("2d");
-const charmanderImage = new Image();
-charmanderImage.src = "./assets/charmander.png?v=pokemon-004";
+const species = [
+  { id: 1, name: "妙蛙种子", english: "Bulbasaur", element: "草", base: [45, 49, 49],
+    image: "./assets/bulbasaur.png?v=pokemon-001" },
+  { id: 4, name: "小火龙", english: "Charmander", element: "火", base: [39, 52, 43],
+    image: "./assets/charmander.png?v=pokemon-004" },
+  { id: 7, name: "杰尼龟", english: "Squirtle", element: "水", base: [44, 48, 65],
+    image: "./assets/squirtle.png?v=pokemon-007" },
+].map((entry) => {
+  const image = new Image();
+  image.src = entry.image;
+  return { ...entry, image };
+});
 const eyebrow = document.querySelector("#eyebrow");
 const title = document.querySelector("#title");
 const message = document.querySelector("#message");
@@ -41,45 +51,61 @@ let throwWillSucceed = false;
 let catchStartedAt = 0;
 let animationFrame = 0;
 let transitionTimers = [];
+let currentPlaceId = 1;
+let currentSpeciesId = 4;
+let currentStats = [39, 52, 43];
 
 debugPanel.hidden = !debugMode;
 document.querySelector(".workspace").classList.toggle("debug-mode", debugMode);
 
 function loadSave() {
+  const emptyRecords = Object.fromEntries(species.map(({ id }) => [
+    id, { state: "unknown", captureCount: 0, placeId: null, latest: null, best: null },
+  ]));
   try {
     const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
     return {
-      captureCount: Number.isInteger(parsed.captureCount) && parsed.captureCount >= 0
-        ? parsed.captureCount
-        : 0,
-      discoveryState: ["unknown", "seen", "captured"].includes(parsed.discoveryState)
-        ? parsed.discoveryState
-        : parsed.captured === true
-          ? "captured"
-          : "unknown",
-      captured: parsed.captured === true,
-      placeId: parsed.placeId === 1 ? 1 : null,
+      records: Object.fromEntries(species.map(({ id }) => {
+        const record = parsed.records?.[id] || emptyRecords[id];
+        return [id, {
+          state: ["unknown", "seen", "captured"].includes(record.state)
+            ? record.state : "unknown",
+          captureCount: Number.isInteger(record.captureCount) ? record.captureCount : 0,
+          placeId: Number.isInteger(record.placeId) ? record.placeId : null,
+          latest: Array.isArray(record.latest) ? record.latest : null,
+          best: Array.isArray(record.best) ? record.best : null,
+        }];
+      })),
+      nextPlaceId: Number.isInteger(parsed.nextPlaceId) ? parsed.nextPlaceId : 1,
     };
   } catch {
-    return {
-      captureCount: 0,
-      discoveryState: "unknown",
-      captured: false,
-      placeId: null,
-    };
+    return { records: emptyRecords, nextPlaceId: 1 };
   }
 }
 
 let save = loadSave();
 
-function persistSeen() {
-  if (save.discoveryState !== "unknown") {
-    return true;
-  }
-  const next = {
-    ...save,
-    discoveryState: "seen",
-  };
+function currentSpecies() {
+  return species.find(({ id }) => id === currentSpeciesId);
+}
+
+function currentRecord() {
+  return save.records[currentSpeciesId];
+}
+
+function discoveredCount() {
+  return species.filter(({ id }) => save.records[id].state !== "unknown").length;
+}
+
+function capturedCount() {
+  return species.filter(({ id }) => save.records[id].state === "captured").length;
+}
+
+function totalCaptureCount() {
+  return species.reduce((total, { id }) => total + save.records[id].captureCount, 0);
+}
+
+function persist(next) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     save = next;
@@ -89,21 +115,36 @@ function persistSeen() {
   }
 }
 
-function persistCapture() {
-  const next = {
-    captureCount: save.captureCount + 1,
-    discoveryState: "captured",
-    captured: true,
-    placeId: 1,
-  };
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    save = next;
-    captureCount.textContent = String(save.captureCount);
+function persistSeen() {
+  const record = currentRecord();
+  if (record.state !== "unknown") {
     return true;
-  } catch {
-    return false;
   }
+  return persist({
+    ...save,
+    records: { ...save.records, [currentSpeciesId]: { ...record, state: "seen" } },
+  });
+}
+
+function persistCapture() {
+  const record = currentRecord();
+  const score = (stats) => stats.reduce((total, value) => total + value, 0);
+  const best = !record.best || score(currentStats) > score(record.best)
+    ? [...currentStats] : record.best;
+  const next = {
+    ...save,
+    records: {
+      ...save.records,
+      [currentSpeciesId]: {
+        state: "captured",
+        captureCount: record.captureCount + 1,
+        placeId: currentPlaceId,
+        latest: [...currentStats],
+        best,
+      },
+    },
+  };
+  return persist(next);
 }
 
 function clearTimers() {
@@ -376,10 +417,11 @@ function drawCharmanderIllustration(scale = 1, offsetX = 0, offsetY = 0) {
   ctx.restore();
 }
 
-function drawCharmander(scale = 1, offsetX = 0, offsetY = 0) {
+function drawSpecies(scale = 1, offsetX = 0, offsetY = 0, speciesId = currentSpeciesId) {
+  const definition = species.find(({ id }) => id === speciesId);
   const size = 68 * scale;
-  if (charmanderImage.complete && charmanderImage.naturalWidth > 0) {
-    ctx.drawImage(charmanderImage, offsetX, offsetY, size, size);
+  if (definition.image.complete && definition.image.naturalWidth > 0) {
+    ctx.drawImage(definition.image, offsetX, offsetY, size, size);
     return;
   }
   drawCharmanderIllustration(scale, offsetX, offsetY);
@@ -455,7 +497,7 @@ function drawEncounter() {
   ctx.beginPath();
   ctx.ellipse(120, 132, 49, 9, 0, 0, Math.PI * 2);
   ctx.fill();
-  drawCharmander(1.92, 55, 18);
+  drawSpecies(1.92, 55, 18);
 }
 
 function drawCapture() {
@@ -465,7 +507,7 @@ function drawCapture() {
   ctx.beginPath();
   ctx.ellipse(120, 112, 40, 7, 0, 0, Math.PI * 2);
   ctx.fill();
-  drawCharmander(1.52, 68, 9);
+  drawSpecies(1.52, 68, 9);
 
   const inTarget = markerValue >= TARGET_START && markerValue <= TARGET_END;
   const ringRadius = 31 + Math.abs(markerValue - 50) * 0.28;
@@ -496,7 +538,7 @@ function drawThrowing(now = performance.now()) {
   ctx.beginPath();
   ctx.ellipse(120, 112, 40, 7, 0, 0, Math.PI * 2);
   ctx.fill();
-  drawCharmander(1.52, 68, 9);
+  drawSpecies(1.52, 68, 9);
 
   const duration = reducedMotion ? 140 : THROW_DURATION_MS;
   const progress = Math.min(1, Math.max(0, (now - throwStartedAt) / duration));
@@ -558,11 +600,7 @@ function drawHome() {
   clearScene("#fffdf7");
   const rows = [
     ["探索", "寻找附近的精灵"],
-    ["图鉴", save.discoveryState === "unknown"
-      ? "0 已发现 · 0 已捕获"
-      : save.discoveryState === "seen"
-        ? "1 已发现 · 0 已捕获"
-        : "1 已发现 · 1 已捕获"],
+    ["图鉴", `${discoveredCount()} 已发现 · ${capturedCount()} 已捕获`],
   ];
   rows.forEach(([label, detail], index) => {
     const y = 10 + index * 76;
@@ -587,44 +625,38 @@ function drawHome() {
 
 function drawBestiaryList() {
   clearScene("#fffdf7");
-  if (save.discoveryState === "unknown") {
-    roundedRect(8, 10, 224, 146, 8, "#f7fbf8");
-    ctx.fillStyle = "#ef5b4f";
-    ctx.font = "800 26px system-ui, sans-serif";
-    ctx.fillText("?", 112, 57);
+  species.forEach((definition, index) => {
+    const record = save.records[definition.id];
+    const selected = bestiarySelection === index;
+    const y = 4 + index * 48;
+    roundedRect(8, y, 224, 43, 6, selected ? "#e4f4e8" : "#f7fbf8");
     ctx.fillStyle = "#183238";
-    ctx.font = "800 16px system-ui, sans-serif";
-    ctx.fillText("还没有图鉴条目", 64, 91);
-    ctx.fillStyle = "#60777a";
-    ctx.font = "600 11px system-ui, sans-serif";
-    ctx.fillText("先去探索一个地点", 70, 116);
-    return;
-  }
+    ctx.font = "800 11px system-ui, sans-serif";
+    ctx.fillText(
+      `No.${String(definition.id).padStart(3, "0")} ${
+        record.state === "unknown" ? "???" : definition.name}`,
+      18, y + 18,
+    );
+    ctx.fillStyle = record.state === "captured" ? "#ef5b4f" :
+      record.state === "seen" ? "#55a86c" : "#60777a";
+    ctx.font = "800 9px system-ui, sans-serif";
+    ctx.fillText(
+      record.state === "captured" ? `已捕获 ${record.captureCount}` :
+        record.state === "seen" ? "已发现" : "未知",
+      158, y + 18,
+    );
+  });
 
-  const selected = bestiarySelection === 0;
-  roundedRect(8, 8, 224, 94, 8, selected ? "#e4f4e8" : "#f7fbf8");
-  ctx.save();
-  if (save.discoveryState === "seen") ctx.globalAlpha = 0.55;
-  drawCharmander(0.76, 9, 13);
-  ctx.restore();
+  const backSelected = bestiarySelection === species.length;
+  roundedRect(8, 148, 224, 34, 6, backSelected ? "#e4f4e8" : "#f7fbf8");
   ctx.fillStyle = "#183238";
-  ctx.font = "800 13px system-ui, sans-serif";
-  ctx.fillText("No.004 小火龙", 94, 34);
-  ctx.fillStyle = save.discoveryState === "captured" ? "#ef5b4f" : "#55a86c";
   ctx.font = "800 11px system-ui, sans-serif";
-  ctx.fillText(save.discoveryState === "captured" ? "已捕获" : "已发现", 94, 58);
-  ctx.fillStyle = "#60777a";
-  ctx.font = "600 10px system-ui, sans-serif";
-  ctx.fillText("捕获 " + save.captureCount, 94, 80);
-
-  const backSelected = bestiarySelection === 1;
-  roundedRect(8, 112, 224, 44, 8, backSelected ? "#e4f4e8" : "#f7fbf8");
-  ctx.fillStyle = "#183238";
-  ctx.font = "800 14px system-ui, sans-serif";
-  ctx.fillText("返回首页", 24, 140);
+  ctx.fillText("返回首页", 18, 169);
 }
 
 function drawBestiary() {
+  const definition = species[bestiarySelection];
+  const record = save.records[definition.id];
   clearScene("#ffe4c4");
 
   ctx.fillStyle = "#ef7054";
@@ -642,27 +674,31 @@ function drawBestiary() {
   ctx.ellipse(60, 127, 43, 9, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.save();
-  if (save.discoveryState === "seen") ctx.globalAlpha = 0.55;
-  drawCharmander(1.48, 8, 37);
+  if (record.state === "seen") ctx.globalAlpha = 0.55;
+  drawSpecies(1.48, 8, 37, definition.id);
   ctx.restore();
 
   ctx.fillStyle = "#657b7d";
   ctx.font = "700 9px system-ui, sans-serif";
-  ctx.fillText("No.004", 124, 35);
+  ctx.fillText(`No.${String(definition.id).padStart(3, "0")}`, 124, 35);
   ctx.fillStyle = "#183238";
   ctx.font = "800 18px system-ui, sans-serif";
-  ctx.fillText("小火龙", 124, 58);
+  ctx.fillText(definition.name, 124, 58);
 
   roundedRect(124, 67, 48, 18, 8,
-    save.discoveryState === "captured" ? "#ef6658" : "#55a86c");
+    record.state === "captured" ? "#ef6658" : "#55a86c");
   ctx.fillStyle = "#ffffff";
   ctx.font = "800 9px system-ui, sans-serif";
-  ctx.fillText(save.discoveryState === "captured" ? "捕获" : "发现", 136, 80);
+  ctx.fillText(record.state === "captured" ? "捕获" : "发现", 136, 80);
 
   ctx.fillStyle = "#60777a";
   ctx.font = "600 9px system-ui, sans-serif";
-  ctx.fillText("捕获次数  " + save.captureCount, 124, 105);
-  ctx.fillText(save.placeId ? "发现地点  城市绿地" : "发现地点  --", 124, 122);
+  ctx.fillText("捕获次数  " + record.captureCount, 124, 102);
+  ctx.fillText(record.placeId ? `发现地点  ${record.placeId}` : "发现地点  --", 124, 117);
+  if (record.latest) {
+    ctx.fillText(`最近 ${record.latest.join("/")}`, 124, 132);
+    ctx.fillText(`最佳 ${record.best.join("/")}`, 124, 147);
+  }
 
   ctx.fillStyle = "#d7e8e4";
   ctx.fillRect(124, 136, 86, 6);
@@ -696,18 +732,41 @@ function updateTrace() {
   });
 }
 
+function selectEncounter(placeId) {
+  const weightsByPlace = [
+    [25, 60, 15],
+    [60, 25, 15],
+    [15, 25, 60],
+  ];
+  let weights = [...weightsByPlace[(placeId - 1) % weightsByPlace.length]];
+  const unknown = species.map(({ id }) => save.records[id].state === "unknown");
+  if (unknown.some(Boolean)) {
+    weights = weights.map((weight, index) => unknown[index] ? weight : 0);
+  }
+  let roll = Math.random() * weights.reduce((sum, weight) => sum + weight, 0);
+  let index = 0;
+  for (; index < weights.length - 1 && roll >= weights[index]; index += 1) {
+    roll -= weights[index];
+  }
+  const definition = species[index];
+  currentSpeciesId = definition.id;
+  currentStats = definition.base.map((value) => value + Math.floor(Math.random() * 16));
+}
+
 function render() {
+  const record = currentRecord();
+  const definition = currentSpecies();
   device.dataset.state = state;
   screen.dataset.state = state;
-  captureCount.textContent = String(save.captureCount);
+  captureCount.textContent = String(totalCaptureCount());
   captureMeter.hidden = state !== "capture";
-  saveState.textContent = save.discoveryState === "captured"
+  saveState.textContent = capturedCount() > 0
     ? "图鉴已捕获"
-    : save.discoveryState === "seen"
+    : discoveredCount() > 0
       ? "图鉴已发现"
       : "离线模式";
   const navigable = state === "home" ||
-    (state === "bestiaryList" && save.discoveryState !== "unknown");
+    state === "bestiaryList";
   upButton.disabled = !navigable;
   downButton.disabled = !navigable;
 
@@ -731,14 +790,14 @@ function render() {
     drawSignal();
   } else if (state === "encounter") {
     eyebrow.textContent = "野外遭遇";
-    title.textContent = "野生的小火龙出现了";
-    message.textContent = "尾焰在风里轻轻跳动";
-    meta.textContent = "No.004 · 已写入发现记录";
+    title.textContent = `野生的${definition.name}出现了`;
+    message.textContent = `${definition.element}属性 · HP/攻击/防御`;
+    meta.textContent = `${currentStats.join("/")} · 地点 ${currentPlaceId}`;
     screenAction.textContent = "准备捕获";
     drawEncounter();
   } else if (state === "capture") {
     eyebrow.textContent = `精灵球 × ${attempts}`;
-    title.textContent = "瞄准小火龙";
+    title.textContent = `瞄准${definition.name}`;
     message.textContent = "捕获环变绿时投球";
     meta.textContent = "按下确认键投出精灵球";
     screenAction.textContent = "投球";
@@ -746,7 +805,7 @@ function render() {
   } else if (state === "throwing") {
     eyebrow.textContent = "第一人称投掷";
     title.textContent = "精灵球飞出去了";
-    message.textContent = "命中小火龙";
+    message.textContent = `命中${definition.name}`;
     meta.textContent = "正在判定捕获结果";
     screenAction.textContent = "投掷中";
     drawThrowing();
@@ -760,8 +819,8 @@ function render() {
   } else if (state === "captured") {
     eyebrow.textContent = "捕获成功";
     title.textContent = "太棒了！";
-    message.textContent = "成功捕获小火龙";
-    meta.textContent = `第 ${save.captureCount} 次捕获记录`;
+    message.textContent = `成功捕获${definition.name}`;
+    meta.textContent = `个体值 ${currentStats.join("/")}`;
     screenAction.textContent = "查看图鉴";
     drawCaptured();
   } else if (state === "storageError") {
@@ -775,7 +834,7 @@ function render() {
     pendingWrite === "discovery" ? drawSignal() : drawCaptured();
   } else if (state === "escaped") {
     eyebrow.textContent = "捕获失败";
-    title.textContent = "小火龙逃走了";
+    title.textContent = `${definition.name}逃走了`;
     message.textContent = "发现记录仍在图鉴中";
     meta.textContent = "回首页可查看图鉴";
     screenAction.textContent = "返回首页";
@@ -783,24 +842,25 @@ function render() {
   } else if (state === "bestiaryList") {
     eyebrow.textContent = "本地图鉴";
     title.textContent = "收藏记录";
-    message.textContent = save.discoveryState === "unknown"
-      ? "还没有发现精灵"
-      : bestiarySelection === 0
-        ? "No.004 · 小火龙"
-        : "返回首页";
-    meta.textContent = "已发现 " +
-      (save.discoveryState === "unknown" ? 0 : 1) + " / 1";
-    screenAction.textContent = save.discoveryState === "unknown"
-      ? "OK 返回"
-      : "上下选择 · OK 打开";
+    message.textContent = bestiarySelection < species.length
+      ? `No.${String(species[bestiarySelection].id).padStart(3, "0")} · ${
+        save.records[species[bestiarySelection].id].state === "unknown"
+          ? "???" : species[bestiarySelection].name}`
+      : "返回首页";
+    meta.textContent = `已发现 ${discoveredCount()} / ${species.length}`;
+    screenAction.textContent = "上下选择 · OK 打开";
     drawBestiaryList();
   } else if (state === "bestiaryDetail") {
-    eyebrow.textContent = "图鉴 No.004";
-    title.textContent = "小火龙";
-    message.textContent = save.discoveryState === "captured"
+    const selected = species[bestiarySelection];
+    const selectedRecord = save.records[selected.id];
+    eyebrow.textContent = `图鉴 No.${String(selected.id).padStart(3, "0")}`;
+    title.textContent = selected.name;
+    message.textContent = selectedRecord.state === "captured"
       ? "已捕获"
       : "已发现 · 尚未捕获";
-    meta.textContent = "尾巴上的火焰象征生命力";
+    meta.textContent = selectedRecord.best
+      ? `最佳个体 ${selectedRecord.best.join("/")}`
+      : `${selected.element}属性`;
     screenAction.textContent = "返回列表";
     drawBestiary();
   }
@@ -927,6 +987,9 @@ function handleOk() {
       return;
     }
     state = "scanning";
+    currentPlaceId = save.nextPlaceId;
+    selectEncounter(currentPlaceId);
+    persist({ ...save, nextPlaceId: (save.nextPlaceId % 3) + 1 });
     render();
     schedule(() => {
       state = "place";
@@ -948,6 +1011,7 @@ function handleOk() {
   } else if (state === "capture") {
     throwBall();
   } else if (state === "captured") {
+    bestiarySelection = species.findIndex(({ id }) => id === currentSpeciesId);
     state = "bestiaryDetail";
     render();
   } else if (state === "storageError") {
@@ -962,9 +1026,9 @@ function handleOk() {
     state = "home";
     render();
   } else if (state === "bestiaryList") {
-    if (save.discoveryState === "unknown" || bestiarySelection === 1) {
+    if (bestiarySelection === species.length) {
       state = "home";
-    } else {
+    } else if (save.records[species[bestiarySelection].id].state !== "unknown") {
       state = "bestiaryDetail";
     }
     render();
@@ -997,8 +1061,8 @@ function handleDirection() {
     homeSelection = homeSelection === 0 ? 1 : 0;
     render();
   } else if (state === "bestiaryList" &&
-             save.discoveryState !== "unknown") {
-    bestiarySelection = bestiarySelection === 0 ? 1 : 0;
+             species.length > 0) {
+    bestiarySelection = (bestiarySelection + 1) % (species.length + 1);
     render();
   }
 }
@@ -1025,12 +1089,15 @@ window.citySpiritsMvp = {
     state,
     attempts,
     markerValue,
-    captureCount: save.captureCount,
-    discoveryState: save.discoveryState,
+    captureCount: totalCaptureCount(),
+    discoveryState: currentRecord().state,
+    currentPlaceId,
+    currentSpeciesId,
+    currentStats: [...currentStats],
     homeSelection,
     bestiarySelection,
   }),
 };
 
-charmanderImage.addEventListener("load", render);
+species.forEach(({ image }) => image.addEventListener("load", render));
 render();

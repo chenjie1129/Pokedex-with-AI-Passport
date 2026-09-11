@@ -462,6 +462,10 @@ Install the current firmware on another compatible AI Passport with the
 The production integration work for real Wi-Fi place recognition is specified
 in the [T08 Real Place Integration Plan](docs/architecture/t08-real-place-integration.md).
 
+The three-species encounter model, individual attributes, place weights, and
+schema-v4 migration are described in the
+[T09 Three-Species Encounter Design](docs/architecture/t09-three-species-encounters.md).
+
 ### Charmander capture MVP
 
 The first playable vertical slice now covers:

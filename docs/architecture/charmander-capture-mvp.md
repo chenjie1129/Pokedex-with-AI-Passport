@@ -12,8 +12,10 @@ confirmed place
   -> bestiary detail
 ```
 
-Only Charmander is playable. Bulbasaur and Squirtle are intentionally deferred
-until this loop is accepted.
+This document records the original single-species vertical slice. T09 now
+generalizes the same transaction and capture loop to Bulbasaur, Charmander, and
+Squirtle; see
+[T09 Three-Species Encounters](t09-three-species-encounters.md).
 
 ## Domain design
 
@@ -28,7 +30,7 @@ which keeps Host tests deterministic.
 
 ### Bestiary service
 
-The bestiary stores:
+The original bestiary stored:
 
 - Charmander discovery state;
 - capture count and last local place ID;
@@ -40,9 +42,9 @@ to persist that copy, and mutates live state only after persistence succeeds.
 Any encounter sequence at or below the durable high-water mark is a duplicate,
 including events replayed long after the former 16-entry window would have
 evicted them. New encounters use `last_settled_sequence + 1`, so storage remains
-fixed-size while lifetime capture count remains independent. Schema v3 keeps
-the encoded blob at 156 bytes, decodes valid schema-v1/v2 snapshots, and the BSP
-rewrites migrated blobs canonically during load.
+fixed-size while lifetime capture count remains independent. Schema v4 keeps
+the encoded blob at 156 bytes, decodes valid schema-v1/v2/v3 snapshots, and the
+BSP rewrites migrated blobs canonically during load.
 
 ### Game loop
 

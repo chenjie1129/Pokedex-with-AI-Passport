@@ -39,6 +39,7 @@ typedef struct {
     city_game_stage_t stage;
     uint16_t place_id;
     uint16_t species_id;
+    city_creature_stats_t stats;
     uint64_t encounter_sequence;
     uint32_t capture_seed;
     uint8_t attempts_remaining;
@@ -53,6 +54,14 @@ void city_game_init(city_game_session_t *session);
 city_game_event_t city_game_arrive(
     city_game_session_t *session,
     uint16_t place_id,
+    uint64_t encounter_sequence,
+    uint32_t seed);
+
+city_game_event_t city_game_arrive_with_species(
+    city_game_session_t *session,
+    uint16_t place_id,
+    uint16_t species_id,
+    const city_creature_stats_t *stats,
     uint64_t encounter_sequence,
     uint32_t seed);
 

@@ -12,6 +12,7 @@ enable_testing()
 add_library(city_domain STATIC
     ../components/city_domain/src/bestiary_service.c
     ../components/city_domain/src/capture_engine.c
+    ../components/city_domain/src/encounter_selector.c
     ../components/city_domain/src/game_loop.c
     ../components/city_domain/src/location_mode.c
     ../components/city_domain/src/place_fingerprint.c
@@ -45,6 +46,7 @@ add_city_test(test_place_fingerprint test_place_fingerprint.c)
 add_city_test(test_location_mode test_location_mode.c)
 add_city_test(test_wild_reward_guard test_wild_reward_guard.c)
 add_city_test(test_capture_engine test_capture_engine.c)
+add_city_test(test_encounter_selector test_encounter_selector.c)
 add_city_test(test_bestiary_service test_bestiary_service.c)
 add_city_test(test_game_loop test_game_loop.c)
 add_city_test(city_mvp_scenario ../tools/city_mvp_scenario.c)
