@@ -522,6 +522,10 @@ Release: open an owned Pokemon's actions, choose RELEASE, then deliberately chan
 
 Starter evolution: earn 30 bond and captures together at three saved places, then open the starter in Bestiary and choose OK → EVOLVE from its actions. Ivysaur, Charmeleon and Wartortle bring the roster to 15. Evolution preserves catch history. See [evolution rules and save migration](docs/architecture/starter-evolution.md).
 
+Pokemon cries: encounters and opening an unlocked Bestiary detail play the
+matching species cry offline. Menu redraws do not replay it; leaving cancels
+playback. Audio runs outside the UI task. See [technical design and validation](docs/architecture/pokemon-cries.md).
+
 Species information: seen, caught and evolved Bestiary detail entries now show
 the full type label and one short species fact. All 15 entries use authored
 summaries checked against the official Pokédex; references live in

@@ -1,0 +1,148 @@
+{
+  "checked_on": "2026-09-12",
+  "repository_commit": "ef687b18f0ce17169b4b4c09175819f7ade92f0f",
+  "variant": "latest",
+  "species": [
+    {
+      "id": 1,
+      "name": "Bulbasaur",
+      "api_url": "https://pokeapi.co/api/v2/pokemon/1/",
+      "source_url": "https://raw.githubusercontent.com/PokeAPI/cries/ef687b18f0ce17169b4b4c09175819f7ade92f0f/cries/pokemon/latest/1.ogg",
+      "source_sha256": "6233bc22546f161d61240c7eef8494a61c42f8ba56833f96313045d1cbbec575",
+      "pcm_sha256": "d399bbfbe81e90853cd206a112b70a01bb8ca531cf07d7b50bf0d47ecae22362",
+      "samples": 15019
+    },
+    {
+      "id": 4,
+      "name": "Charmander",
+      "api_url": "https://pokeapi.co/api/v2/pokemon/4/",
+      "source_url": "https://raw.githubusercontent.com/PokeAPI/cries/ef687b18f0ce17169b4b4c09175819f7ade92f0f/cries/pokemon/latest/4.ogg",
+      "source_sha256": "bdb41cecd5a948ee4b19e4e13156abcbdb2bd3e9c9f458d65fe2c64a87fd852e",
+      "pcm_sha256": "7d9ef8acd2e7783453919b9b2189d895806e7e53f1edc8621ea4965dbf5738bd",
+      "samples": 11514
+    },
+    {
+      "id": 7,
+      "name": "Squirtle",
+      "api_url": "https://pokeapi.co/api/v2/pokemon/7/",
+      "source_url": "https://raw.githubusercontent.com/PokeAPI/cries/ef687b18f0ce17169b4b4c09175819f7ade92f0f/cries/pokemon/latest/7.ogg",
+      "source_sha256": "6c2603df20b277bf2e814a5a3b292bdb404d47ada67ab769ff9bee59d3f38631",
+      "pcm_sha256": "d50c6405aab2b16b5a439445a07e4420503db2fb3d6f2ed6c56ab6f76329e728",
+      "samples": 14017
+    },
+    {
+      "id": 25,
+      "name": "Pikachu",
+      "api_url": "https://pokeapi.co/api/v2/pokemon/25/",
+      "source_url": "https://raw.githubusercontent.com/PokeAPI/cries/ef687b18f0ce17169b4b4c09175819f7ade92f0f/cries/pokemon/latest/25.ogg",
+      "source_sha256": "1ec10c893184b155a110d746ff0560f291978f32ce90c283b9871e61d6df12a1",
+      "pcm_sha256": "fa9d0d5d6288dc624fa589f95fae0a9641d90750d8beb113ba4d274b32f10839",
+      "samples": 14816
+    },
+    {
+      "id": 39,
+      "name": "Jigglypuff",
+      "api_url": "https://pokeapi.co/api/v2/pokemon/39/",
+      "source_url": "https://raw.githubusercontent.com/PokeAPI/cries/ef687b18f0ce17169b4b4c09175819f7ade92f0f/cries/pokemon/latest/39.ogg",
+      "source_sha256": "f58caea1a748e1cffef27d3977802cc5145e59b9647417f57ff762fe6187e7b3",
+      "pcm_sha256": "f154bcc3fdbc2da155c1b2bd9363804eedae63e260404d5ec8a4f960494460ed",
+      "samples": 5945
+    },
+    {
+      "id": 43,
+      "name": "Oddish",
+      "api_url": "https://pokeapi.co/api/v2/pokemon/43/",
+      "source_url": "https://raw.githubusercontent.com/PokeAPI/cries/ef687b18f0ce17169b4b4c09175819f7ade92f0f/cries/pokemon/latest/43.ogg",
+      "source_sha256": "f74f25d48fde5e46b6d746a94d641380e00e5d3f65a870da5db5c4def245b4ce",
+      "pcm_sha256": "c35c13caf14cdd63293c61bacfda9c66028d8ac116a395e8fdc85d9dc558fd8e",
+      "samples": 14017
+    },
+    {
+      "id": 52,
+      "name": "Meowth",
+      "api_url": "https://pokeapi.co/api/v2/pokemon/52/",
+      "source_url": "https://raw.githubusercontent.com/PokeAPI/cries/ef687b18f0ce17169b4b4c09175819f7ade92f0f/cries/pokemon/latest/52.ogg",
+      "source_sha256": "4718dca5902584f6bb243589e0dd57bb189ce5373d594ebd741ad8a6544302dd",
+      "pcm_sha256": "4779932636da345e499433521766171f4df7566ae7d053629511ef522939b4be",
+      "samples": 10013
+    },
+    {
+      "id": 54,
+      "name": "Psyduck",
+      "api_url": "https://pokeapi.co/api/v2/pokemon/54/",
+      "source_url": "https://raw.githubusercontent.com/PokeAPI/cries/ef687b18f0ce17169b4b4c09175819f7ade92f0f/cries/pokemon/latest/54.ogg",
+      "source_sha256": "2313b1749ba446f7ad5634dafed46b6b72dde6cad5dad4529b45cc17b4f5b306",
+      "pcm_sha256": "999809aa38960a4093885ca34fb63c576233af91b22b271bfe895877caa6f686",
+      "samples": 13517
+    },
+    {
+      "id": 58,
+      "name": "Growlithe",
+      "api_url": "https://pokeapi.co/api/v2/pokemon/58/",
+      "source_url": "https://raw.githubusercontent.com/PokeAPI/cries/ef687b18f0ce17169b4b4c09175819f7ade92f0f/cries/pokemon/latest/58.ogg",
+      "source_sha256": "a4bcc703435473eb0e779c137ea9a1bef3046b95c57aa943623eeb2c7463ae9e",
+      "pcm_sha256": "fb1ee060ba421eff7f7b43d33645a263e2af305f9b56cbdaa4d44033af5bbf88",
+      "samples": 12015
+    },
+    {
+      "id": 74,
+      "name": "Geodude",
+      "api_url": "https://pokeapi.co/api/v2/pokemon/74/",
+      "source_url": "https://raw.githubusercontent.com/PokeAPI/cries/ef687b18f0ce17169b4b4c09175819f7ade92f0f/cries/pokemon/latest/74.ogg",
+      "source_sha256": "9e4f3a50a436e796a3d74804a9c07daa92004f3740f629e73ff50778a85f63bf",
+      "pcm_sha256": "dd040d0d31cbea4cd0860fbb1afe1ef712333d5ad8b26645326fb83d733280db",
+      "samples": 21527
+    },
+    {
+      "id": 92,
+      "name": "Gastly",
+      "api_url": "https://pokeapi.co/api/v2/pokemon/92/",
+      "source_url": "https://raw.githubusercontent.com/PokeAPI/cries/ef687b18f0ce17169b4b4c09175819f7ade92f0f/cries/pokemon/latest/92.ogg",
+      "source_sha256": "3829dd291fc9b08f82981fca3c469f33d07f17af5c07f84f949272d819a6a318",
+      "pcm_sha256": "10efd23c8443e1d701652bf49f6a2cfef68451c0e3c66a0c35a57757b8875580",
+      "samples": 22027
+    },
+    {
+      "id": 133,
+      "name": "Eevee",
+      "api_url": "https://pokeapi.co/api/v2/pokemon/133/",
+      "source_url": "https://raw.githubusercontent.com/PokeAPI/cries/ef687b18f0ce17169b4b4c09175819f7ade92f0f/cries/pokemon/latest/133.ogg",
+      "source_sha256": "b9dd1a040ed6bd4e9025df476180c7cc82c3187ff21f235b26798ba84992489c",
+      "pcm_sha256": "2bb576f5e5063c3d0c5c6014c7c2902a353ada3c24941244352a6eb6fe66e1bb",
+      "samples": 12516
+    },
+    {
+      "id": 2,
+      "name": "Ivysaur",
+      "api_url": "https://pokeapi.co/api/v2/pokemon/2/",
+      "source_url": "https://raw.githubusercontent.com/PokeAPI/cries/ef687b18f0ce17169b4b4c09175819f7ade92f0f/cries/pokemon/latest/2.ogg",
+      "source_sha256": "7cd88c8b0c4b9186cfeb29696b25fd4443d81619d1d85c8bebf48dfc19740da2",
+      "pcm_sha256": "7edf21978aa97f878f23815c225bd37e16c3a1cb06e5f3516dc935505516b7b3",
+      "samples": 14017
+    },
+    {
+      "id": 5,
+      "name": "Charmeleon",
+      "api_url": "https://pokeapi.co/api/v2/pokemon/5/",
+      "source_url": "https://raw.githubusercontent.com/PokeAPI/cries/ef687b18f0ce17169b4b4c09175819f7ade92f0f/cries/pokemon/latest/5.ogg",
+      "source_sha256": "e2a6fc5d5e96d7b0796153da39a4d3c0aa1f3c95360ca4512f23e717600a0fb3",
+      "pcm_sha256": "3a66bba6cb2c2b09f7865b513284f3262a74864f89c4e40ffc07e0f4c434c16e",
+      "samples": 16020
+    },
+    {
+      "id": 8,
+      "name": "Wartortle",
+      "api_url": "https://pokeapi.co/api/v2/pokemon/8/",
+      "source_url": "https://raw.githubusercontent.com/PokeAPI/cries/ef687b18f0ce17169b4b4c09175819f7ade92f0f/cries/pokemon/latest/8.ogg",
+      "source_sha256": "1685aaa5e05edf822b016f21f2334eb00ecf6f6e4a6858807846a91c96e4cdf3",
+      "pcm_sha256": "da685c5cb02affc76978404b29c94ab4263052f711ea5ea68c2620cdecd07978",
+      "samples": 16020
+    }
+  ],
+  "format": {
+    "sample_rate": 16000,
+    "channels": 1,
+    "bits": 16,
+    "encoding": "signed little-endian PCM"
+  }
+}
