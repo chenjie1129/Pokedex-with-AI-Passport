@@ -12,6 +12,10 @@
 #include "starter_sprites.h"
 #include "roster_sprites.h"
 #include "place_scan_coordinator.h"
+#include "pokemon_audio.h"
+#ifdef CITY_AUDIO_RENDER_SMOKE
+#include "pokemon_cries.h"
+#endif
 
 #include "esp_log.h"
 #include "esp_random.h"
@@ -1063,12 +1067,21 @@ static void build_state(void)
 static void set_state(ui_state_t state)
 {
     lv_obj_t *old = s_screen;
+    const ui_state_t previous = s_state;
     s_state = state;
     s_state_started_ms = now_ms();
     s_pocket.last_activity_ms = s_state_started_ms;
     build_state();
     if (old != NULL) {
         lv_obj_delete(old);
+    }
+    if (state == UI_ENCOUNTER && previous != UI_ENCOUNTER) {
+        pokemon_audio_play(s_current_species_id);
+    } else if (state == UI_BESTIARY_DETAIL && previous == UI_BESTIARY_LIST) {
+        pokemon_audio_play(city_species_id_at(s_bestiary_selection));
+    } else if (state != previous &&
+               (previous == UI_ENCOUNTER || previous == UI_BESTIARY_DETAIL)) {
+        pokemon_audio_stop();
     }
 }
 
@@ -1848,6 +1861,7 @@ void app_main(void)
     }
 
     ESP_ERROR_CHECK(bsp_i2c_init());
+    if (!pokemon_audio_init()) ESP_LOGW(TAG, "Audio worker unavailable");
     s_battery_queue = xQueueCreate(1, sizeof(int));
     if (s_battery_queue && xTaskCreate(battery_task, "battery", 3072, NULL, 2, NULL) != pdPASS) {
         ESP_LOGW(TAG, "Battery worker unavailable");
@@ -1869,11 +1883,42 @@ void app_main(void)
         s_pocket.last_activity_ms = s_state_started_ms;
         build_state();
         s_tick = lv_timer_create(tick, 33, NULL);
-#ifdef CITY_CAPTURE_RENDER_SMOKE
+#if defined(CITY_CAPTURE_RENDER_SMOKE) || defined(CITY_AUDIO_RENDER_SMOKE)
         lv_timer_pause(s_tick);
 #endif
         bsp_lvgl_unlock();
     }
+
+#ifdef CITY_AUDIO_RENDER_SMOKE
+    /* No timers, buttons, scan or persistence writes in this diagnostic. */
+    for (uint8_t i = 0; i < CITY_SPECIES_COUNT; ++i) {
+        const uint16_t species_id = city_species_id_at(i);
+        const pokemon_cry_t *cry = pokemon_cry_find(species_id);
+        if (!cry || !bsp_lvgl_lock(2000)) { ESP_LOGE(TAG, "AUDIO_SMOKE_FAIL encounter"); return; }
+        s_current_species_id = species_id;
+        s_encounter_previous_state = CITY_DISCOVERY_SEEN;
+        set_state(UI_ENCOUNTER);
+        set_state(UI_ENCOUNTER); /* A menu redraw must not restart the cry. */
+        bsp_lvgl_unlock();
+        vTaskDelay(pdMS_TO_TICKS(cry->sample_count * 1000 / POKEMON_CRY_SAMPLE_RATE + 400));
+        if (!bsp_lvgl_lock(2000)) { ESP_LOGE(TAG, "AUDIO_SMOKE_FAIL detail"); return; }
+        s_bestiary_selection = i;
+        city_creature_record_t *record = city_bestiary_record(&s_bestiary, species_id);
+        const city_discovery_state_t saved_state = record->state;
+        if (record->state == CITY_DISCOVERY_UNKNOWN) record->state = CITY_DISCOVERY_SEEN;
+        set_state(UI_BESTIARY_LIST);
+        set_state(UI_BESTIARY_DETAIL);
+        record->state = saved_state;
+        bsp_lvgl_unlock();
+        vTaskDelay(pdMS_TO_TICKS(cry->sample_count * 1000 / POKEMON_CRY_SAMPLE_RATE + 400));
+        ESP_LOGI(TAG, "AUDIO_DETAIL_PASS species=%u", species_id);
+    }
+    if (!bsp_lvgl_lock(2000)) { ESP_LOGE(TAG, "AUDIO_SMOKE_FAIL home"); return; }
+    set_state(UI_HOME);
+    bsp_lvgl_unlock();
+    ESP_LOGI(TAG, "AUDIO_SMOKE_PASS captures=%lu", (unsigned long)total_capture_count());
+    return;
+#endif
 
 #ifdef CITY_CAPTURE_RENDER_SMOKE
     // Dedicated diagnostic build: do not register input or run save/capture timers.

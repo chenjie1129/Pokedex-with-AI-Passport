@@ -22,6 +22,7 @@ add_library(city_domain STATIC
     ../components/city_domain/src/wild_reward_guard.c
     ../components/city_domain/src/pocket_policy.c
     ../components/city_domain/src/passport_progress.c
+    ../components/city_domain/src/user_settings.c
 )
 target_include_directories(city_domain PUBLIC
     ../components/city_domain/include
@@ -73,3 +74,15 @@ add_city_test(test_buddy test_buddy.c)
 
 add_city_test(test_evolution test_evolution.c)
 add_city_test(test_health_and_release test_health_and_release.c)
+
+add_city_test(test_pokemon_audio test_pokemon_audio.c)
+target_sources(test_pokemon_audio PRIVATE ../main/assets/pokemon_cries.c)
+target_include_directories(test_pokemon_audio PRIVATE
+    audio_stubs battery_stubs ../components/bsp/include ../main/assets)
+add_test(NAME test_cries_assets COMMAND "${Python3_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../tools/generate_cries.py" --check)
+add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/audio_transitions.c"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/audio_stubs/generate_transitions.py"
+        "${CMAKE_CURRENT_SOURCE_DIR}/../main/main.c" "${CMAKE_CURRENT_BINARY_DIR}/audio_transitions.c"
+    DEPENDS ../main/main.c audio_stubs/generate_transitions.py)
+add_city_test(test_audio_transitions "${CMAKE_CURRENT_BINARY_DIR}/audio_transitions.c")
