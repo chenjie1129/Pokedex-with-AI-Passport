@@ -2,8 +2,8 @@
 
 #include <stddef.h>
 
-#define CITY_CAPTURE_TARGET_MIN_MS UINT32_C(4000)
-#define CITY_CAPTURE_TARGET_SPAN_MS UINT32_C(4001)
+#define CITY_CAPTURE_TARGET_MIN_MS UINT32_C(1000)
+#define CITY_CAPTURE_TARGET_SPAN_MS UINT32_C(2201)
 
 bool city_capture_begin(
     city_capture_round_t *round,

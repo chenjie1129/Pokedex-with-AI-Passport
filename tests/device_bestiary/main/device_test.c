@@ -1,5 +1,6 @@
 #include "bestiary_service.h"
 #include "bsp_bestiary_store.h"
+#include "game_loop.h"
 
 #include <inttypes.h>
 #include <stdbool.h>
@@ -85,7 +86,7 @@ static void test_legacy_store_migration(void)
         !migrated ||
         migrated_bestiary.charmander.capture_count != 4U ||
         migrated_bestiary.charmander.last_place_id != UINT16_MAX ||
-        migrated_bestiary.ledger_count != 0U) {
+        migrated_bestiary.last_settled_sequence != 4U) {
         fail("legacy_migration");
     }
 
@@ -105,7 +106,7 @@ static void test_legacy_store_migration(void)
             &migration_store, &restored, &migrated) != ESP_OK ||
         migrated || restored.charmander.capture_count != 5U ||
         restored.charmander.last_place_id != 1U ||
-        restored.ledger_count != 1U) {
+        restored.last_settled_sequence != UINT64_C(8001)) {
         fail("migrated_restore");
     }
 
@@ -126,9 +127,9 @@ static void test_legacy_store_migration(void)
     ESP_LOGI(
         TAG,
         "DEVICE_MIGRATION_PASS legacy=4 count=%" PRIu32
-        " ledger=%u old_key=removed",
+        " sequence=%" PRIu64 " old_key=removed",
         restored.charmander.capture_count,
-        restored.ledger_count);
+        restored.last_settled_sequence);
 }
 
 static void test_seen_store_round_trip(void)
@@ -187,7 +188,8 @@ static void test_seen_store_round_trip(void)
     if (bsp_bestiary_store_load(
             &seen_store, &captured, NULL) != ESP_OK ||
         captured.charmander.state != CITY_DISCOVERY_CAPTURED ||
-        captured.charmander.capture_count != 1U) {
+        captured.charmander.capture_count != 1U ||
+        captured.last_settled_sequence != UINT64_C(7001)) {
         fail("seen_capture_restore");
     }
 
@@ -207,16 +209,155 @@ static void test_seen_store_round_trip(void)
         captured.charmander.capture_count);
 }
 
+static bool persist_before_write_failure(
+    const city_bestiary_t *next,
+    void *context)
+{
+    (void)next;
+    (void)context;
+    return false;
+}
+
+static bool persist_commit_report_failure(
+    const city_bestiary_t *next,
+    void *context)
+{
+    (void)bsp_bestiary_store_persist(next, context);
+    return false;
+}
+
+static void test_interrupted_commit_recovery(void)
+{
+    const bsp_bestiary_store_t fault_store = {
+        .namespace_name = "city_fault_tst",
+        .blob_key = "snapshot",
+        .legacy_count_key = "caught_004",
+    };
+    nvs_handle_t handle;
+    if (nvs_open(
+            fault_store.namespace_name,
+            NVS_READWRITE,
+            &handle) != ESP_OK ||
+        nvs_erase_all(handle) != ESP_OK ||
+        nvs_commit(handle) != ESP_OK) {
+        fail("fault_seed");
+    }
+    nvs_close(handle);
+
+    city_bestiary_t bestiary;
+    if (bsp_bestiary_store_load(
+            &fault_store, &bestiary, NULL) != ESP_OK ||
+        city_bestiary_mark_seen(
+            &bestiary,
+            CITY_SPECIES_CHARMANDER,
+            bsp_bestiary_store_persist,
+            (void *)&fault_store) != CITY_BESTIARY_APPLIED) {
+        fail("fault_seen_seed");
+    }
+
+    if (city_bestiary_capture(
+            &bestiary,
+            1U,
+            CITY_SPECIES_CHARMANDER,
+            1U,
+            persist_before_write_failure,
+            (void *)&fault_store) != CITY_BESTIARY_STORAGE_FAILED ||
+        bestiary.charmander.state != CITY_DISCOVERY_SEEN) {
+        fail("prewrite_interrupt");
+    }
+
+    city_bestiary_t restored;
+    if (bsp_bestiary_store_load(
+            &fault_store, &restored, NULL) != ESP_OK ||
+        restored.charmander.state != CITY_DISCOVERY_SEEN ||
+        restored.last_settled_sequence != 0U) {
+        fail("prewrite_restore");
+    }
+
+    if (city_bestiary_capture(
+            &restored,
+            1U,
+            CITY_SPECIES_CHARMANDER,
+            1U,
+            persist_commit_report_failure,
+            (void *)&fault_store) != CITY_BESTIARY_STORAGE_FAILED ||
+        restored.charmander.state != CITY_DISCOVERY_SEEN) {
+        fail("postcommit_ambiguous");
+    }
+
+    city_bestiary_t committed;
+    if (bsp_bestiary_store_load(
+            &fault_store, &committed, NULL) != ESP_OK ||
+        committed.charmander.capture_count != 1U ||
+        committed.last_settled_sequence != 1U ||
+        city_bestiary_capture(
+            &committed,
+            1U,
+            CITY_SPECIES_CHARMANDER,
+            1U,
+            bsp_bestiary_store_persist,
+            (void *)&fault_store) != CITY_BESTIARY_DUPLICATE ||
+        committed.charmander.capture_count != 1U) {
+        fail("postcommit_retry");
+    }
+
+    if (nvs_open(
+            fault_store.namespace_name,
+            NVS_READWRITE,
+            &handle) != ESP_OK ||
+        nvs_erase_key(handle, fault_store.blob_key) != ESP_OK ||
+        nvs_commit(handle) != ESP_OK) {
+        fail("fault_cleanup");
+    }
+    nvs_close(handle);
+    ESP_LOGI(TAG, "DEVICE_FAULT_PASS prewrite=rollback postcommit=deduplicated");
+}
+
+static void test_capture_timeout_contract(void)
+{
+    city_game_session_t session;
+    city_game_init(&session);
+    if (city_game_arrive(&session, 1U, 1U, 17U) !=
+            CITY_GAME_EVENT_ENCOUNTER_STARTED ||
+        city_game_begin_capture(&session, 100U) !=
+            CITY_GAME_EVENT_CAPTURE_STARTED) {
+        fail("capture_budget_start");
+    }
+
+    uint64_t now = 100U + CITY_CAPTURE_DURATION_MS;
+    if (city_game_tick(&session, now) !=
+            CITY_GAME_EVENT_ATTEMPT_TIMED_OUT ||
+        session.attempts_remaining != 2U) {
+        fail("capture_timeout_1");
+    }
+    now += CITY_CAPTURE_DURATION_MS;
+    if (city_game_tick(&session, now) !=
+            CITY_GAME_EVENT_ATTEMPT_TIMED_OUT ||
+        session.attempts_remaining != 1U) {
+        fail("capture_timeout_2");
+    }
+    now += CITY_CAPTURE_DURATION_MS;
+    if (city_game_tick(&session, now) != CITY_GAME_EVENT_ESCAPED ||
+        now - session.capture_started_ms > CITY_GAME_CAPTURE_BUDGET_MS) {
+        fail("capture_timeout_3");
+    }
+    ESP_LOGI(
+        TAG,
+        "DEVICE_CAPTURE_BUDGET_PASS elapsed=%" PRIu64 " budget=%u",
+        now - session.capture_started_ms,
+        CITY_GAME_CAPTURE_BUDGET_MS);
+}
+
 static void run_first_boot(device_store_t *store)
 {
     city_bestiary_t bestiary;
     city_bestiary_init(&bestiary);
 
-    for (uint64_t encounter_id = 1U; encounter_id <= 20U;
-         ++encounter_id) {
+    for (uint64_t encounter_sequence = 1U; encounter_sequence <= 20U;
+         ++encounter_sequence) {
         if (city_bestiary_capture(
                 &bestiary,
-                encounter_id,
+                encounter_sequence,
                 CITY_SPECIES_CHARMANDER,
                 1U,
                 persist_snapshot,
@@ -225,18 +366,16 @@ static void run_first_boot(device_store_t *store)
         }
     }
     if (bestiary.charmander.capture_count != 20U ||
-        bestiary.ledger_count != CITY_BESTIARY_LEDGER_CAPACITY ||
-        bestiary.ledger_next != 4U) {
+        bestiary.last_settled_sequence != 20U) {
         fail("phase1_state");
     }
 
     ESP_LOGI(
         TAG,
         "DEVICE_TEST_PHASE1_PASS count=%" PRIu32
-        " ledger=%u next=%u",
+        " sequence=%" PRIu64,
         bestiary.charmander.capture_count,
-        bestiary.ledger_count,
-        bestiary.ledger_next);
+        bestiary.last_settled_sequence);
     nvs_close(store->handle);
     vTaskDelay(pdMS_TO_TICKS(250));
     esp_restart();
@@ -248,8 +387,7 @@ static void run_second_boot(device_store_t *store)
     city_bestiary_init(&bestiary);
     if (!load_snapshot(store->handle, &bestiary) ||
         bestiary.charmander.capture_count != 20U ||
-        bestiary.ledger_count != CITY_BESTIARY_LEDGER_CAPACITY ||
-        bestiary.ledger_next != 4U) {
+        bestiary.last_settled_sequence != 20U) {
         fail("reboot_restore");
     }
 
@@ -260,8 +398,16 @@ static void run_second_boot(device_store_t *store)
             1U,
             persist_snapshot,
             store) != CITY_BESTIARY_DUPLICATE ||
+        bestiary.charmander.capture_count != 20U ||
+        city_bestiary_capture(
+            &bestiary,
+            1U,
+            CITY_SPECIES_CHARMANDER,
+            1U,
+            persist_snapshot,
+            store) != CITY_BESTIARY_DUPLICATE ||
         bestiary.charmander.capture_count != 20U) {
-        fail("recent_duplicate");
+        fail("stale_duplicate");
     }
 
     if (city_bestiary_capture(
@@ -272,8 +418,7 @@ static void run_second_boot(device_store_t *store)
             persist_snapshot,
             store) != CITY_BESTIARY_APPLIED ||
         bestiary.charmander.capture_count != 21U ||
-        bestiary.ledger_count != CITY_BESTIARY_LEDGER_CAPACITY ||
-        bestiary.ledger_next != 5U) {
+        bestiary.last_settled_sequence != 21U) {
         fail("capture_21");
     }
 
@@ -281,7 +426,7 @@ static void run_second_boot(device_store_t *store)
     city_bestiary_init(&persisted);
     if (!load_snapshot(store->handle, &persisted) ||
         persisted.charmander.capture_count != 21U ||
-        persisted.ledger_next != 5U) {
+        persisted.last_settled_sequence != 21U) {
         fail("nvs_round_trip");
     }
 
@@ -292,10 +437,9 @@ static void run_second_boot(device_store_t *store)
     ESP_LOGI(
         TAG,
         "DEVICE_TEST_PASS count=%" PRIu32
-        " ledger=%u next=%u duplicate=protected reboot=verified nvs=verified",
+        " sequence=%" PRIu64 " stale=protected reboot=verified nvs=verified",
         persisted.charmander.capture_count,
-        persisted.ledger_count,
-        persisted.ledger_next);
+        persisted.last_settled_sequence);
 }
 
 void app_main(void)
@@ -305,6 +449,8 @@ void app_main(void)
     }
     test_legacy_store_migration();
     test_seen_store_round_trip();
+    test_interrupted_commit_recovery();
+    test_capture_timeout_contract();
 
     device_store_t store;
     if (nvs_open(
@@ -315,12 +461,23 @@ void app_main(void)
     size_t length = 0U;
     const esp_err_t probe =
         nvs_get_blob(store.handle, TEST_KEY, NULL, &length);
-    if (probe == ESP_ERR_NVS_NOT_FOUND) {
-        run_first_boot(&store);
+    bool continue_after_reboot = false;
+    if (probe == ESP_OK && length == CITY_BESTIARY_ENCODED_BYTES) {
+        city_bestiary_t persisted;
+        continue_after_reboot =
+            load_snapshot(store.handle, &persisted) &&
+            persisted.schema_version == CITY_BESTIARY_SCHEMA_VERSION &&
+            persisted.charmander.capture_count == 20U &&
+            persisted.last_settled_sequence == 20U;
     }
-    if (probe != ESP_OK ||
-        length != CITY_BESTIARY_ENCODED_BYTES) {
-        fail("snapshot_probe");
+    if (!continue_after_reboot) {
+        if (probe == ESP_OK && nvs_erase_key(store.handle, TEST_KEY) != ESP_OK) {
+            fail("stale_snapshot_cleanup");
+        }
+        if (nvs_commit(store.handle) != ESP_OK) {
+            fail("stale_snapshot_commit");
+        }
+        run_first_boot(&store);
     }
     run_second_boot(&store);
 

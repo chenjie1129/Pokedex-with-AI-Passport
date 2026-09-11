@@ -32,16 +32,17 @@ The bestiary stores:
 
 - Charmander discovery state;
 - capture count and last local place ID;
-- a 16-entry rolling encounter-ID window for recent-event idempotency;
+- a monotonic `last_settled_sequence` high-water mark;
 - schema version and CRC-32 in its encoded form.
 
 Capture is transactional. The service builds a copy, asks the storage adapter
 to persist that copy, and mutates live state only after persistence succeeds.
-Duplicate encounter IDs return success-equivalent idempotency without writing
-or incrementing the count. The rolling window does not cap lifetime progress:
-after it fills, each new capture replaces the oldest encounter ID while the
-32-bit capture count continues to increase. Schema v2 keeps the encoded blob at
-156 bytes and migrates valid schema-v1 snapshots during decode.
+Any encounter sequence at or below the durable high-water mark is a duplicate,
+including events replayed long after the former 16-entry window would have
+evicted them. New encounters use `last_settled_sequence + 1`, so storage remains
+fixed-size while lifetime capture count remains independent. Schema v3 keeps
+the encoded blob at 156 bytes, decodes valid schema-v1/v2 snapshots, and the BSP
+rewrites migrated blobs canonically during load.
 
 ### Game loop
 
@@ -52,8 +53,8 @@ WAITING_FOR_PLACE
   -> ENCOUNTER
   -> CAPTURE
      -> CAPTURED -> BESTIARY
-     -> CAPTURE (miss, attempts remain)
-     -> ESCAPED (three misses)
+     -> CAPTURE (miss or timeout, attempts remain)
+     -> ESCAPED (three misses, three idle timeouts, or shared deadline)
      -> STORAGE_ERROR -> CAPTURED (retry succeeds)
      -> REWARD_ERROR (non-retryable reward rejection)
 ```
@@ -126,5 +127,7 @@ successful durable commit; load or commit failures fail closed. Wi-Fi scanning
 remains a separate asynchronous integration boundary.
 
 ESP-IDF 5.5 production builds and ESP32-C3 tests cover legacy migration, blob
-reload after restart, recent-event idempotency and capture counts beyond the
-16-entry rolling window.
+reload after restart, permanent stale-event idempotency, storage-boundary
+fault injection, and capture counts beyond the former 16-entry limit. Capture
+uses three 4.2-second rounds under one 15-second input deadline; idle rounds
+auto-expire instead of looping forever.

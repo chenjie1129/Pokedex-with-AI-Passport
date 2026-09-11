@@ -3,8 +3,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define CITY_CAPTURE_DURATION_MS UINT32_C(12000)
-#define CITY_CAPTURE_WINDOW_HALF_MS UINT32_C(900)
+#define CITY_CAPTURE_DURATION_MS UINT32_C(4200)
+#define CITY_CAPTURE_WINDOW_HALF_MS UINT32_C(700)
 
 typedef struct {
     uint64_t started_ms;
