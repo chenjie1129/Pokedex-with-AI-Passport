@@ -1,3 +1,4 @@
+#include "bsp_bestiary_store.h"
 #include "bsp_button.h"
 #include "bsp_display.h"
 #include "bsp_i2c.h"
@@ -11,7 +12,6 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "lvgl.h"
-#include "nvs.h"
 #include "nvs_flash.h"
 
 #include <stdbool.h>
@@ -31,7 +31,7 @@
 #define CATCH_MS        UINT64_C(1200)
 
 typedef enum {
-    UI_ARRIVAL = 0,
+    UI_HOME = 0,
     UI_SCANNING,
     UI_ENCOUNTER,
     UI_AIM,
@@ -39,16 +39,29 @@ typedef enum {
     UI_CATCHING,
     UI_CAPTURED,
     UI_ESCAPED,
-    UI_BESTIARY,
+    UI_BESTIARY_LIST,
+    UI_BESTIARY_DETAIL,
     UI_STORAGE_ERROR,
 } ui_state_t;
+
+typedef enum {
+    WRITE_NONE = 0,
+    WRITE_DISCOVERY,
+    WRITE_CAPTURE,
+} write_operation_t;
 
 static const char *TAG = "pokedex";
 
 static ui_state_t s_state;
 static uint64_t s_state_started_ms;
 static uint8_t s_attempts = 3;
-static uint32_t s_capture_count;
+static city_bestiary_t s_bestiary;
+static bool s_bestiary_ready;
+static bool s_save_in_progress;
+static uint8_t s_home_selection;
+static uint8_t s_bestiary_selection;
+static write_operation_t s_pending_write;
+static uint64_t s_encounter_id;
 static bool s_throw_hit;
 static city_capture_round_t s_round;
 
@@ -74,8 +87,9 @@ static uint64_t now_ms(void)
 static const char *state_name(ui_state_t state)
 {
     static const char *const names[] = {
-        "arrival", "scanning", "encounter", "aim", "throwing",
-        "catching", "captured", "escaped", "bestiary", "storage_error",
+        "home", "scanning", "encounter", "aim", "throwing",
+        "catching", "captured", "escaped", "bestiary_list",
+        "bestiary_detail", "storage_error",
     };
     return names[state];
 }
@@ -228,19 +242,54 @@ static lv_obj_t *create_ball(lv_obj_t *parent, int x, int y, int size)
     return s_ball;
 }
 
-static void build_arrival(void)
+static lv_obj_t *create_menu_row(
+    lv_obj_t *parent,
+    int y,
+    const char *title,
+    const char *subtitle,
+    bool selected)
 {
-    s_screen = new_screen("NEW PLACE", "OK  SCAN");
-    s_field = create_field(s_screen);
+    lv_obj_t *row = lv_obj_create(parent);
+    style_plain(row, selected ? 0xE4F4E8 : 0xF7FBF8);
+    lv_obj_set_style_radius(row, 8, 0);
+    lv_obj_set_style_border_width(row, selected ? 2 : 1, 0);
+    lv_obj_set_style_border_color(
+        row, lv_color_hex(selected ? COLOR_GREEN : 0xD5E0DD), 0);
+    lv_obj_set_size(row, 220, 62);
+    lv_obj_set_pos(row, 10, y);
 
-    lv_obj_t *beacon = lv_obj_create(s_field);
-    style_plain(beacon, 0xF7FBF8);
-    lv_obj_set_style_radius(beacon, 20, 0);
-    lv_obj_set_size(beacon, 62, 78);
-    lv_obj_set_pos(beacon, 79, 42);
-    label_at(beacon, "?", &lv_font_montserrat_20, 0x247052, 12, 23, 38);
-    label_at(s_screen, "Explore this place", &lv_font_montserrat_14,
-             COLOR_MUTED, 10, 251, 220);
+    lv_obj_t *title_label = label_at(
+        row, title, &lv_font_montserrat_20, COLOR_INK, 14, 8, 160);
+    lv_obj_set_style_text_align(title_label, LV_TEXT_ALIGN_LEFT, 0);
+    lv_obj_t *subtitle_label = label_at(
+        row, subtitle, &lv_font_montserrat_14, COLOR_MUTED, 14, 37, 178);
+    lv_obj_set_style_text_align(subtitle_label, LV_TEXT_ALIGN_LEFT, 0);
+    label_at(
+        row, selected ? ">" : "", &lv_font_montserrat_20,
+        selected ? COLOR_CORAL : COLOR_MUTED, 188, 19, 20);
+    return row;
+}
+
+static void build_home(void)
+{
+    s_screen = new_screen("CITY SPIRITS", "UP/DN SELECT  OK OPEN");
+    const city_discovery_state_t discovery =
+        s_bestiary.charmander.state;
+    const char *progress = discovery == CITY_DISCOVERY_UNKNOWN
+                               ? "0 SEEN  0 CAUGHT"
+                               : discovery == CITY_DISCOVERY_SEEN
+                                     ? "1 SEEN  0 CAUGHT"
+                                     : "1 SEEN  1 CAUGHT";
+
+    create_menu_row(
+        s_screen, 79, "EXPLORE", "Find a nearby spirit",
+        s_home_selection == 0U);
+    create_menu_row(
+        s_screen, 151, "BESTIARY", progress,
+        s_home_selection == 1U);
+    label_at(
+        s_screen, "Offline collection", &lv_font_montserrat_14,
+        COLOR_MUTED, 10, 251, 220);
 }
 
 static void build_scanning(void)
@@ -348,43 +397,157 @@ static void build_captured(void)
 
 static void build_escaped(void)
 {
-    s_screen = new_screen("IT GOT AWAY", "OK  TRY AGAIN");
+    s_screen = new_screen("IT GOT AWAY", "OK  HOME");
     s_field = create_field(s_screen);
     create_charmander(s_field, false);
     label_at(s_screen, "Adjust your timing", &lv_font_montserrat_14,
              COLOR_MUTED, 10, 251, 220);
 }
 
-static void build_bestiary(void)
+static void build_bestiary_list(void)
 {
+    const city_creature_record_t *record = &s_bestiary.charmander;
+    if (record->state == CITY_DISCOVERY_UNKNOWN) {
+        s_screen = new_screen("BESTIARY", "OK  BACK");
+        lv_obj_t *empty = lv_obj_create(s_screen);
+        style_plain(empty, 0xF7FBF8);
+        lv_obj_set_style_radius(empty, 8, 0);
+        lv_obj_set_size(empty, 220, 146);
+        lv_obj_set_pos(empty, 10, 76);
+        label_at(empty, "?", &lv_font_montserrat_20, COLOR_CORAL, 90, 22, 40);
+        label_at(empty, "NO ENTRIES YET", &lv_font_montserrat_20,
+                 COLOR_INK, 10, 59, 200);
+        label_at(empty, "Explore to discover one", &lv_font_montserrat_14,
+                 COLOR_MUTED, 10, 94, 200);
+        label_at(s_screen, "Discovered 0 / 1", &lv_font_montserrat_14,
+                 COLOR_MUTED, 10, 251, 220);
+        return;
+    }
+
+    s_screen = new_screen("BESTIARY", "UP/DN SELECT  OK OPEN");
+    lv_obj_t *row = lv_obj_create(s_screen);
+    style_plain(row, s_bestiary_selection == 0U ? 0xE4F4E8 : 0xF7FBF8);
+    lv_obj_set_style_radius(row, 8, 0);
+    lv_obj_set_style_border_width(row, s_bestiary_selection == 0U ? 2 : 1, 0);
+    lv_obj_set_style_border_color(
+        row, lv_color_hex(s_bestiary_selection == 0U
+                              ? COLOR_GREEN
+                              : 0xD5E0DD), 0);
+    lv_obj_set_size(row, 220, 96);
+    lv_obj_set_pos(row, 10, 74);
+
+    lv_obj_t *image = create_charmander(row, true);
+    lv_obj_set_pos(image, 8, 8);
+    if (record->state == CITY_DISCOVERY_SEEN) {
+        lv_obj_set_style_image_recolor(
+            image, lv_color_hex(COLOR_MUTED), 0);
+        lv_obj_set_style_image_recolor_opa(image, LV_OPA_60, 0);
+    }
+    lv_obj_t *name = label_at(
+        row, "No.004 CHARMANDER", &lv_font_montserrat_14,
+        COLOR_INK, 91, 15, 118);
+    lv_obj_set_style_text_align(name, LV_TEXT_ALIGN_LEFT, 0);
+    lv_obj_t *status = label_at(
+        row, record->state == CITY_DISCOVERY_CAPTURED ? "CAUGHT" : "SEEN",
+        &lv_font_montserrat_14,
+        record->state == CITY_DISCOVERY_CAPTURED ? COLOR_CORAL : COLOR_GREEN,
+        91, 43, 104);
+    lv_obj_set_style_text_align(status, LV_TEXT_ALIGN_LEFT, 0);
+
+    char count[24];
+    snprintf(
+        count, sizeof(count), "COUNT %lu",
+        (unsigned long)record->capture_count);
+    lv_obj_t *count_label = label_at(
+        row, count, &lv_font_montserrat_14, COLOR_MUTED, 91, 67, 104);
+    lv_obj_set_style_text_align(count_label, LV_TEXT_ALIGN_LEFT, 0);
+
+    create_menu_row(
+        s_screen, 181, "BACK", "Return to home",
+        s_bestiary_selection == 1U);
+    label_at(s_screen, "Discovered 1 / 1", &lv_font_montserrat_14,
+             COLOR_MUTED, 10, 251, 220);
+}
+
+static void build_bestiary_detail(void)
+{
+    const city_creature_record_t *record = &s_bestiary.charmander;
+    const city_species_definition_t *definition =
+        city_species_definition(CITY_SPECIES_CHARMANDER);
     s_screen = new_screen("No.004 CHARMANDER", "OK  BACK");
     s_field = create_field(s_screen);
-    create_charmander(s_field, false);
+
+    lv_obj_t *image = create_charmander(s_field, true);
+    lv_obj_set_pos(image, 9, 16);
+    if (record->state == CITY_DISCOVERY_SEEN) {
+        lv_obj_set_style_image_recolor(
+            image, lv_color_hex(COLOR_MUTED), 0);
+        lv_obj_set_style_image_recolor_opa(image, LV_OPA_60, 0);
+    }
 
     lv_obj_t *tag = lv_obj_create(s_field);
-    style_plain(tag, COLOR_CORAL);
-    lv_obj_set_style_radius(tag, 10, 0);
-    lv_obj_set_size(tag, 52, 24);
-    lv_obj_set_pos(tag, 158, 14);
-    label_at(tag, "FIRE", &lv_font_montserrat_14, 0xFFFFFF, 2, 5, 48);
+    style_plain(
+        tag, record->state == CITY_DISCOVERY_CAPTURED
+                 ? COLOR_CORAL
+                 : COLOR_GREEN);
+    lv_obj_set_style_radius(tag, 8, 0);
+    lv_obj_set_size(tag, 78, 24);
+    lv_obj_set_pos(tag, 132, 13);
+    label_at(
+        tag, record->state == CITY_DISCOVERY_CAPTURED ? "CAUGHT" : "SEEN",
+        &lv_font_montserrat_14, 0xFFFFFF, 3, 5, 72);
 
-    char count[32];
-    snprintf(count, sizeof(count), "CAUGHT  %lu", (unsigned long)s_capture_count);
-    label_at(s_field, count, &lv_font_montserrat_14,
-             COLOR_INK, 127, 57, 88);
-    label_at(s_field, "PLACE 01", &lv_font_montserrat_14,
-             COLOR_MUTED, 127, 82, 88);
-    label_at(s_screen, "Discovered 1 / 3", &lv_font_montserrat_14,
-             COLOR_MUTED, 10, 251, 220);
+    char count[24];
+    snprintf(
+        count, sizeof(count), "CAUGHT %lu",
+        (unsigned long)record->capture_count);
+    lv_obj_t *count_label = label_at(
+        s_field, count, &lv_font_montserrat_14, COLOR_INK, 118, 53, 96);
+    lv_obj_set_style_text_align(count_label, LV_TEXT_ALIGN_LEFT, 0);
+
+    char place[24];
+    if (record->last_place_id == UINT16_MAX) {
+        snprintf(place, sizeof(place), "PLACE --");
+    } else {
+        snprintf(place, sizeof(place), "PLACE %02u", record->last_place_id);
+    }
+    lv_obj_t *place_label = label_at(
+        s_field, place, &lv_font_montserrat_14, COLOR_MUTED, 118, 80, 96);
+    lv_obj_set_style_text_align(place_label, LV_TEXT_ALIGN_LEFT, 0);
+
+    lv_obj_t *description = label_at(
+        s_field, definition->description, &lv_font_montserrat_14,
+        COLOR_INK, 10, 126, 200);
+    lv_label_set_long_mode(description, LV_LABEL_LONG_WRAP);
+    lv_obj_set_height(description, 38);
+    lv_obj_set_style_text_align(description, LV_TEXT_ALIGN_LEFT, 0);
+    label_at(
+        s_screen,
+        record->state == CITY_DISCOVERY_CAPTURED
+            ? "Collection entry complete"
+            : "Seen - capture to complete",
+        &lv_font_montserrat_14, COLOR_MUTED, 10, 251, 220);
 }
 
 static void build_storage_error(void)
 {
     s_screen = new_screen("SAVE FAILED", "OK  RETRY");
     s_field = create_field(s_screen);
-    create_ball(s_field, 88, 69, 44);
-    label_at(s_screen, "Capture was not recorded", &lv_font_montserrat_14,
-             COLOR_CORAL, 10, 251, 220);
+    if (s_pending_write == WRITE_DISCOVERY) {
+        lv_obj_t *beacon = lv_obj_create(s_field);
+        style_plain(beacon, 0xF7FBF8);
+        lv_obj_set_style_radius(beacon, 8, 0);
+        lv_obj_set_size(beacon, 68, 76);
+        lv_obj_set_pos(beacon, 76, 42);
+        label_at(beacon, "?", &lv_font_montserrat_20,
+                 COLOR_CORAL, 14, 23, 40);
+        label_at(s_screen, "Discovery was not recorded",
+                 &lv_font_montserrat_14, COLOR_CORAL, 10, 251, 220);
+    } else {
+        create_ball(s_field, 88, 69, 44);
+        label_at(s_screen, "Capture was not recorded",
+                 &lv_font_montserrat_14, COLOR_CORAL, 10, 251, 220);
+    }
 }
 
 static void build_state(void)
@@ -402,8 +565,8 @@ static void build_state(void)
     s_status = NULL;
 
     switch (s_state) {
-    case UI_ARRIVAL:
-        build_arrival();
+    case UI_HOME:
+        build_home();
         break;
     case UI_SCANNING:
         build_scanning();
@@ -426,8 +589,11 @@ static void build_state(void)
     case UI_ESCAPED:
         build_escaped();
         break;
-    case UI_BESTIARY:
-        build_bestiary();
+    case UI_BESTIARY_LIST:
+        build_bestiary_list();
+        break;
+    case UI_BESTIARY_DETAIL:
+        build_bestiary_detail();
         break;
     case UI_STORAGE_ERROR:
         build_storage_error();
@@ -440,7 +606,7 @@ static void build_state(void)
         "STATE %s attempts=%u capture_count=%lu",
         state_name(s_state),
         s_attempts,
-        (unsigned long)s_capture_count);
+        (unsigned long)s_bestiary.charmander.capture_count);
 }
 
 static void set_state(ui_state_t state)
@@ -460,42 +626,136 @@ static void start_capture_round(void)
     set_state(UI_AIM);
 }
 
-static bool save_capture(void)
+static uint64_t new_encounter_id(void)
 {
-    nvs_handle_t handle;
-    esp_err_t err = nvs_open("pokedex", NVS_READWRITE, &handle);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "NVS open failed: %s", esp_err_to_name(err));
+    uint64_t encounter_id = ((uint64_t)esp_random() << 32U) |
+                            (uint32_t)esp_timer_get_time();
+    return encounter_id == 0U ? 1U : encounter_id;
+}
+
+static bool persist_discovery(void)
+{
+    if (!s_bestiary_ready) {
+        ESP_LOGE(TAG, "Bestiary unavailable; discovery not persisted");
         return false;
     }
 
-    uint32_t next = s_capture_count + 1U;
-    err = nvs_set_u32(handle, "caught_004", next);
-    if (err == ESP_OK) {
-        err = nvs_commit(handle);
-    }
-    nvs_close(handle);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "NVS commit failed: %s", esp_err_to_name(err));
+    const city_bestiary_result_t result = city_bestiary_mark_seen(
+        &s_bestiary,
+        CITY_SPECIES_CHARMANDER,
+        bsp_bestiary_store_persist,
+        (void *)&BSP_BESTIARY_STORE_DEFAULT);
+    if (result != CITY_BESTIARY_APPLIED &&
+        result != CITY_BESTIARY_UNCHANGED) {
+        ESP_LOGE(TAG, "Discovery commit rejected: result=%d", (int)result);
         return false;
     }
-    s_capture_count = next;
-    ESP_LOGI(TAG, "CAPTURE_COMMITTED species=004 count=%lu",
-             (unsigned long)s_capture_count);
+    ESP_LOGI(
+        TAG, "DISCOVERY_COMMITTED species=004 result=%s",
+        result == CITY_BESTIARY_APPLIED ? "applied" : "unchanged");
     return true;
 }
 
-static void load_capture_count(void)
+static bool persist_capture(void)
 {
-    nvs_handle_t handle;
-    if (nvs_open("pokedex", NVS_READONLY, &handle) != ESP_OK) {
-        s_capture_count = 0;
+    if (!s_bestiary_ready || s_encounter_id == 0U) {
+        ESP_LOGE(TAG, "Bestiary unavailable; capture not persisted");
+        return false;
+    }
+
+    const city_bestiary_result_t result = city_bestiary_capture(
+        &s_bestiary,
+        s_encounter_id,
+        CITY_SPECIES_CHARMANDER,
+        1U,
+        bsp_bestiary_store_persist,
+        (void *)&BSP_BESTIARY_STORE_DEFAULT);
+    if (result != CITY_BESTIARY_APPLIED &&
+        result != CITY_BESTIARY_DUPLICATE) {
+        ESP_LOGE(TAG, "Capture commit rejected: result=%d", (int)result);
+        return false;
+    }
+
+    ESP_LOGI(
+        TAG,
+        "CAPTURE_COMMITTED species=004 count=%lu encounter=%016llx result=%s",
+        (unsigned long)s_bestiary.charmander.capture_count,
+        (unsigned long long)s_encounter_id,
+        result == CITY_BESTIARY_APPLIED ? "applied" : "duplicate");
+    return true;
+}
+
+static void bestiary_write_task(void *argument)
+{
+    (void)argument;
+    const write_operation_t operation = s_pending_write;
+    const bool saved = operation == WRITE_DISCOVERY
+                           ? persist_discovery()
+                           : operation == WRITE_CAPTURE
+                                 ? persist_capture()
+                                 : false;
+
+    while (!bsp_lvgl_lock(1000)) {
+        ESP_LOGW(TAG, "Waiting to publish bestiary result");
+    }
+    s_save_in_progress = false;
+    if (saved) {
+        s_pending_write = WRITE_NONE;
+        set_state(operation == WRITE_DISCOVERY
+                      ? UI_ENCOUNTER
+                      : UI_CAPTURED);
+    } else {
+        set_state(UI_STORAGE_ERROR);
+    }
+    bsp_lvgl_unlock();
+    vTaskDelete(NULL);
+}
+
+static bool request_bestiary_write(write_operation_t operation)
+{
+    if (operation == WRITE_NONE) {
+        return false;
+    }
+    if (s_save_in_progress) {
+        return operation == s_pending_write;
+    }
+
+    s_pending_write = operation;
+    s_save_in_progress = true;
+    if (xTaskCreate(
+            bestiary_write_task,
+            "bestiary_write",
+            4096,
+            NULL,
+            4,
+            NULL) != pdPASS) {
+        s_save_in_progress = false;
+        ESP_LOGE(TAG, "Failed to create bestiary write task");
+        return false;
+    }
+    return true;
+}
+
+static void load_bestiary(void)
+{
+    city_bestiary_init(&s_bestiary);
+    bool migrated = false;
+    const esp_err_t err = bsp_bestiary_store_load(
+        &BSP_BESTIARY_STORE_DEFAULT, &s_bestiary, &migrated);
+    if (err != ESP_OK) {
+        s_bestiary_ready = false;
+        ESP_LOGE(TAG, "Bestiary load failed: %s", esp_err_to_name(err));
         return;
     }
-    if (nvs_get_u32(handle, "caught_004", &s_capture_count) != ESP_OK) {
-        s_capture_count = 0;
-    }
-    nvs_close(handle);
+
+    s_bestiary_ready = true;
+    ESP_LOGI(
+        TAG,
+        "BESTIARY_READY schema=%u count=%lu ledger=%u migrated=%u",
+        s_bestiary.schema_version,
+        (unsigned long)s_bestiary.charmander.capture_count,
+        s_bestiary.ledger_count,
+        migrated ? 1U : 0U);
 }
 
 static void update_aim(uint64_t now)
@@ -567,15 +827,22 @@ static void tick(lv_timer_t *timer)
     (void)timer;
     uint64_t now = now_ms();
 
-    if (s_state == UI_SCANNING && now - s_state_started_ms >= 900U) {
-        set_state(UI_ENCOUNTER);
+    if (s_state == UI_SCANNING &&
+        now - s_state_started_ms >= 900U &&
+        !s_save_in_progress) {
+        s_attempts = 3U;
+        s_encounter_id = new_encounter_id();
+        if (!request_bestiary_write(WRITE_DISCOVERY)) {
+            set_state(UI_STORAGE_ERROR);
+        }
     } else if (s_state == UI_AIM) {
         update_aim(now);
     } else if (s_state == UI_THROWING) {
         update_throw(now);
     } else if (s_state == UI_CATCHING &&
-               now - s_state_started_ms >= CATCH_MS) {
-        set_state(save_capture() ? UI_CAPTURED : UI_STORAGE_ERROR);
+               now - s_state_started_ms >= CATCH_MS &&
+               !request_bestiary_write(WRITE_CAPTURE)) {
+        set_state(UI_STORAGE_ERROR);
     }
 }
 
@@ -591,7 +858,7 @@ static void throw_ball(void)
 static void on_button(bsp_btn_t button, bsp_btn_ev_t event, void *user)
 {
     (void)user;
-    if (event != BSP_BTN_CLICK || button != BSP_BTN_OK) {
+    if (event != BSP_BTN_CLICK) {
         return;
     }
     if (!bsp_lvgl_lock(500)) {
@@ -599,11 +866,48 @@ static void on_button(bsp_btn_t button, bsp_btn_ev_t event, void *user)
         return;
     }
 
-    ESP_LOGI(TAG, "BUTTON ok state=%s", state_name(s_state));
+    ESP_LOGI(TAG, "BUTTON key=%d state=%s",
+             (int)button, state_name(s_state));
+    if (s_state == UI_HOME) {
+        if (button == BSP_BTN_UP || button == BSP_BTN_DOWN) {
+            s_home_selection = s_home_selection == 0U ? 1U : 0U;
+            set_state(UI_HOME);
+        } else if (button == BSP_BTN_OK) {
+            if (s_home_selection == 0U) {
+                set_state(UI_SCANNING);
+            } else {
+                s_bestiary_selection = 0U;
+                set_state(UI_BESTIARY_LIST);
+            }
+        }
+        bsp_lvgl_unlock();
+        return;
+    }
+
+    if (s_state == UI_BESTIARY_LIST) {
+        if (s_bestiary.charmander.state == CITY_DISCOVERY_UNKNOWN) {
+            if (button == BSP_BTN_OK) {
+                set_state(UI_HOME);
+            }
+        } else if (button == BSP_BTN_UP || button == BSP_BTN_DOWN) {
+            s_bestiary_selection =
+                s_bestiary_selection == 0U ? 1U : 0U;
+            set_state(UI_BESTIARY_LIST);
+        } else if (button == BSP_BTN_OK) {
+            set_state(s_bestiary_selection == 0U
+                          ? UI_BESTIARY_DETAIL
+                          : UI_HOME);
+        }
+        bsp_lvgl_unlock();
+        return;
+    }
+
+    if (button != BSP_BTN_OK) {
+        bsp_lvgl_unlock();
+        return;
+    }
+
     switch (s_state) {
-    case UI_ARRIVAL:
-        set_state(UI_SCANNING);
-        break;
     case UI_ENCOUNTER:
         start_capture_round();
         break;
@@ -611,17 +915,19 @@ static void on_button(bsp_btn_t button, bsp_btn_ev_t event, void *user)
         throw_ball();
         break;
     case UI_CAPTURED:
-        set_state(UI_BESTIARY);
+        set_state(UI_BESTIARY_DETAIL);
         break;
     case UI_ESCAPED:
-        s_attempts = 3;
-        set_state(UI_ENCOUNTER);
+        set_state(UI_HOME);
         break;
-    case UI_BESTIARY:
-        set_state(UI_ARRIVAL);
+    case UI_BESTIARY_DETAIL:
+        s_bestiary_selection = 0U;
+        set_state(UI_BESTIARY_LIST);
         break;
     case UI_STORAGE_ERROR:
-        set_state(save_capture() ? UI_CAPTURED : UI_STORAGE_ERROR);
+        if (!request_bestiary_write(s_pending_write)) {
+            set_state(UI_STORAGE_ERROR);
+        }
         break;
     default:
         break;
@@ -634,11 +940,12 @@ void app_main(void)
     ESP_LOGI(TAG, "Pokedex AI Passport boot");
     ESP_LOGI(TAG, "wake_cause=%d", (int)esp_sleep_get_wakeup_cause());
 
+    city_bestiary_init(&s_bestiary);
     esp_err_t nvs_err = nvs_flash_init();
     if (nvs_err != ESP_OK) {
         ESP_LOGE(TAG, "NVS init failed: %s", esp_err_to_name(nvs_err));
     } else {
-        load_capture_count();
+        load_bestiary();
     }
 
     ESP_ERROR_CHECK(bsp_i2c_init());
@@ -651,7 +958,7 @@ void app_main(void)
     ESP_ERROR_CHECK(bsp_button_init(on_button, NULL));
 
     if (bsp_lvgl_lock(1000)) {
-        s_state = UI_ARRIVAL;
+        s_state = UI_HOME;
         s_state_started_ms = now_ms();
         build_state();
         s_tick = lv_timer_create(tick, 33, NULL);
@@ -659,5 +966,5 @@ void app_main(void)
     }
 
     ESP_LOGI(TAG, "READY display=1 buttons=1 capture_count=%lu",
-             (unsigned long)s_capture_count);
+             (unsigned long)s_bestiary.charmander.capture_count);
 }

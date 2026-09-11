@@ -4,8 +4,10 @@
 #include <string.h>
 
 #define CITY_BESTIARY_LEDGER_OFFSET 16U
+#define CITY_BESTIARY_LEDGER_NEXT_OFFSET 144U
 #define CITY_BESTIARY_CHECKSUM_OFFSET                                    \
     (CITY_BESTIARY_ENCODED_BYTES - 4U)
+#define CITY_BESTIARY_LEGACY_SCHEMA_VERSION 1U
 
 static const city_species_definition_t charmander_definition = {
     .species_id = CITY_SPECIES_CHARMANDER,
@@ -76,19 +78,26 @@ static bool bestiary_is_valid(const city_bestiary_t *bestiary)
         bestiary->schema_version != CITY_BESTIARY_SCHEMA_VERSION ||
         bestiary->charmander.species_id != CITY_SPECIES_CHARMANDER ||
         bestiary->charmander.state > CITY_DISCOVERY_CAPTURED ||
-        bestiary->ledger_count > CITY_BESTIARY_LEDGER_CAPACITY) {
+        bestiary->ledger_count > CITY_BESTIARY_LEDGER_CAPACITY ||
+        bestiary->ledger_next >= CITY_BESTIARY_LEDGER_CAPACITY) {
         return false;
     }
     if (bestiary->charmander.state == CITY_DISCOVERY_CAPTURED &&
         (bestiary->charmander.capture_count == 0U ||
-         bestiary->charmander.capture_count != bestiary->ledger_count ||
-         bestiary->charmander.last_place_id == UINT16_MAX)) {
+         bestiary->charmander.capture_count < bestiary->ledger_count ||
+         (bestiary->ledger_count > 0U &&
+          bestiary->charmander.last_place_id == UINT16_MAX))) {
         return false;
     }
     if (bestiary->charmander.state != CITY_DISCOVERY_CAPTURED &&
         (bestiary->charmander.capture_count != 0U ||
          bestiary->ledger_count != 0U ||
+         bestiary->ledger_next != 0U ||
          bestiary->charmander.last_place_id != UINT16_MAX)) {
+        return false;
+    }
+    if (bestiary->ledger_count < CITY_BESTIARY_LEDGER_CAPACITY &&
+        bestiary->ledger_next != bestiary->ledger_count) {
         return false;
     }
     for (uint8_t i = 0; i < bestiary->ledger_count; ++i) {
@@ -127,6 +136,45 @@ void city_bestiary_init(city_bestiary_t *bestiary)
     bestiary->charmander.last_place_id = UINT16_MAX;
 }
 
+bool city_bestiary_import_legacy_count(
+    city_bestiary_t *bestiary,
+    uint32_t capture_count)
+{
+    if (bestiary == NULL) {
+        return false;
+    }
+
+    city_bestiary_init(bestiary);
+    if (capture_count > 0U) {
+        bestiary->charmander.state = CITY_DISCOVERY_CAPTURED;
+        bestiary->charmander.capture_count = capture_count;
+    }
+    return bestiary_is_valid(bestiary);
+}
+
+city_bestiary_result_t city_bestiary_mark_seen(
+    city_bestiary_t *bestiary,
+    uint16_t species_id,
+    city_bestiary_persist_fn persist,
+    void *context)
+{
+    if (!bestiary_is_valid(bestiary) ||
+        city_species_definition(species_id) == NULL || persist == NULL) {
+        return CITY_BESTIARY_INVALID;
+    }
+    if (bestiary->charmander.state != CITY_DISCOVERY_UNKNOWN) {
+        return CITY_BESTIARY_UNCHANGED;
+    }
+
+    city_bestiary_t next = *bestiary;
+    next.charmander.state = CITY_DISCOVERY_SEEN;
+    if (!persist(&next, context)) {
+        return CITY_BESTIARY_STORAGE_FAILED;
+    }
+    *bestiary = next;
+    return CITY_BESTIARY_APPLIED;
+}
+
 city_bestiary_result_t city_bestiary_capture(
     city_bestiary_t *bestiary,
     uint64_t encounter_id,
@@ -145,16 +193,21 @@ city_bestiary_result_t city_bestiary_capture(
             return CITY_BESTIARY_DUPLICATE;
         }
     }
-    if (bestiary->ledger_count == CITY_BESTIARY_LEDGER_CAPACITY ||
-        bestiary->charmander.capture_count == UINT32_MAX) {
-        return CITY_BESTIARY_LEDGER_FULL;
+    if (bestiary->charmander.capture_count == UINT32_MAX) {
+        return CITY_BESTIARY_COUNTER_FULL;
     }
 
     city_bestiary_t next = *bestiary;
     next.charmander.state = CITY_DISCOVERY_CAPTURED;
     ++next.charmander.capture_count;
     next.charmander.last_place_id = place_id;
-    next.encounter_ids[next.ledger_count++] = encounter_id;
+    next.encounter_ids[next.ledger_next] = encounter_id;
+    if (next.ledger_count < CITY_BESTIARY_LEDGER_CAPACITY) {
+        ++next.ledger_count;
+    }
+    next.ledger_next =
+        (uint8_t)((next.ledger_next + 1U) %
+                  CITY_BESTIARY_LEDGER_CAPACITY);
 
     if (!persist(&next, context)) {
         return CITY_BESTIARY_STORAGE_FAILED;
@@ -184,6 +237,7 @@ bool city_bestiary_encode(
             output + CITY_BESTIARY_LEDGER_OFFSET + ((size_t)i * 8U),
             bestiary->encounter_ids[i]);
     }
+    output[CITY_BESTIARY_LEDGER_NEXT_OFFSET] = bestiary->ledger_next;
     write_u32_le(
         output + CITY_BESTIARY_CHECKSUM_OFFSET,
         crc32(output, CITY_BESTIARY_CHECKSUM_OFFSET));
@@ -203,9 +257,15 @@ bool city_bestiary_decode(
         return false;
     }
 
+    const uint16_t stored_schema_version = read_u16_le(data + 4U);
+    if (stored_schema_version != CITY_BESTIARY_LEGACY_SCHEMA_VERSION &&
+        stored_schema_version != CITY_BESTIARY_SCHEMA_VERSION) {
+        return false;
+    }
+
     city_bestiary_t decoded;
     memset(&decoded, 0, sizeof(decoded));
-    decoded.schema_version = read_u16_le(data + 4U);
+    decoded.schema_version = CITY_BESTIARY_SCHEMA_VERSION;
     decoded.charmander.species_id = read_u16_le(data + 6U);
     decoded.charmander.state = (city_discovery_state_t)data[8];
     decoded.ledger_count = data[9];
@@ -217,6 +277,16 @@ bool city_bestiary_decode(
     for (uint8_t i = 0; i < decoded.ledger_count; ++i) {
         decoded.encounter_ids[i] = read_u64_le(
             data + CITY_BESTIARY_LEDGER_OFFSET + ((size_t)i * 8U));
+    }
+    if (stored_schema_version == CITY_BESTIARY_LEGACY_SCHEMA_VERSION) {
+        if (decoded.charmander.capture_count != decoded.ledger_count) {
+            return false;
+        }
+        decoded.ledger_next =
+            (uint8_t)(decoded.ledger_count %
+                      CITY_BESTIARY_LEDGER_CAPACITY);
+    } else {
+        decoded.ledger_next = data[CITY_BESTIARY_LEDGER_NEXT_OFFSET];
     }
     if (!bestiary_is_valid(&decoded)) {
         return false;

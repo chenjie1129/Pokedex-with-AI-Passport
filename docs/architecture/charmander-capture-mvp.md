@@ -32,13 +32,16 @@ The bestiary stores:
 
 - Charmander discovery state;
 - capture count and last local place ID;
-- a bounded encounter-ID ledger for idempotency;
+- a 16-entry rolling encounter-ID window for recent-event idempotency;
 - schema version and CRC-32 in its encoded form.
 
 Capture is transactional. The service builds a copy, asks the storage adapter
 to persist that copy, and mutates live state only after persistence succeeds.
 Duplicate encounter IDs return success-equivalent idempotency without writing
-or incrementing the count.
+or incrementing the count. The rolling window does not cap lifetime progress:
+after it fills, each new capture replaces the oldest encounter ID while the
+32-bit capture count continues to increase. Schema v2 keeps the encoded blob at
+156 bytes and migrates valid schema-v1 snapshots during decode.
 
 ### Game loop
 
@@ -88,15 +91,40 @@ LVGL task. The Poke Ball is drawn from primitives, and the 215x215 official
 Pokedex artwork must be converted to the device color format during firmware
 asset packaging.
 
+## Persistent navigation and discovery states
+
+The firmware boots into a permanent home screen with `EXPLORE` and `BESTIARY`
+entries. UP and DOWN move the selection and OK opens it. The bestiary supports
+an empty state, a one-row list, a detail view and an explicit path back home;
+no capture is required to open it.
+
+The discovery model has three durable states:
+
+- `UNKNOWN`: omitted from the list;
+- `SEEN`: visible with zero captures and an unknown capture place;
+- `CAPTURED`: visible with lifetime count and the most recent capture place.
+
+A first encounter calls `city_bestiary_mark_seen()` on the NVS worker before
+the encounter screen is published. A failed write therefore cannot leak a
+reward or discovery into the UI. Capture upgrades the same record to
+`CAPTURED`; three misses return home while the durable `SEEN` entry remains
+browsable. The browser simulator mirrors the same home, list, detail and
+three-state transitions.
+
 ## Firmware integration boundary
 
-The next firmware slice must provide adapters for:
+The production firmware now owns a `city_bestiary_t` read model and delegates
+all durable writes to `bsp_bestiary_store`. The adapter stores the 156-byte,
+checksummed schema-v2 blob under `pokedex/bestiary_004`. If that blob is
+missing, it imports `pokedex/caught_004`, commits the new blob and removes the
+legacy key in the same NVS transaction. Legacy integer records preserve their
+lifetime count without inventing encounter IDs or a place ID.
 
-- Wi-Fi observations into the W1 location engine;
-- monotonic time and random seed;
-- bestiary blob storage through NVS;
-- three button events and LVGL rendering;
-- asynchronous Wi-Fi and NVS work outside the LVGL task.
+Capture settlement runs in a worker task so NVS writes never block the LVGL
+task. The UI transitions to `captured` only after the domain service receives a
+successful durable commit; load or commit failures fail closed. Wi-Fi scanning
+remains a separate asynchronous integration boundary.
 
-No firmware build or physical-device claim is made by this MVP because the
-current development environment does not contain ESP-IDF.
+ESP-IDF 5.5 production builds and ESP32-C3 tests cover legacy migration, blob
+reload after restart, recent-event idempotency and capture counts beyond the
+16-entry rolling window.
