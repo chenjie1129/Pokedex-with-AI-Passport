@@ -4,7 +4,7 @@ import re
 import sys
 source = Path(sys.argv[1]).read_text()
 functions = []
-for name in ('style_plain', 'label_at', 'new_screen', 'create_field', 'create_species', 'build_home', 'build_passport', 'ball_geometry', 'create_ball', 'build_catching', 'build_throwing', 'build_encounter', 'build_bestiary_list', 'build_bestiary_detail'):
+for name in ('style_plain', 'label_at', 'new_screen', 'create_field', 'create_species', 'build_home', 'build_passport', 'ball_geometry', 'create_ball', 'build_catching', 'build_throwing', 'build_evolution', 'evolution_reveal_y', 'build_evolved', 'build_encounter', 'build_bestiary_list', 'build_bestiary_detail', 'build_pokemon_actions', 'build_release_picker', 'build_release_confirm', 'build_released'):
     match = re.search(r'^static [^\n]*\b' + name + r'\(', source, re.M)
     assert match, name
     end = source.index('\n}\n', match.start()) + 3

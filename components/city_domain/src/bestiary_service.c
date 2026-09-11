@@ -14,6 +14,8 @@
 #define CITY_BESTIARY_SCHEMA_V2 2U
 #define CITY_BESTIARY_SCHEMA_V3 3U
 #define CITY_BESTIARY_SCHEMA_V4 4U
+#define CITY_BESTIARY_LEGACY_RECORD_BYTES 20U
+#define CITY_BESTIARY_OLD_HEADER_BYTES 32U
 #define CITY_BESTIARY_WILD_OFFSET 76U
 #define CITY_BESTIARY_V3_SEQUENCE_OFFSET 16U
 
@@ -150,6 +152,68 @@ const city_creature_record_t *city_bestiary_record_const(const city_bestiary_t *
     const uint8_t i = city_species_index(species_id);
     return bestiary && i < CITY_SPECIES_COUNT ? &bestiary->records[i] : NULL;
 }
+
+uint16_t city_bestiary_owned_count(
+    const city_bestiary_t *bestiary, uint16_t species_id)
+{
+    if (!bestiary || city_species_definition(species_id) == NULL) return 0U;
+    uint16_t count = 0U;
+    for (uint16_t i = 0U; i < bestiary->owned_count; ++i)
+        if (bestiary->owned[i].species_id == species_id) ++count;
+    return count;
+}
+
+const city_owned_pokemon_t *city_bestiary_owned_at(
+    const city_bestiary_t *bestiary, uint16_t species_id, uint16_t ordinal)
+{
+    if (!bestiary) return NULL;
+    for (uint16_t i = 0U; i < bestiary->owned_count; ++i) {
+        if (bestiary->owned[i].species_id != species_id) continue;
+        if (ordinal == 0U) return &bestiary->owned[i];
+        --ordinal;
+    }
+    return NULL;
+}
+
+static bool materialize_legacy_owned(city_bestiary_t *bestiary)
+{
+    if (!bestiary) return false;
+    if (bestiary->owned_count > 0U) return true;
+    uint32_t total = 0U;
+    for (uint8_t i = 0U; i < CITY_SPECIES_COUNT; ++i) {
+        total += bestiary->records[i].capture_count;
+        total += bestiary->records[i].evolution_obtained ? 1U : 0U;
+    }
+    if (total > CITY_MAX_OWNED_POKEMON) return false;
+    uint32_t next_id = 1U;
+    for (uint8_t i = 0U; i < CITY_SPECIES_COUNT; ++i) {
+        const city_creature_record_t *record = &bestiary->records[i];
+        for (uint32_t copy = 0U; copy < record->capture_count; ++copy) {
+            city_owned_pokemon_t *owned = &bestiary->owned[bestiary->owned_count++];
+            memset(owned, 0, sizeof(*owned));
+            owned->instance_id = next_id++;
+            owned->species_id = record->species_id;
+            owned->place_id = record->last_place_id;
+            owned->stats = copy + 1U == record->capture_count ?
+                record->latest_stats : record->best_stats;
+            owned->current_hp = copy == 0U ? record->current_hp : owned->stats.hp;
+            owned->migrated = true;
+        }
+        if (record->evolution_obtained) {
+            city_owned_pokemon_t *owned = &bestiary->owned[bestiary->owned_count++];
+            memset(owned, 0, sizeof(*owned));
+            owned->instance_id = next_id++;
+            owned->species_id = record->species_id;
+            owned->place_id = record->last_place_id;
+            owned->stats = record->best_stats;
+            owned->current_hp = record->capture_count == 0U ? record->current_hp : owned->stats.hp;
+            owned->evolved = true;
+            owned->migrated = true;
+        }
+    }
+    bestiary->next_instance_id = next_id;
+    return true;
+}
 bool city_bestiary_encounter_status(const city_bestiary_t *bestiary, uint16_t species_id,
                                     city_discovery_state_t *previous_state)
 {
@@ -165,11 +229,13 @@ static bool record_is_valid(const city_creature_record_t *record)
     if (record == NULL ||
         city_species_definition(record->species_id) == NULL ||
         record->state > CITY_DISCOVERY_CAPTURED ||
-        record->friendship > CITY_BUDDY_MAX_FRIENDSHIP) {
+        record->friendship > CITY_BUDDY_MAX_FRIENDSHIP ||
+        (record->evolution_obtained && !city_species_definition(record->species_id)->evolves_from)) {
         return false;
     }
     if (record->state == CITY_DISCOVERY_CAPTURED) {
-        return record->capture_count > 0U &&
+        return (record->capture_count > 0U || record->evolution_obtained) &&
+               record->current_hp <= city_bestiary_max_hp(record) &&
                stats_match_species(
                    record->species_id, &record->latest_stats) &&
                stats_match_species(
@@ -177,7 +243,8 @@ static bool record_is_valid(const city_creature_record_t *record)
                stats_total(&record->best_stats) >=
                    stats_total(&record->latest_stats);
     }
-    return record->friendship == 0U && record->buddy_places == 0U &&
+    return !record->evolution_obtained && record->current_hp == 0U &&
+           record->friendship == 0U && record->buddy_places == 0U &&
            record->capture_count == 0U &&
            record->last_place_id == UINT16_MAX &&
            stats_are_zero(&record->latest_stats) &&
@@ -191,13 +258,37 @@ bool city_bestiary_is_valid(const city_bestiary_t *bestiary)
         const city_creature_record_t *buddy = city_bestiary_record_const(bestiary, bestiary->buddy_species_id);
         if (!buddy || buddy->state != CITY_DISCOVERY_CAPTURED) return false;
     }
+    if (bestiary->owned_count > CITY_MAX_OWNED_POKEMON || bestiary->next_instance_id == 0U) return false;
     uint64_t total = 0;
+    bool has_history = false;
     for (uint8_t i = 0; i < CITY_SPECIES_COUNT; ++i) {
         if (bestiary->records[i].species_id != city_species_id_at(i) ||
             !record_is_valid(&bestiary->records[i])) return false;
         total += bestiary->records[i].capture_count;
+        has_history = has_history || bestiary->records[i].state != CITY_DISCOVERY_UNKNOWN;
     }
-    return total == 0 ? bestiary->last_settled_sequence == 0 : bestiary->last_settled_sequence >= total;
+    uint32_t captured[CITY_SPECIES_COUNT] = {0};
+    bool evolved[CITY_SPECIES_COUNT] = {false};
+    uint32_t maximum_id = 0U;
+    for (uint16_t i = 0U; i < bestiary->owned_count; ++i) {
+        const city_owned_pokemon_t *owned = &bestiary->owned[i];
+        const uint8_t index = city_species_index(owned->species_id);
+        if (owned->instance_id == 0U || index == CITY_SPECIES_COUNT ||
+            (owned->place_id == UINT16_MAX && !owned->migrated) ||
+            !stats_match_species(owned->species_id, &owned->stats) ||
+            owned->current_hp > owned->stats.hp || (owned->evolved && evolved[index])) return false;
+        for (uint16_t j = 0U; j < i; ++j)
+            if (bestiary->owned[j].instance_id == owned->instance_id) return false;
+        if (owned->evolved) evolved[index] = true;
+        else ++captured[index];
+        if (owned->instance_id > maximum_id) maximum_id = owned->instance_id;
+    }
+    for (uint8_t i = 0U; i < CITY_SPECIES_COUNT; ++i)
+        if (captured[i] != bestiary->records[i].capture_count ||
+            evolved[i] != bestiary->records[i].evolution_obtained) return false;
+    return bestiary->next_instance_id > maximum_id &&
+           bestiary->last_settled_sequence >= total &&
+           (bestiary->last_settled_sequence == 0U || total > 0U || has_history);
 }
 uint8_t city_bestiary_discovered_count(const city_bestiary_t *bestiary)
 {
@@ -229,6 +320,7 @@ void city_bestiary_init(city_bestiary_t *bestiary)
     }
     memset(bestiary, 0, sizeof(*bestiary));
     bestiary->schema_version = CITY_BESTIARY_SCHEMA_VERSION;
+    bestiary->next_instance_id = 1U;
     for (uint8_t i = 0; i < CITY_SPECIES_COUNT; ++i)
         init_record(&bestiary->records[i], city_species_id_at(i));
 }
@@ -248,9 +340,10 @@ bool city_bestiary_import_legacy_count(
             base_stats(CITY_SPECIES_CHARMANDER);
         bestiary->records[1].best_stats =
             bestiary->records[1].latest_stats;
+        bestiary->records[1].current_hp = bestiary->records[1].latest_stats.hp;
         bestiary->last_settled_sequence = capture_count;
     }
-    return city_bestiary_is_valid(bestiary);
+    return materialize_legacy_owned(bestiary) && city_bestiary_is_valid(bestiary);
 }
 
 city_bestiary_result_t city_bestiary_mark_seen(
@@ -314,6 +407,11 @@ city_bestiary_result_t city_bestiary_capture_with_stats(
     }
 
     city_bestiary_t next = *bestiary;
+    if (!materialize_legacy_owned(&next) ||
+        next.owned_count >= CITY_MAX_OWNED_POKEMON ||
+        next.next_instance_id == UINT32_MAX) {
+        return CITY_BESTIARY_COUNTER_FULL;
+    }
     city_creature_record_t *next_record =
         city_bestiary_record(&next, species_id);
     next_record->state = CITY_DISCOVERY_CAPTURED;
@@ -324,6 +422,18 @@ city_bestiary_result_t city_bestiary_capture_with_stats(
         stats_total(stats) > stats_total(&next_record->best_stats)) {
         next_record->best_stats = *stats;
     }
+    if (record->state != CITY_DISCOVERY_CAPTURED) {
+        next_record->current_hp = stats->hp;
+    } else if (next_record->current_hp > next_record->best_stats.hp) {
+        next_record->current_hp = next_record->best_stats.hp;
+    }
+    city_owned_pokemon_t *owned = &next.owned[next.owned_count++];
+    memset(owned, 0, sizeof(*owned));
+    owned->instance_id = next.next_instance_id++;
+    owned->species_id = species_id;
+    owned->place_id = place_id;
+    owned->stats = *stats;
+    owned->current_hp = stats->hp;
     next.last_settled_sequence = encounter_sequence;
     if (next.buddy_species_id) {
         city_creature_record_t *buddy = city_bestiary_record(&next, next.buddy_species_id);
@@ -363,6 +473,7 @@ static void encode_record(
 {
     write_u16_le(output, record->species_id);
     output[2] = (uint8_t)record->state;
+    output[3] = record->evolution_obtained ? 1 : 0;
     write_u32_le(output + 4U, record->capture_count);
     write_u16_le(output + 8U, record->last_place_id);
     output[10] = record->latest_stats.hp;
@@ -373,6 +484,7 @@ static void encode_record(
     output[15] = record->best_stats.defense;
     write_u16_le(output + 16, record->friendship);
     write_u16_le(output + 18, record->buddy_places);
+    output[20] = record->current_hp;
 }
 
 static void decode_record(
@@ -390,6 +502,35 @@ static void decode_record(
     record->best_stats.hp = data[13];
     record->best_stats.attack = data[14];
     record->best_stats.defense = data[15];
+}
+
+static void encode_owned(uint8_t *output, const city_owned_pokemon_t *owned)
+{
+    write_u32_le(output, owned->instance_id);
+    write_u16_le(output + 4U, owned->species_id);
+    write_u16_le(output + 6U, owned->place_id);
+    output[8] = owned->stats.hp;
+    output[9] = owned->stats.attack;
+    output[10] = owned->stats.defense;
+    output[11] = owned->current_hp;
+    output[12] = (owned->evolved ? 1U : 0U) | (owned->migrated ? 2U : 0U);
+}
+
+static bool decode_owned(const uint8_t *data, city_owned_pokemon_t *owned)
+{
+    if ((data[12] & ~3U) != 0U || data[13] != 0U || data[14] != 0U || data[15] != 0U)
+        return false;
+    memset(owned, 0, sizeof(*owned));
+    owned->instance_id = read_u32_le(data);
+    owned->species_id = read_u16_le(data + 4U);
+    owned->place_id = read_u16_le(data + 6U);
+    owned->stats.hp = data[8];
+    owned->stats.attack = data[9];
+    owned->stats.defense = data[10];
+    owned->current_hp = data[11];
+    owned->evolved = (data[12] & 1U) != 0U;
+    owned->migrated = (data[12] & 2U) != 0U;
+    return true;
 }
 
 bool city_bestiary_encode(
@@ -410,8 +551,14 @@ bool city_bestiary_encode(
     output[16] = bestiary->wild_cooldown_active ? 1U : 0U;
     write_u32_le(output + 20U, CITY_CATALOG_VERSION);
     write_u16_le(output + 24U, bestiary->buddy_species_id);
+    write_u16_le(output + 26U, bestiary->owned_count);
+    write_u32_le(output + 28U, bestiary->next_instance_id);
     for (uint8_t i = 0; i < CITY_SPECIES_COUNT; ++i)
-        encode_record(output + 32U + i * 20U, &bestiary->records[i]);
+        encode_record(output + CITY_BESTIARY_HEADER_BYTES + i * CITY_BESTIARY_RECORD_BYTES, &bestiary->records[i]);
+    const size_t owned_offset = CITY_BESTIARY_HEADER_BYTES +
+        CITY_SPECIES_COUNT * CITY_BESTIARY_RECORD_BYTES;
+    for (uint16_t i = 0U; i < bestiary->owned_count; ++i)
+        encode_owned(output + owned_offset + i * CITY_OWNED_POKEMON_BYTES, &bestiary->owned[i]);
     write_u32_le(
         output + CITY_BESTIARY_CHECKSUM_OFFSET,
         crc32(output, CITY_BESTIARY_CHECKSUM_OFFSET));
@@ -507,20 +654,65 @@ bool city_bestiary_decode(
     const uint16_t version = read_u16_le(data + 4);
     city_bestiary_t decoded;
     city_bestiary_init(&decoded);
-    if (version == 6 || version == CITY_BESTIARY_SCHEMA_VERSION) {
+    if (version == CITY_BESTIARY_SCHEMA_VERSION) {
+        const uint16_t count = read_u16_le(data + 6U);
+        if (count != CITY_SPECIES_COUNT || length != CITY_BESTIARY_ENCODED_BYTES ||
+            data[16] > 1U || data[17] != 0U || data[18] != 0U || data[19] != 0U ||
+            data[32] != 0U || data[33] != 0U || data[34] != 0U || data[35] != 0U ||
+            data[36] != 0U || data[37] != 0U || data[38] != 0U || data[39] != 0U) return false;
+        decoded.last_settled_sequence = read_u64_le(data + 8U);
+        decoded.wild_cooldown_active = data[16] == 1U;
+        decoded.buddy_species_id = read_u16_le(data + 24U);
+        decoded.owned_count = read_u16_le(data + 26U);
+        decoded.next_instance_id = read_u32_le(data + 28U);
+        if (decoded.owned_count > CITY_MAX_OWNED_POKEMON) return false;
+        bool present[CITY_SPECIES_COUNT] = {false};
+        for (uint16_t i = 0U; i < count; ++i) {
+            city_creature_record_t record;
+            const uint8_t *record_data = data + CITY_BESTIARY_HEADER_BYTES +
+                i * CITY_BESTIARY_RECORD_BYTES;
+            decode_record(record_data, &record);
+            if (record_data[3U] > 1U || record_data[21U] != 0U) return false;
+            record.evolution_obtained = record_data[3U] == 1U;
+            record.friendship = read_u16_le(record_data + 16U);
+            record.buddy_places = read_u16_le(record_data + 18U);
+            record.current_hp = record_data[20U];
+            const uint8_t index = city_species_index(record.species_id);
+            if (index == CITY_SPECIES_COUNT || present[index]) return false;
+            present[index] = true;
+            decoded.records[index] = record;
+        }
+        const size_t owned_offset = CITY_BESTIARY_HEADER_BYTES +
+            CITY_SPECIES_COUNT * CITY_BESTIARY_RECORD_BYTES;
+        for (uint16_t i = 0U; i < decoded.owned_count; ++i)
+            if (!decode_owned(data + owned_offset + i * CITY_OWNED_POKEMON_BYTES,
+                              &decoded.owned[i])) return false;
+        for (size_t i = owned_offset + decoded.owned_count * CITY_OWNED_POKEMON_BYTES;
+             i < CITY_BESTIARY_CHECKSUM_OFFSET; ++i)
+            if (data[i] != 0U) return false;
+    } else if (version >= 6 && version < CITY_BESTIARY_SCHEMA_VERSION) {
         const uint16_t count = read_u16_le(data + 6);
-        if (count == 0 || count > CITY_SPECIES_COUNT || length != 32U + count * 20U + 4U || data[16] > 1) return false;
+        const size_t record_bytes = version >= 9 ? CITY_BESTIARY_RECORD_BYTES : CITY_BESTIARY_LEGACY_RECORD_BYTES;
+        if (count == 0 || count > CITY_SPECIES_COUNT || length != CITY_BESTIARY_OLD_HEADER_BYTES + count * record_bytes + 4U || data[16] > 1) return false;
         decoded.last_settled_sequence = read_u64_le(data + 8);
         decoded.wild_cooldown_active = data[16] == 1;
         if (version >= 7) decoded.buddy_species_id = read_u16_le(data + 24);
         bool present[CITY_SPECIES_COUNT] = {false};
         for (uint16_t i = 0; i < count; ++i) {
             city_creature_record_t record;
-            decode_record(data + 32U + i * 20U, &record);
-            if (version >= 7) {
-                record.friendship = read_u16_le(data + 32U + i * 20U + 16U);
-                record.buddy_places = read_u16_le(data + 32U + i * 20U + 18U);
+            const uint8_t *record_data = data + CITY_BESTIARY_OLD_HEADER_BYTES + i * record_bytes;
+            decode_record(record_data, &record);
+            if (version >= 8) {
+                if (record_data[3U] > 1) return false;
+                record.evolution_obtained = record_data[3U] == 1;
             }
+            if (version >= 7) {
+                record.friendship = read_u16_le(record_data + 16U);
+                record.buddy_places = read_u16_le(record_data + 18U);
+            }
+            record.current_hp = version >= 9 ? record_data[20U] :
+                (record.state == CITY_DISCOVERY_CAPTURED ? record.best_stats.hp : 0U);
+            if (version >= 9 && record_data[21U] != 0U) return false;
             const uint8_t index = city_species_index(record.species_id);
             if (index == CITY_SPECIES_COUNT || present[index]) return false;
             present[index] = true;
@@ -538,6 +730,16 @@ bool city_bestiary_decode(
     } else if (version >= 1 && version <= 3) {
         if (length != CITY_BESTIARY_LEGACY_BYTES || !decode_legacy(data, version, &decoded)) return false;
     } else return false;
+
+    if (version < 9) {
+        for (uint8_t i = 0; i < CITY_SPECIES_COUNT; ++i) {
+            if (decoded.records[i].state == CITY_DISCOVERY_CAPTURED) {
+                decoded.records[i].current_hp = decoded.records[i].best_stats.hp;
+            }
+        }
+    }
+
+    if (version < CITY_BESTIARY_SCHEMA_VERSION && !materialize_legacy_owned(&decoded)) return false;
 
     if (!city_bestiary_is_valid(&decoded)) {
         return false;
@@ -594,4 +796,193 @@ city_bestiary_result_t city_bestiary_choose_buddy(
     if (!persist(&next, context)) return CITY_BESTIARY_STORAGE_FAILED;
     *bestiary = next;
     return CITY_BESTIARY_APPLIED;
+}
+
+uint16_t city_evolution_target(uint16_t source_id)
+{
+    for (unsigned i = 0; i < CITY_SPECIES_COUNT; ++i)
+        if (species_definitions[i].evolves_from == source_id && source_id)
+            return species_definitions[i].species_id;
+    return 0;
+}
+uint8_t city_buddy_place_count(const city_creature_record_t *record)
+{
+    if (!record) return 0;
+    uint16_t bits = record->buddy_places;
+    uint8_t count = 0;
+    while (bits) { count += bits & 1U; bits >>= 1; }
+    return count;
+}
+bool city_evolution_ready(const city_bestiary_t *bestiary, uint16_t source_id)
+{
+    if (!city_bestiary_is_valid(bestiary) || bestiary->buddy_species_id != source_id) return false;
+    const city_creature_record_t *source = city_bestiary_record_const(bestiary, source_id);
+    const city_creature_record_t *target = city_bestiary_record_const(bestiary, city_evolution_target(source_id));
+    return source && target && !target->evolution_obtained && source->state == CITY_DISCOVERY_CAPTURED &&
+        source->friendship >= CITY_EVOLUTION_BOND && city_buddy_place_count(source) >= CITY_EVOLUTION_PLACES;
+}
+city_bestiary_result_t city_bestiary_evolve(city_bestiary_t *bestiary,
+    uint16_t source_id, city_bestiary_persist_fn persist, void *context)
+{
+    if (!city_bestiary_is_valid(bestiary) || !persist) return CITY_BESTIARY_INVALID;
+    const uint16_t target_id = city_evolution_target(source_id);
+    const city_creature_record_t *existing = city_bestiary_record_const(bestiary, target_id);
+    if (!existing) return CITY_BESTIARY_INVALID;
+    if (existing->evolution_obtained) return CITY_BESTIARY_UNCHANGED;
+    if (!city_evolution_ready(bestiary, source_id)) return CITY_BESTIARY_INVALID;
+    city_bestiary_t next = *bestiary;
+    if (!materialize_legacy_owned(&next) ||
+        next.owned_count >= CITY_MAX_OWNED_POKEMON ||
+        next.next_instance_id == UINT32_MAX) return CITY_BESTIARY_COUNTER_FULL;
+    const city_creature_record_t *source = city_bestiary_record_const(&next, source_id);
+    city_creature_record_t *target = city_bestiary_record(&next, target_id);
+    const city_species_definition_t *from = city_species_definition(source_id);
+    const city_species_definition_t *to = city_species_definition(target_id);
+    const city_creature_stats_t stats = {
+        to->base_hp + source->best_stats.hp - from->base_hp,
+        to->base_attack + source->best_stats.attack - from->base_attack,
+        to->base_defense + source->best_stats.defense - from->base_defense
+    };
+    target->state = CITY_DISCOVERY_CAPTURED;
+    target->evolution_obtained = true;
+    target->last_place_id = source->last_place_id;
+    target->latest_stats = stats;
+    if (stats_total(&stats) > stats_total(&target->best_stats)) target->best_stats = stats;
+    if (source->friendship > target->friendship) target->friendship = source->friendship;
+    target->buddy_places |= source->buddy_places;
+    target->current_hp = stats.hp;
+    city_owned_pokemon_t *owned = &next.owned[next.owned_count++];
+    memset(owned, 0, sizeof(*owned));
+    owned->instance_id = next.next_instance_id++;
+    owned->species_id = target_id;
+    owned->place_id = source->last_place_id;
+    owned->stats = stats;
+    owned->current_hp = stats.hp;
+    owned->evolved = true;
+    next.buddy_species_id = target_id;
+    if (!persist(&next, context)) return CITY_BESTIARY_STORAGE_FAILED;
+    *bestiary = next;
+    return CITY_BESTIARY_APPLIED;
+}
+
+uint8_t city_bestiary_max_hp(const city_creature_record_t *record)
+{
+    return record && record->state == CITY_DISCOVERY_CAPTURED ? record->best_stats.hp : 0U;
+}
+
+city_bestiary_result_t city_bestiary_apply_damage(
+    city_bestiary_t *bestiary, uint16_t species_id, uint8_t damage,
+    city_bestiary_persist_fn persist, void *context)
+{
+    if (!city_bestiary_is_valid(bestiary) || !persist || damage == 0U) return CITY_BESTIARY_INVALID;
+    const city_creature_record_t *record = city_bestiary_record_const(bestiary, species_id);
+    if (!record || record->state != CITY_DISCOVERY_CAPTURED) return CITY_BESTIARY_INVALID;
+    if (record->current_hp == 0U) return CITY_BESTIARY_UNCHANGED;
+    city_bestiary_t next = *bestiary;
+    if (!materialize_legacy_owned(&next)) return CITY_BESTIARY_INVALID;
+    city_creature_record_t *changed = city_bestiary_record(&next, species_id);
+    changed->current_hp = damage >= changed->current_hp ? 0U : (uint8_t)(changed->current_hp - damage);
+    for (uint16_t i = 0U; i < next.owned_count; ++i) {
+        city_owned_pokemon_t *owned = &next.owned[i];
+        if (owned->species_id == species_id &&
+            memcmp(&owned->stats, &record->best_stats, sizeof(owned->stats)) == 0) {
+            owned->current_hp = changed->current_hp;
+            break;
+        }
+    }
+    if (!persist(&next, context)) return CITY_BESTIARY_STORAGE_FAILED;
+    *bestiary = next;
+    return CITY_BESTIARY_APPLIED;
+}
+
+city_bestiary_result_t city_bestiary_recover(
+    city_bestiary_t *bestiary, uint16_t species_id,
+    city_bestiary_persist_fn persist, void *context)
+{
+    if (!city_bestiary_is_valid(bestiary) || !persist) return CITY_BESTIARY_INVALID;
+    const city_creature_record_t *record = city_bestiary_record_const(bestiary, species_id);
+    if (!record || record->state != CITY_DISCOVERY_CAPTURED) return CITY_BESTIARY_INVALID;
+    const uint8_t maximum = city_bestiary_max_hp(record);
+    if (record->current_hp == maximum) return CITY_BESTIARY_UNCHANGED;
+    city_bestiary_t next = *bestiary;
+    if (!materialize_legacy_owned(&next)) return CITY_BESTIARY_INVALID;
+    city_bestiary_record(&next, species_id)->current_hp = maximum;
+    for (uint16_t i = 0U; i < next.owned_count; ++i) {
+        city_owned_pokemon_t *owned = &next.owned[i];
+        if (owned->species_id == species_id &&
+            memcmp(&owned->stats, &record->best_stats, sizeof(owned->stats)) == 0) {
+            owned->current_hp = owned->stats.hp;
+            break;
+        }
+    }
+    if (!persist(&next, context)) return CITY_BESTIARY_STORAGE_FAILED;
+    *bestiary = next;
+    return CITY_BESTIARY_APPLIED;
+}
+
+static void rebuild_species_after_release(city_bestiary_t *bestiary, uint16_t species_id,
+                                          const city_creature_record_t *previous)
+{
+    city_creature_record_t *record = city_bestiary_record(bestiary, species_id);
+    const uint16_t friendship = previous->friendship;
+    const uint16_t buddy_places = previous->buddy_places;
+    init_record(record, species_id);
+    record->state = CITY_DISCOVERY_SEEN;
+    const city_owned_pokemon_t *latest = NULL;
+    const city_owned_pokemon_t *best = NULL;
+    for (uint16_t i = 0U; i < bestiary->owned_count; ++i) {
+        const city_owned_pokemon_t *owned = &bestiary->owned[i];
+        if (owned->species_id != species_id) continue;
+        if (!latest || owned->instance_id > latest->instance_id) latest = owned;
+        if (!best || stats_total(&owned->stats) > stats_total(&best->stats)) best = owned;
+        if (owned->evolved) record->evolution_obtained = true;
+        else ++record->capture_count;
+    }
+    if (latest && best) {
+        record->state = CITY_DISCOVERY_CAPTURED;
+        record->last_place_id = latest->place_id;
+        record->latest_stats = latest->stats;
+        record->best_stats = best->stats;
+        record->current_hp = best->current_hp;
+        record->friendship = friendship;
+        record->buddy_places = buddy_places;
+    } else if (bestiary->buddy_species_id == species_id) {
+        bestiary->buddy_species_id = 0U;
+    }
+}
+
+city_bestiary_result_t city_bestiary_release_instance(
+    city_bestiary_t *bestiary, uint32_t instance_id,
+    city_bestiary_persist_fn persist, void *context)
+{
+    if (!city_bestiary_is_valid(bestiary) || !persist || instance_id == 0U)
+        return CITY_BESTIARY_INVALID;
+    city_bestiary_t next = *bestiary;
+    if (!materialize_legacy_owned(&next)) return CITY_BESTIARY_INVALID;
+    uint16_t index = next.owned_count;
+    for (uint16_t i = 0U; i < next.owned_count; ++i)
+        if (next.owned[i].instance_id == instance_id) { index = i; break; }
+    if (index == next.owned_count) return CITY_BESTIARY_INVALID;
+    const uint16_t species_id = next.owned[index].species_id;
+    const city_creature_record_t previous = *city_bestiary_record_const(&next, species_id);
+    for (uint16_t i = index + 1U; i < next.owned_count; ++i)
+        next.owned[i - 1U] = next.owned[i];
+    --next.owned_count;
+    memset(&next.owned[next.owned_count], 0, sizeof(next.owned[0]));
+    rebuild_species_after_release(&next, species_id, &previous);
+    if (!persist(&next, context)) return CITY_BESTIARY_STORAGE_FAILED;
+    *bestiary = next;
+    return CITY_BESTIARY_APPLIED;
+}
+
+city_bestiary_result_t city_bestiary_release(
+    city_bestiary_t *bestiary, uint16_t species_id,
+    city_bestiary_persist_fn persist, void *context)
+{
+    if (!city_bestiary_is_valid(bestiary) || !persist) return CITY_BESTIARY_INVALID;
+    const uint16_t count = city_bestiary_owned_count(bestiary, species_id);
+    const city_owned_pokemon_t *owned = count == 0U ? NULL :
+        city_bestiary_owned_at(bestiary, species_id, (uint16_t)(count - 1U));
+    return owned ? city_bestiary_release_instance(
+        bestiary, owned->instance_id, persist, context) : CITY_BESTIARY_INVALID;
 }

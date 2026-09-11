@@ -49,17 +49,18 @@ int main(void) {
     assert(city_bestiary_capture(&restored,6,1,1,save,0)==CITY_BESTIARY_DUPLICATE);
     for(unsigned i=7;i<130;++i) assert(city_bestiary_capture(&b,i,1,1,save,0)==CITY_BESTIARY_APPLIED);
     assert(b.records[0].friendship==100);
-    /* Actual v6 layout has reserved zero bytes; old captures must not earn retroactive points. */
-    bytes[4]=6; bytes[24]=bytes[25]=0;
-    for(unsigned i=0;i<CITY_SPECIES_COUNT;++i) memset(bytes+32+i*20+16,0,4);
-    checksum(bytes,sizeof(bytes));
-    assert(city_bestiary_decode(bytes,sizeof(bytes),&restored));
+    /* Actual v6 layout has 20-byte records; old captures must not earn retroactive points. */
+    uint8_t old[32U + CITY_SPECIES_COUNT * 20U + 4U] = {0};
+    memcpy(old,bytes,32); old[4]=6; old[24]=old[25]=0;
+    for(unsigned i=0;i<CITY_SPECIES_COUNT;++i) memcpy(old+32+i*20,bytes+CITY_BESTIARY_HEADER_BYTES+i*CITY_BESTIARY_RECORD_BYTES,16);
+    checksum(old,sizeof(old));
+    assert(city_bestiary_decode(old,sizeof(old),&restored));
     assert(restored.buddy_species_id==0 && restored.last_settled_sequence==6);
     for(unsigned i=0;i<CITY_SPECIES_COUNT;++i) assert(restored.records[i].friendship==0 && restored.records[i].buddy_places==0);
     /* Valid CRC is insufficient for an invalid buddy or friendship. */
     assert(city_bestiary_encode(&b,bytes)); bytes[24]=25; checksum(bytes,sizeof(bytes));
     assert(!city_bestiary_decode(bytes,sizeof(bytes),&restored));
-    assert(city_bestiary_encode(&b,bytes)); bytes[48]=101; checksum(bytes,sizeof(bytes));
+    assert(city_bestiary_encode(&b,bytes)); bytes[CITY_BESTIARY_HEADER_BYTES+16]=101; checksum(bytes,sizeof(bytes));
     assert(!city_bestiary_decode(bytes,sizeof(bytes),&restored));
     return 0;
 }

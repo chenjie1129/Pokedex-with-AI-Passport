@@ -13,6 +13,7 @@ typedef enum {
     CITY_PASSPORT_NEW_PLACE,
     CITY_PASSPORT_CATCH_SPECIES,
     CITY_PASSPORT_COMPLETE,
+    CITY_PASSPORT_EVOLVE_SPECIES,
 } city_passport_goal_t;
 typedef struct {
     bool places_ready;

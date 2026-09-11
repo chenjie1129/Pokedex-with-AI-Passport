@@ -37,15 +37,14 @@ esp_err_t nvs_commit(nvs_handle_t h)
 }
 static void make_legacy(void)
 {
-    city_bestiary_t b; city_bestiary_init(&b);
-    b.records[1].state=CITY_DISCOVERY_CAPTURED;b.records[1].capture_count=20;
+    city_bestiary_t b; assert(city_bestiary_import_legacy_count(&b,20));
     b.records[1].last_place_id=2;
-    b.records[1].latest_stats=(city_creature_stats_t){39,52,43};
-    b.records[1].best_stats=b.records[1].latest_stats;
     b.last_settled_sequence=20;b.wild_cooldown_active=true;
+    for(unsigned i=0;i<b.owned_count;++i)b.owned[i].place_id=2;
     uint8_t bytes[CITY_BESTIARY_ENCODED_BYTES];assert(city_bestiary_encode(&b,bytes));
     memset(legacy,0,sizeof(legacy));memcpy(legacy,bytes,16);legacy[4]=5;legacy[6]=3;
-    memcpy(legacy+16,bytes+32,60);legacy[76]=1;
+    for(unsigned i=0;i<3;++i)memcpy(legacy+16+i*20,bytes+CITY_BESTIARY_HEADER_BYTES+i*CITY_BESTIARY_RECORD_BYTES,20);
+    legacy[76]=1;
     uint32_t c=UINT32_MAX;
     for(unsigned i=0;i<152;++i){c^=legacy[i];for(unsigned j=0;j<8;++j)c=(c>>1)^(0xedb88320U&(uint32_t)-(int32_t)(c&1));}
     c=~c;for(unsigned i=0;i<4;++i)legacy[152+i]=(uint8_t)(c>>(i*8));
@@ -82,7 +81,10 @@ int main(void)
     assert(bsp_bestiary_store_load(&BSP_BESTIARY_STORE_DEFAULT,&b,&migrated)==ESP_OK);
     assert(b.records[3].capture_count==1 && b.records[1].capture_count==20 && b.wild_cooldown_active);
     /* Upgrade a current-key v6 save in place, only publishing after commit. */
-    saved[4]=6;
+    uint8_t current[CITY_BESTIARY_ENCODED_BYTES];memcpy(current,saved,saved_len);
+    memset(saved,0,sizeof(saved));memcpy(saved,current,32);saved[4]=6;saved[5]=0;
+    for(unsigned i=0;i<CITY_SPECIES_COUNT;++i)memcpy(saved+32+i*20,current+CITY_BESTIARY_HEADER_BYTES+i*CITY_BESTIARY_RECORD_BYTES,20);
+    saved_len=32U+CITY_SPECIES_COUNT*20U+4U;
     uint32_t crc=UINT32_MAX;
     for(size_t i=0;i<saved_len-4;++i){crc^=saved[i];for(unsigned j=0;j<8;++j)crc=(crc>>1)^(0xedb88320U&(uint32_t)-(int32_t)(crc&1));}
     crc=~crc;for(unsigned j=0;j<4;++j)saved[saved_len-4+j]=(uint8_t)(crc>>(8*j));
@@ -92,7 +94,7 @@ int main(void)
     assert(!migrated && empty.records[1].capture_count==0 && saved[4]==6);
     fail_commit=false;
     assert(bsp_bestiary_store_load(&BSP_BESTIARY_STORE_DEFAULT,&empty,&migrated)==ESP_OK);
-    assert(migrated && saved[4]==7 && empty.records[1].capture_count==20 && empty.buddy_species_id==0);
+    assert(migrated && saved[4]==CITY_BESTIARY_SCHEMA_VERSION && empty.records[1].capture_count==20 && empty.buddy_species_id==0);
     puts("Bestiary adapter: failed stages, readback, retry, retained legacy and corruption passed");
     return 0;
 }

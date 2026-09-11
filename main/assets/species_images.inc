@@ -11,3 +11,6 @@
     {74, &geodude_large, &geodude_small},
     {92, &gastly_large, &gastly_small},
     {133, &eevee_large, &eevee_small},
+    {2, &ivysaur_large, &ivysaur_small},
+    {5, &charmeleon_large, &charmeleon_small},
+    {8, &wartortle_large, &wartortle_small},

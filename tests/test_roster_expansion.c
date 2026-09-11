@@ -15,7 +15,7 @@ static void crc(uint8_t *p, size_t len)
 }
 int main(void)
 {
-    assert(CITY_SPECIES_COUNT == 12);
+    assert(CITY_SPECIES_COUNT == 15);
     city_bestiary_t b; city_bestiary_init(&b);
     city_discovery_state_t before;
     assert(city_bestiary_encounter_status(&b, CITY_SPECIES_EEVEE, &before) && before == CITY_DISCOVERY_UNKNOWN);
@@ -32,7 +32,7 @@ int main(void)
         assert(city_bestiary_capture(&b, i+1, id, 2, persist, NULL) == CITY_BESTIARY_APPLIED);
         assert(city_bestiary_encounter_status(&b, id, &before) && before == CITY_DISCOVERY_CAPTURED);
     }
-    assert(city_bestiary_captured_count(&b) == 12);
+    assert(city_bestiary_captured_count(&b) == CITY_SPECIES_COUNT);
     uint8_t bytes[CITY_BESTIARY_ENCODED_BYTES]; assert(city_bestiary_encode(&b, bytes));
     city_bestiary_t restored; assert(city_bestiary_decode(bytes, sizeof(bytes), &restored));
     assert(memcmp(&b, &restored, sizeof(b)) == 0);
@@ -40,25 +40,28 @@ int main(void)
     // Real v4/v5 byte layout, all original counts/stats and cooldown preserved.
     uint8_t legacy[156] = {0};
     memcpy(legacy, bytes, 16); legacy[6] = 3; legacy[7] = 0;
-    memcpy(legacy+16, bytes+32, 60);
+    for (unsigned i = 0; i < 3; ++i) memcpy(legacy+16+i*20, bytes+CITY_BESTIARY_HEADER_BYTES+i*CITY_BESTIARY_RECORD_BYTES, 20);
     for (unsigned version = 4; version <= 5; ++version) {
         legacy[4] = version; legacy[76] = version == 5; crc(legacy, sizeof(legacy));
         assert(city_bestiary_decode(legacy, sizeof(legacy), &restored));
         assert(restored.wild_cooldown_active == (version == 5));
-        assert(restored.last_settled_sequence == 12);
+        assert(restored.last_settled_sequence == CITY_SPECIES_COUNT);
         for (unsigned i = 0; i < 3; ++i) assert(memcmp(&restored.records[i], &b.records[i], sizeof(b.records[i])) == 0);
         for (unsigned i = 3; i < 12; ++i) assert(restored.records[i].state == CITY_DISCOVERY_UNKNOWN);
     }
     // A v6 catalog can grow without depending on positional record order.
     uint8_t short_save[96] = {0}; // 32 header + 3*20 records + 4 CRC
-    memcpy(short_save, bytes, 32); short_save[6] = 3;
-    memcpy(short_save+32, bytes+72, 20); memcpy(short_save+52, bytes+32, 20); memcpy(short_save+72, bytes+52, 20);
+    memcpy(short_save, bytes, 32); short_save[4] = 6; short_save[5] = 0; short_save[6] = 3;
+    memcpy(short_save+32, bytes+CITY_BESTIARY_HEADER_BYTES+2*CITY_BESTIARY_RECORD_BYTES, 20);
+    memcpy(short_save+52, bytes+CITY_BESTIARY_HEADER_BYTES, 20);
+    memcpy(short_save+72, bytes+CITY_BESTIARY_HEADER_BYTES+CITY_BESTIARY_RECORD_BYTES, 20);
     crc(short_save,sizeof(short_save)); assert(city_bestiary_decode(short_save,sizeof(short_save),&restored));
     assert(restored.records[0].capture_count == 1 && restored.records[2].capture_count == 1);
-    memcpy(bytes+52,bytes+32,20); crc(bytes,sizeof(bytes));
+    memcpy(bytes+CITY_BESTIARY_HEADER_BYTES+CITY_BESTIARY_RECORD_BYTES,
+           bytes+CITY_BESTIARY_HEADER_BYTES,CITY_BESTIARY_RECORD_BYTES); crc(bytes,sizeof(bytes));
     assert(!city_bestiary_decode(bytes,sizeof(bytes),&restored)); // Duplicate IDs rejected.
     city_bestiary_init(&b);
-    unsigned hits[12]={0}, wild[12]={0};
+    unsigned hits[CITY_SPECIES_COUNT]={0}, wild[CITY_SPECIES_COUNT]={0};
     for (uint32_t seed = 0; seed < 32000; ++seed) {
         city_encounter_selection_t e;
         assert(city_encounter_select(1,false,&b,seed,&e)); ++hits[city_species_index(e.species_id)];

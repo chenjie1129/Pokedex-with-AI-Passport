@@ -9,3 +9,4 @@ static inline const char *esp_err_to_name(esp_err_t e) { (void)e; return "error"
 #define ESP_ERR_INVALID_SIZE -5
 #define ESP_ERR_INVALID_STATE -6
 #define ESP_ERR_NVS_NOT_FOUND -7
+#define ESP_ERR_NO_MEM -8

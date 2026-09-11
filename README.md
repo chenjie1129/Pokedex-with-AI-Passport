@@ -515,3 +515,17 @@ Passport share the generated catalog. See
 [roster, migration and status rules](docs/architecture/twelve-species-roster.md).
 
 Buddy Pokemon: choose a caught species with UP in its Bestiary detail. Home shows its bond progress; captures and first captures at saved places grow friendship. See [buddy and Poké Ball design](docs/architecture/buddy-and-pokeball.md).
+
+Persistent HP and recovery: each owned species now keeps current HP across restarts. Open its Bestiary detail, press OK, and choose RECOVER HP to restore it to its best recorded maximum. The domain API can apply persisted damage for future battle or exhaustion systems.
+
+Release: open an owned Pokemon's actions, choose RELEASE, then deliberately change the default KEEP choice to RELEASE. Choose an individual copy to release. A successful save removes only that copy; releasing the final copy returns that species to SEEN, clears its collection progress, and removes it as the active buddy when applicable. It can be encountered and captured again later.
+
+Starter evolution: earn 30 bond and captures together at three saved places, then open the starter in Bestiary and choose OK → EVOLVE from its actions. Ivysaur, Charmeleon and Wartortle bring the roster to 15. Evolution preserves catch history. See [evolution rules and save migration](docs/architecture/starter-evolution.md).
+
+Species information: seen, caught and evolved Bestiary detail entries now show
+the full type label and one short species fact. All 15 entries use authored
+summaries checked against the official Pokédex; references live in
+[content/species.json](content/species.json). Descriptions are available even
+after a failed capture. This display-only catalog update preserves game rules,
+saved progress and existing controls. Settings is postponed while the core
+Pokédex experience is tested.

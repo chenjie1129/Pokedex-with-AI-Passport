@@ -10,6 +10,11 @@
 #define ESP_LOGI(...) ((void)0)
 static lv_obj_t *s_screen, *s_status, *s_battery_label, *s_field;
 static lv_obj_t *s_ball, *s_ball_red, *s_ball_band, *s_ball_button, *s_ball_button_inner;
+static uint16_t s_evolution_source_id;
+static uint8_t s_evolution_selection;
+static uint8_t s_action_selection, s_release_selection;
+static uint16_t s_release_copy_selection;
+static uint32_t s_release_instance_id;
 static uint8_t s_encounter_selection, s_bestiary_selection;
 static uint16_t s_current_species_id;
 static city_creature_stats_t s_current_stats;
@@ -37,10 +42,14 @@ static void check_labels(lv_obj_t *o)
 {
     if (lv_obj_check_type(o, &lv_label_class)) {
         lv_point_t size;
+        const bool wrapped = lv_label_get_long_mode(o) == LV_LABEL_LONG_WRAP;
         lv_text_get_size(&size, lv_label_get_text(o), lv_obj_get_style_text_font(o, 0),
-                        lv_obj_get_style_text_letter_space(o, 0), 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
-        if (size.x > lv_obj_get_content_width(o)) {
-            fprintf(stderr, "Clipped label: %s (%d > %d)\n", lv_label_get_text(o), size.x, (int)lv_obj_get_content_width(o));
+                        lv_obj_get_style_text_letter_space(o, 0),
+                        lv_obj_get_style_text_line_space(o, 0),
+                        wrapped ? lv_obj_get_content_width(o) : LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+        if (size.x > lv_obj_get_content_width(o) || size.y > lv_obj_get_content_height(o)) {
+            fprintf(stderr, "Clipped label: %s (%dx%d in %dx%d)\n", lv_label_get_text(o), size.x, size.y,
+                    (int)lv_obj_get_content_width(o), (int)lv_obj_get_content_height(o));
             assert(0);
         }
         lv_area_t bounds; lv_obj_get_coords(o, &bounds);
@@ -51,7 +60,13 @@ static void check_labels(lv_obj_t *o)
 static void snapshot(const char *name, unsigned mode)
 {
     lv_obj_t *old = s_screen;
-    if (mode == 6) build_throwing();
+    if (mode == 7) build_evolution();
+    else if (mode == 8) build_evolved();
+    else if (mode == 9) build_pokemon_actions();
+    else if (mode == 10) build_release_picker();
+    else if (mode == 11) build_release_confirm();
+    else if (mode == 12) build_released();
+    else if (mode == 6) build_throwing();
     else if (mode == 5) build_catching();
     else if (mode == 1) build_home();
     else if (mode == 2) build_encounter();
@@ -87,6 +102,14 @@ int main(void)
     snapshot("home-no-buddy", 1);
     snapshot("passport-empty", false);
     snapshot("bestiary-unknown", 3);
+    /* Information is readable even when an encounter has not been caught. */
+    for (unsigned i = 0; i < CITY_SPECIES_COUNT; ++i) {
+        assert(city_bestiary_mark_seen(&s_bestiary, city_species_id_at(i), persist, NULL) == CITY_BESTIARY_APPLIED);
+        s_bestiary_selection = i;
+        char name[80];
+        snprintf(name, sizeof(name), "seen-detail-%03u", city_species_id_at(i));
+        snapshot(name, 4);
+    }
     for (unsigned i = 0; i < CITY_SPECIES_COUNT; ++i)
         assert(city_bestiary_capture(&s_bestiary, i + 1, city_species_id_at(i), 1, persist, NULL) == CITY_BESTIARY_APPLIED);
     for (unsigned i = 0; i <= CITY_SPECIES_COUNT; ++i) {
@@ -95,6 +118,7 @@ int main(void)
         snprintf(name,sizeof(name),"bestiary-row-%02u",i); snapshot(name,3);
         if (i == CITY_SPECIES_COUNT) continue;
         snprintf(name,sizeof(name),"detail-%03u",city_species_id_at(i)); snapshot(name,4);
+        s_action_selection = 0; snprintf(name,sizeof(name),"actions-%03u",city_species_id_at(i)); snapshot(name,9);
         s_current_species_id = city_species_id_at(i);
         s_current_stats = s_bestiary.records[i].latest_stats;
         for (unsigned status = 0; status < 3; ++status) {
@@ -102,6 +126,22 @@ int main(void)
             snprintf(name,sizeof(name),"encounter-%03u-status-%u",s_current_species_id,status); snapshot(name,2);
         }
     }
+    s_bestiary_selection = city_species_index(CITY_SPECIES_PIKACHU);
+    assert(city_bestiary_capture(&s_bestiary, CITY_SPECIES_COUNT + 1U,
+        CITY_SPECIES_PIKACHU, 1, persist, NULL) == CITY_BESTIARY_APPLIED);
+    assert(city_bestiary_capture(&s_bestiary, CITY_SPECIES_COUNT + 2U,
+        CITY_SPECIES_PIKACHU, 1, persist, NULL) == CITY_BESTIARY_APPLIED);
+    s_release_copy_selection = 1; snapshot("release-picker",10);
+    const city_owned_pokemon_t *release = city_bestiary_owned_at(
+        &s_bestiary, CITY_SPECIES_PIKACHU, s_release_copy_selection);
+    assert(release); s_release_instance_id = release->instance_id;
+    s_release_selection = 1; snapshot("release-confirm-keep",11);
+    s_release_selection = 0; snapshot("release-confirm-release",11);
+    assert(city_bestiary_release_instance(&s_bestiary, s_release_instance_id,
+        persist, NULL) == CITY_BESTIARY_APPLIED);
+    assert(city_bestiary_record_const(&s_bestiary,
+        CITY_SPECIES_PIKACHU)->capture_count == 2U);
+    snapshot("released",12);
     for (unsigned i = 0; i < CITY_SPECIES_COUNT; ++i) {
         assert(city_bestiary_choose_buddy(&s_bestiary, city_species_id_at(i), persist, NULL) == CITY_BESTIARY_APPLIED);
         char name[80];
@@ -111,6 +151,33 @@ int main(void)
             s_bestiary_selection = i;
             snprintf(name,sizeof(name),"buddy-detail-%03u-%u",city_species_id_at(i),points); snapshot(name,4);
         }
+    }
+    for (unsigned i = 0; i < 3; ++i) {
+        s_evolution_source_id = city_species_id_at(i);
+        city_bestiary_t empty; city_bestiary_init(&empty);
+        unsigned target_index = city_species_index(city_evolution_target(s_evolution_source_id));
+        const uint16_t target_id = city_evolution_target(s_evolution_source_id);
+        for (uint16_t j = 0; j < s_bestiary.owned_count; ) {
+            if (s_bestiary.owned[j].species_id != target_id) { ++j; continue; }
+            for (uint16_t k = j + 1U; k < s_bestiary.owned_count; ++k)
+                s_bestiary.owned[k - 1U] = s_bestiary.owned[k];
+            --s_bestiary.owned_count;
+            memset(&s_bestiary.owned[s_bestiary.owned_count], 0,
+                   sizeof(s_bestiary.owned[0]));
+        }
+        s_bestiary.records[target_index] = empty.records[target_index];
+        s_bestiary.buddy_species_id = s_evolution_source_id;
+        char name[80];
+        for (unsigned ready = 0; ready < 2; ++ready) {
+            s_bestiary.records[i].friendship = ready ? 30 : 29;
+            s_bestiary.records[i].buddy_places = ready ? 7 : 3;
+            s_evolution_selection = ready ? 0 : 1;
+            snprintf(name,sizeof(name),"evolution-%u-ready-%u",s_evolution_source_id,ready);snapshot(name,7);
+        }
+        assert(city_bestiary_evolve(&s_bestiary,s_evolution_source_id,persist,NULL)==CITY_BESTIARY_APPLIED);
+        snprintf(name,sizeof(name),"evolved-%u",s_evolution_source_id);snapshot(name,8);
+        s_bestiary_selection=city_species_index(city_evolution_target(s_evolution_source_id));
+        snprintf(name,sizeof(name),"evolved-detail-%u",s_evolution_source_id);snapshot(name,4);
     }
     fixture.count = 2; fixture.place_ids[0] = 1; fixture.place_ids[1] = 2;
     s_home_selection = 2;

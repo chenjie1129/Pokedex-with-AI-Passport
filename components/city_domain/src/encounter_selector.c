@@ -17,7 +17,7 @@ static uint32_t mix32(uint32_t value)
 uint8_t city_encounter_place_weight(uint16_t place_id, uint16_t species_id)
 {
     const city_species_definition_t *def = city_species_definition(species_id);
-    if (place_id == 0 || place_id == CITY_PLACE_INVALID_ID || !def) return 0;
+    if (place_id == 0 || place_id == CITY_PLACE_INVALID_ID || !def || def->evolves_from) return 0;
     return def->place_pool == (place_id - 1U) % 3U ? 6 : 1;
 }
 
@@ -54,7 +54,7 @@ bool city_encounter_select(uint16_t place_id, bool first_encounter_at_place,
     city_discovery_state_t priority = CITY_DISCOVERY_CAPTURED;
     if (first_encounter_at_place) {
         for (uint8_t i = 0; i < CITY_SPECIES_COUNT; ++i)
-            if (bestiary->records[i].state < priority) priority = bestiary->records[i].state;
+            if (city_encounter_place_weight(place_id, city_species_id_at(i)) && bestiary->records[i].state < priority) priority = bestiary->records[i].state;
     }
     uint16_t total = 0;
     uint8_t weights[CITY_SPECIES_COUNT];

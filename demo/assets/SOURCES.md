@@ -29,3 +29,8 @@ distribution requires original City Spirits artwork.
 - Eevee: https://www.pokemon.com/static-assets/content-assets/cms2/img/pokedex/full/133.png
 
 Generated device pixels retain source attribution in roster_sprites.c.
+
+Evolution artwork (same official prototype source):
+- Ivysaur: https://www.pokemon.com/static-assets/content-assets/cms2/img/pokedex/full/002.png
+- Charmeleon: https://www.pokemon.com/static-assets/content-assets/cms2/img/pokedex/full/005.png
+- Wartortle: https://www.pokemon.com/static-assets/content-assets/cms2/img/pokedex/full/008.png

@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 4,
   "species": [
     {
       "id": 1,
@@ -10,8 +10,13 @@
       "defense": 49,
       "pool": 0,
       "wild": true,
-      "description": "A little seed companion for your next outing.",
-      "artwork": "https://www.pokemon.com/static-assets/content-assets/cms2/img/pokedex/full/001.png"
+      "description": "Its back seed stores food to help it grow after birth.",
+      "artwork": "https://www.pokemon.com/static-assets/content-assets/cms2/img/pokedex/full/001.png",
+      "types": [
+        "Grass",
+        "Poison"
+      ],
+      "info_source": "https://sg.portal-pokemon.com/pokedex/0001/"
     },
     {
       "id": 4,
@@ -22,8 +27,12 @@
       "defense": 43,
       "pool": 1,
       "wild": false,
-      "description": "A bright flame for a curious explorer.",
-      "artwork": "https://www.pokemon.com/static-assets/content-assets/cms2/img/pokedex/full/004.png"
+      "description": "Its tail flame grows faint when it is weak.",
+      "artwork": "https://www.pokemon.com/static-assets/content-assets/cms2/img/pokedex/full/004.png",
+      "types": [
+        "Fire"
+      ],
+      "info_source": "https://sg.portal-pokemon.com/pokedex/0004/"
     },
     {
       "id": 7,
@@ -34,8 +43,12 @@
       "defense": 65,
       "pool": 2,
       "wild": true,
-      "description": "A small shell with plenty of courage.",
-      "artwork": "https://www.pokemon.com/static-assets/content-assets/cms2/img/pokedex/full/007.png"
+      "description": "Its shell hardens after birth. It can spray powerful foam.",
+      "artwork": "https://www.pokemon.com/static-assets/content-assets/cms2/img/pokedex/full/007.png",
+      "types": [
+        "Water"
+      ],
+      "info_source": "https://sg.portal-pokemon.com/pokedex/0007/"
     },
     {
       "id": 25,
@@ -46,8 +59,12 @@
       "defense": 40,
       "pool": 1,
       "wild": false,
-      "description": "A spark of energy on every adventure.",
-      "artwork": "https://www.pokemon.com/static-assets/content-assets/cms2/img/pokedex/full/025.png"
+      "description": "It stores electricity in cheek pouches and releases it when angry.",
+      "artwork": "https://www.pokemon.com/static-assets/content-assets/cms2/img/pokedex/full/025.png",
+      "types": [
+        "Electric"
+      ],
+      "info_source": "https://sg.portal-pokemon.com/pokedex/0025/"
     },
     {
       "id": 39,
@@ -58,8 +75,13 @@
       "defense": 20,
       "pool": 2,
       "wild": true,
-      "description": "A round companion with a song to share.",
-      "artwork": "https://www.pokemon.com/static-assets/content-assets/cms2/img/pokedex/full/039.png"
+      "description": "Its gentle song can send an opponent to sleep.",
+      "artwork": "https://www.pokemon.com/static-assets/content-assets/cms2/img/pokedex/full/039.png",
+      "types": [
+        "Normal",
+        "Fairy"
+      ],
+      "info_source": "https://sg.portal-pokemon.com/pokedex/0039/"
     },
     {
       "id": 43,
@@ -70,8 +92,13 @@
       "defense": 55,
       "pool": 0,
       "wild": true,
-      "description": "Little leaves, big plans for an outing.",
-      "artwork": "https://www.pokemon.com/static-assets/content-assets/cms2/img/pokedex/full/043.png"
+      "description": "After dark, it walks long distances on its two roots.",
+      "artwork": "https://www.pokemon.com/static-assets/content-assets/cms2/img/pokedex/full/043.png",
+      "types": [
+        "Grass",
+        "Poison"
+      ],
+      "info_source": "https://sg.portal-pokemon.com/pokedex/0043/"
     },
     {
       "id": 52,
@@ -82,8 +109,12 @@
       "defense": 35,
       "pool": 1,
       "wild": true,
-      "description": "Always curious about the next discovery.",
-      "artwork": "https://www.pokemon.com/static-assets/content-assets/cms2/img/pokedex/full/052.png"
+      "description": "It rests by day and patrols its territory at night.",
+      "artwork": "https://www.pokemon.com/static-assets/content-assets/cms2/img/pokedex/full/052.png",
+      "types": [
+        "Normal"
+      ],
+      "info_source": "https://sg.portal-pokemon.com/pokedex/0052/"
     },
     {
       "id": 54,
@@ -94,8 +125,12 @@
       "defense": 48,
       "pool": 2,
       "wild": true,
-      "description": "A puzzled face with surprising potential.",
-      "artwork": "https://www.pokemon.com/static-assets/content-assets/cms2/img/pokedex/full/054.png"
+      "description": "An intense headache can bring out its mysterious powers.",
+      "artwork": "https://www.pokemon.com/static-assets/content-assets/cms2/img/pokedex/full/054.png",
+      "types": [
+        "Water"
+      ],
+      "info_source": "https://sg.portal-pokemon.com/pokedex/0054/"
     },
     {
       "id": 58,
@@ -106,8 +141,12 @@
       "defense": 45,
       "pool": 1,
       "wild": false,
-      "description": "A loyal companion ready to explore.",
-      "artwork": "https://www.pokemon.com/static-assets/content-assets/cms2/img/pokedex/full/058.png"
+      "description": "This brave companion will face foes much larger than itself.",
+      "artwork": "https://www.pokemon.com/static-assets/content-assets/cms2/img/pokedex/full/058.png",
+      "types": [
+        "Fire"
+      ],
+      "info_source": "https://sg.portal-pokemon.com/pokedex/0058/"
     },
     {
       "id": 74,
@@ -118,8 +157,13 @@
       "defense": 100,
       "pool": 0,
       "wild": false,
-      "description": "A sturdy friend for the road ahead.",
-      "artwork": "https://www.pokemon.com/static-assets/content-assets/cms2/img/pokedex/full/074.png"
+      "description": "It can be mistaken for a rock, until someone steps on it.",
+      "artwork": "https://www.pokemon.com/static-assets/content-assets/cms2/img/pokedex/full/074.png",
+      "types": [
+        "Rock",
+        "Ground"
+      ],
+      "info_source": "https://sg.portal-pokemon.com/pokedex/0074/"
     },
     {
       "id": 92,
@@ -130,8 +174,13 @@
       "defense": 30,
       "pool": 0,
       "wild": false,
-      "description": "A playful mystery drifting into view.",
-      "artwork": "https://www.pokemon.com/static-assets/content-assets/cms2/img/pokedex/full/092.png"
+      "description": "Its gaseous body surrounds foes and poisons them through the skin.",
+      "artwork": "https://www.pokemon.com/static-assets/content-assets/cms2/img/pokedex/full/092.png",
+      "types": [
+        "Ghost",
+        "Poison"
+      ],
+      "info_source": "https://sg.portal-pokemon.com/pokedex/0092/"
     },
     {
       "id": 133,
@@ -142,8 +191,64 @@
       "defense": 50,
       "pool": 2,
       "wild": false,
-      "description": "A curious companion full of possibility.",
-      "artwork": "https://www.pokemon.com/static-assets/content-assets/cms2/img/pokedex/full/133.png"
+      "description": "Its many evolved forms help it adapt to different environments.",
+      "artwork": "https://www.pokemon.com/static-assets/content-assets/cms2/img/pokedex/full/133.png",
+      "types": [
+        "Normal"
+      ],
+      "info_source": "https://sg.portal-pokemon.com/pokedex/0133/"
+    },
+    {
+      "id": 2,
+      "name": "Ivysaur",
+      "element": "Grass",
+      "hp": 60,
+      "attack": 62,
+      "defense": 63,
+      "pool": 0,
+      "wild": false,
+      "evolves_from": 1,
+      "description": "Sunlight gives it strength and helps the bud on its back grow.",
+      "artwork": "https://www.pokemon.com/static-assets/content-assets/cms2/img/pokedex/full/002.png",
+      "types": [
+        "Grass",
+        "Poison"
+      ],
+      "info_source": "https://sg.portal-pokemon.com/pokedex/0002/"
+    },
+    {
+      "id": 5,
+      "name": "Charmeleon",
+      "element": "Fire",
+      "hp": 58,
+      "attack": 64,
+      "defense": 58,
+      "pool": 1,
+      "wild": false,
+      "evolves_from": 4,
+      "description": "Swinging its fiery tail heats the air around its opponents.",
+      "artwork": "https://www.pokemon.com/static-assets/content-assets/cms2/img/pokedex/full/005.png",
+      "types": [
+        "Fire"
+      ],
+      "info_source": "https://sg.portal-pokemon.com/pokedex/0005/"
+    },
+    {
+      "id": 8,
+      "name": "Wartortle",
+      "element": "Water",
+      "hp": 59,
+      "attack": 63,
+      "defense": 80,
+      "pool": 2,
+      "wild": false,
+      "evolves_from": 7,
+      "description": "Its long, fluffy tail is seen as a sign of a long life.",
+      "artwork": "https://www.pokemon.com/static-assets/content-assets/cms2/img/pokedex/full/008.png",
+      "types": [
+        "Water"
+      ],
+      "info_source": "https://sg.portal-pokemon.com/pokedex/0008/"
     }
   ]
 }

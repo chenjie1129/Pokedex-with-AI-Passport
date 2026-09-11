@@ -53,6 +53,8 @@ city_passport_progress_t city_passport_progress(const city_passport_stamps_t *st
         for (unsigned i = 0; i < CITY_SPECIES_COUNT; ++i) {
             const city_creature_record_t *r = city_bestiary_record_const(bestiary, city_species_id_at(i));
             if (r->state != CITY_DISCOVERY_CAPTURED) {
+                const uint16_t source = city_species_definition(r->species_id)->evolves_from;
+                if (source) { p.goal = CITY_PASSPORT_EVOLVE_SPECIES; p.target = source; break; }
                 p.target = city_species_id_at(i); p.target_seen = r->state == CITY_DISCOVERY_SEEN; break;
             }
         }
