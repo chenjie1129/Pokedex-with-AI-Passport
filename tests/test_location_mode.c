@@ -111,7 +111,8 @@ static void test_known_place_and_lock(void)
     CHECK(state.locked_until_ms == locked_until);
 
     output = step(&state, CITY_SCAN_EMPTY, 1000U, NULL, &catalog);
-    CHECK(output.event == CITY_LOCATION_EVENT_LOCKED);
+    CHECK(output.event == CITY_LOCATION_EVENT_WILD);
+    CHECK(!output.encounter_eligible);
     CHECK(output.mode == CITY_LOCATION_KNOWN_PLACE);
     CHECK(output.region_id == 5U);
 
@@ -214,7 +215,8 @@ static void test_lock_suppresses_gray_evidence(void)
     const city_location_output_t output =
         step(&state, CITY_SCAN_EVIDENCE, 1000U, &gray, &catalog);
 
-    CHECK(output.event == CITY_LOCATION_EVENT_LOCKED);
+    CHECK(output.event == CITY_LOCATION_EVENT_GRAY_ZONE);
+    CHECK(!output.encounter_eligible);
     CHECK(output.mode == CITY_LOCATION_KNOWN_PLACE);
     CHECK(output.region_id == 5U);
     CHECK(memcmp(&state, &before, sizeof(state)) == 0);

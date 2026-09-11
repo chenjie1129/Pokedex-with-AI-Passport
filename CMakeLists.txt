@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
+include(cmake/build_identity.cmake)
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 
 # Community firmware replaces the bootloader when installed over USB. Keep the

@@ -3,24 +3,14 @@
 #include "bsp_place_identity.h"
 #include "bsp_place_store.h"
 #include "esp_err.h"
+#include "place_scan_policy.h"
 
 #include <stdbool.h>
 #include <stdint.h>
 
-typedef enum {
-    PLACE_RESULT_KNOWN = 0,
-    PLACE_RESULT_CANDIDATE_WAIT,
-    PLACE_RESULT_NEW_CONFIRMED,
-    PLACE_RESULT_GRAY,
-    PLACE_RESULT_WILD,
-    PLACE_RESULT_UNSTABLE,
-    PLACE_RESULT_SCAN_ERROR,
-    PLACE_RESULT_STORAGE_ERROR,
-    PLACE_RESULT_CAPACITY_FULL,
-} place_result_kind_t;
-
 typedef struct {
     place_result_kind_t kind;
+    bool encounter_eligible;
     uint16_t place_id;
     uint16_t confidence_permille;
     uint8_t ap_count;

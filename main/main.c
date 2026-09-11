@@ -1,8 +1,11 @@
 #include "bsp_bestiary_store.h"
 #include "bsp_button.h"
+#include "bsp_battery.h"
+#include "pocket_policy.h"
 #include "bsp_display.h"
 #include "bsp_i2c.h"
 #include "capture_engine.h"
+#include "city_build_identity.h"
 #include "encounter_selector.h"
 #include "game_loop.h"
 #include "charmander_sprite.h"
@@ -14,6 +17,7 @@
 #include "esp_sleep.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
 #include "freertos/task.h"
 #include "lvgl.h"
 #include "nvs_flash.h"
@@ -72,12 +76,15 @@ typedef enum {
     UI_BESTIARY_LIST,
     UI_BESTIARY_DETAIL,
     UI_STORAGE_ERROR,
+    UI_LOW_BATTERY,
 } ui_state_t;
 
 typedef enum {
     WRITE_NONE = 0,
     WRITE_DISCOVERY,
     WRITE_CAPTURE,
+    WRITE_WILD,
+    WRITE_WILD_CLEAR,
 } write_operation_t;
 
 static const char *TAG = "pokedex";
@@ -101,6 +108,13 @@ static uint16_t s_current_place_id = CITY_PLACE_INVALID_ID;
 static uint16_t s_current_species_id = CITY_SPECIES_CHARMANDER;
 static city_creature_stats_t s_current_stats;
 
+static city_wild_reward_guard_t s_wild_guard;
+static uint64_t s_wild_clear_retry_ms;
+static city_pocket_policy_t s_pocket;
+static int s_battery_soc = -1;
+static QueueHandle_t s_battery_queue;
+static lv_obj_t *s_battery_label;
+static lv_obj_t *s_wild_countdown;
 static lv_obj_t *s_screen;
 static lv_obj_t *s_field;
 static lv_obj_t *s_ring;
@@ -134,7 +148,7 @@ static const char *state_name(ui_state_t state)
         "place_unstable", "place_error", "place_storage_error",
         "place_full", "encounter", "aim", "throwing", "catching",
         "captured", "escaped", "abandoned", "bestiary_list", "bestiary_detail",
-        "storage_error",
+        "storage_error", "low_battery",
     };
     return names[state];
 }
@@ -179,9 +193,13 @@ static lv_obj_t *new_screen(const char *title, const char *action)
     lv_obj_set_size(header, SCREEN_WIDTH, 34);
     lv_obj_set_pos(header, 0, 0);
     label_at(header, "Pokedex", &lv_font_montserrat_14, 0x247052, 12, 9, 90);
-    lv_obj_t *battery = label_at(
-        header, "USB", &lv_font_montserrat_14, COLOR_MUTED, 184, 9, 42);
-    lv_obj_set_style_text_align(battery, LV_TEXT_ALIGN_RIGHT, 0);
+    char battery_text[20];
+    if (s_battery_soc < 0) snprintf(battery_text, sizeof(battery_text), "BAT --");
+    else snprintf(battery_text, sizeof(battery_text), "%s%d%%",
+                  city_battery_low(s_battery_soc) ? "LOW " : "", s_battery_soc);
+    s_battery_label = label_at(header, battery_text, &lv_font_montserrat_14,
+        city_battery_low(s_battery_soc) ? COLOR_CORAL : COLOR_MUTED, 126, 9, 102);
+    lv_obj_set_style_text_align(s_battery_label, LV_TEXT_ALIGN_RIGHT, 0);
 
     label_at(
         screen, title, &lv_font_montserrat_20,
@@ -355,7 +373,7 @@ static void build_home(void)
         s_screen, 151, "BESTIARY", progress,
         s_home_selection == 1U);
     label_at(
-        s_screen, "Offline collection", &lv_font_montserrat_14,
+        s_screen, "Hold UP: screen off", &lv_font_montserrat_14,
         COLOR_MUTED, 10, META_Y, 220);
 }
 
@@ -677,6 +695,8 @@ static void build_bestiary_detail(void)
     char place[40];
     if (record->last_place_id == UINT16_MAX) {
         snprintf(place, sizeof(place), "PLACE --");
+    } else if (record->last_place_id == CITY_WILD_PLACE_ID) {
+        snprintf(place, sizeof(place), "WILD");
     } else {
         snprintf(place, sizeof(place), "PLACE %02u", record->last_place_id);
     }
@@ -716,7 +736,7 @@ static void build_storage_error(void)
 {
     s_screen = new_screen("SAVE FAILED", "OK  RETRY");
     s_field = create_field(s_screen);
-    if (s_pending_write == WRITE_DISCOVERY) {
+    if (s_pending_write == WRITE_DISCOVERY || s_pending_write == WRITE_WILD) {
         lv_obj_t *beacon = lv_obj_create(s_field);
         style_plain(beacon, 0xF7FBF8);
         lv_obj_set_style_radius(beacon, 8, 0);
@@ -746,6 +766,7 @@ static void build_state(void)
     s_ball_button = NULL;
     s_ball_button_inner = NULL;
     s_status = NULL;
+    s_wild_countdown = NULL;
 
     switch (s_state) {
     case UI_HOME:
@@ -763,8 +784,19 @@ static void build_state(void)
             "SIGNAL UNCLEAR", "OK  HOME", "Move a little and try again");
         break;
     case UI_PLACE_WILD:
-        build_place_status(
-            "NO PLACE FOUND", "OK  HOME", "Not enough Wi-Fi evidence");
+        s_screen = new_screen("WILD MODE", "OK SEARCH / UP HOME");
+        s_field = create_field(s_screen);
+        s_wild_countdown = label_at(s_field, "", &lv_font_montserrat_20,
+                                    COLOR_INK, 5, 25, 210);
+        label_at(s_field, "One try every 30 minutes", &lv_font_montserrat_14,
+                 COLOR_INK, 5, 70, 210);
+        label_at(s_field, "Leaving uses the try", &lv_font_montserrat_14,
+                 COLOR_MUTED, 5, 100, 210);
+        label_at(s_screen, "Restart: wait up to 30m", &lv_font_montserrat_14,
+                 COLOR_MUTED, 5, META_Y, 230);
+        break;
+    case UI_LOW_BATTERY:
+        build_place_status("LOW BATTERY", "OK  HOME", "Charge before exploring");
         break;
     case UI_PLACE_UNSTABLE:
         build_place_status(
@@ -828,6 +860,7 @@ static void set_state(ui_state_t state)
     lv_obj_t *old = s_screen;
     s_state = state;
     s_state_started_ms = now_ms();
+    s_pocket.last_activity_ms = s_state_started_ms;
     build_state();
     if (old != NULL) {
         lv_obj_delete(old);
@@ -916,7 +949,14 @@ static void bestiary_write_task(void *argument)
 {
     (void)argument;
     const write_operation_t operation = s_pending_write;
-    const bool saved = operation == WRITE_DISCOVERY
+    const bool saved = operation == WRITE_WILD
+        ? city_bestiary_reserve_wild(&s_bestiary, &s_wild_guard, now_ms(),
+            s_current_species_id, bsp_bestiary_store_persist,
+            (void *)&BSP_BESTIARY_STORE_DEFAULT) == CITY_BESTIARY_APPLIED
+        : operation == WRITE_WILD_CLEAR
+        ? city_bestiary_clear_wild_cooldown(&s_bestiary, &s_wild_guard, now_ms(),
+            bsp_bestiary_store_persist, (void *)&BSP_BESTIARY_STORE_DEFAULT) == CITY_BESTIARY_APPLIED
+        : operation == WRITE_DISCOVERY
                            ? persist_discovery()
                            : operation == WRITE_CAPTURE
                                  ? persist_capture()
@@ -926,9 +966,13 @@ static void bestiary_write_task(void *argument)
         ESP_LOGW(TAG, "Waiting to publish bestiary result");
     }
     s_save_in_progress = false;
-    if (saved) {
+    if (operation == WRITE_WILD_CLEAR) {
         s_pending_write = WRITE_NONE;
-        set_state(operation == WRITE_DISCOVERY
+        s_wild_clear_retry_ms = now_ms() + 30000U;
+        ESP_LOGI(TAG, "WILD_COOLDOWN_CLEAR saved=%u", saved);
+    } else if (saved) {
+        s_pending_write = WRITE_NONE;
+        set_state((operation == WRITE_DISCOVERY || operation == WRITE_WILD)
                       ? UI_ENCOUNTER
                       : UI_CAPTURED);
     } else {
@@ -976,6 +1020,11 @@ static void load_bestiary(void)
     }
 
     s_bestiary_ready = true;
+    const city_wild_reward_snapshot_t snapshot = {
+        .schema_version = CITY_WILD_REWARD_SCHEMA_VERSION,
+        .cooldown_active = s_bestiary.wild_cooldown_active,
+    };
+    city_wild_reward_guard_init(&s_wild_guard, &snapshot, now_ms());
     ESP_LOGI(
         TAG,
         "BESTIARY_READY schema=%u count=%lu sequence=%llu migrated=%u",
@@ -1011,12 +1060,31 @@ static void load_place_data(void)
 
 static void begin_place_scan(void)
 {
+    if (city_battery_critical(s_battery_soc)) {
+        set_state(UI_LOW_BATTERY);
+        return;
+    }
     s_current_place_id = CITY_PLACE_INVALID_ID;
     if (!s_place_data_ready || !place_scan_coordinator_request()) {
         set_state(UI_PLACE_ERROR);
         return;
     }
     set_state(UI_SCANNING);
+}
+
+static void begin_wild_encounter(void)
+{
+    if (city_battery_critical(s_battery_soc)) { set_state(UI_LOW_BATTERY); return; }
+    if (city_wild_reward_remaining_ms(&s_wild_guard, now_ms()) != 0U) return;
+    city_encounter_selection_t selection;
+    if (!s_bestiary_ready || !new_encounter_sequence(&s_encounter_sequence) ||
+        !city_wild_encounter_select(esp_random(), &selection)) return;
+    s_current_place_id = CITY_WILD_PLACE_ID;
+    s_current_species_id = selection.species_id;
+    s_current_stats = selection.stats;
+    s_attempts = CITY_GAME_CAPTURE_ATTEMPTS;
+    s_encounter_selection = 0U;
+    if (!request_bestiary_write(WRITE_WILD)) set_state(UI_STORAGE_ERROR);
 }
 
 static void handle_place_result(const place_scan_result_t *result)
@@ -1026,9 +1094,10 @@ static void handle_place_result(const place_scan_result_t *result)
     }
     ESP_LOGI(
         TAG,
-        "PLACE_RESULT kind=%d place_id=%u score=%u aps=%u duration_ms=%lu "
+        "PLACE_RESULT kind=%d eligible=%u place_id=%u score=%u aps=%u duration_ms=%lu "
         "heap_before=%lu heap_after=%lu heap_min=%lu error=%s",
         (int)result->kind,
+        result->encounter_eligible ? 1U : 0U,
         result->place_id,
         result->confidence_permille,
         result->ap_count,
@@ -1041,6 +1110,11 @@ static void handle_place_result(const place_scan_result_t *result)
     switch (result->kind) {
     case PLACE_RESULT_KNOWN:
     case PLACE_RESULT_NEW_CONFIRMED:
+        if (!result->encounter_eligible) {
+            ESP_LOGW(TAG, "ENCOUNTER_BLOCKED no fresh eligible evidence");
+            set_state(UI_PLACE_ERROR);
+            break;
+        }
         s_current_place_id = result->place_id;
         s_attempts = CITY_GAME_CAPTURE_ATTEMPTS;
         s_encounter_selection = 0U;
@@ -1175,6 +1249,38 @@ static void tick(lv_timer_t *timer)
 {
     (void)timer;
     uint64_t now = now_ms();
+    int soc;
+    if (s_battery_queue && xQueueReceive(s_battery_queue, &soc, 0) == pdTRUE) {
+        s_battery_soc = soc;
+        char text[20];
+        if (soc < 0) snprintf(text, sizeof(text), "BAT --");
+        else snprintf(text, sizeof(text), "%s%d%%", city_battery_low(soc) ? "LOW " : "", soc);
+        lv_label_set_text(s_battery_label, text);
+        lv_obj_set_style_text_color(s_battery_label,
+            lv_color_hex(city_battery_low(soc) ? COLOR_CORAL : COLOR_MUTED), 0);
+        if (!s_pocket.screen_off) bsp_display_backlight(city_battery_low(soc) ? 30 : 100);
+    }
+    const bool busy = s_save_in_progress || s_state == UI_SCANNING ||
+        s_state == UI_PLACE_PENDING || s_state == UI_ENCOUNTER ||
+        s_state == UI_AIM || s_state == UI_THROWING || s_state == UI_CATCHING ||
+        s_state == UI_STORAGE_ERROR;
+    if (city_pocket_idle(&s_pocket, now, busy, s_battery_soc)) {
+        bsp_display_backlight(0);
+        lv_timer_set_period(s_tick, 1000);
+        ESP_LOGI(TAG, "SCREEN_OFF idle");
+    }
+    if (s_save_in_progress) return;
+    if (s_state == UI_PLACE_WILD && s_wild_countdown) {
+        const unsigned seconds = (unsigned)((city_wild_reward_remaining_ms(&s_wild_guard, now) + 999U) / 1000U);
+        lv_label_set_text_fmt(s_wild_countdown, seconds ? "Wait %02u:%02u" : "Ready to search", seconds / 60U, seconds % 60U);
+        lv_label_set_text(s_status, seconds ? "UP  HOME" : "OK SEARCH / UP HOME");
+    }
+    if (!busy && s_bestiary_ready && s_bestiary.wild_cooldown_active &&
+        now >= s_wild_clear_retry_ms && city_wild_reward_remaining_ms(&s_wild_guard, now) == 0U) {
+        s_wild_clear_retry_ms = now + 30000U;
+        if (request_bestiary_write(WRITE_WILD_CLEAR)) return;
+        s_pending_write = WRITE_NONE;
+    }
 
     if (s_state == UI_SCANNING || s_state == UI_PLACE_PENDING) {
         place_scan_result_t result;
@@ -1216,15 +1322,34 @@ static void throw_ball(void)
 static void on_button(bsp_btn_t button, bsp_btn_ev_t event, void *user)
 {
     (void)user;
-    const bool handles_long_ok =
-        event == BSP_BTN_LONG && button == BSP_BTN_OK &&
-        (s_state == UI_AIM || s_state == UI_BESTIARY_LIST);
-    if (event != BSP_BTN_CLICK && !handles_long_ok) {
+    if (!bsp_lvgl_lock(500)) return;
+    if (event == BSP_BTN_PRESS) {
+        if (city_pocket_press(&s_pocket, now_ms())) {
+            bsp_display_backlight(city_battery_low(s_battery_soc) ? 30 : 100);
+            lv_timer_set_period(s_tick, 33);
+            ESP_LOGI(TAG, "SCREEN_WAKE");
+        }
+        bsp_lvgl_unlock();
         return;
     }
-    if (!bsp_lvgl_lock(500)) {
-        ESP_LOGE(TAG, "button dropped: LVGL lock timeout");
-        return;
+    if (s_pocket.screen_off || s_pocket.consume_gesture || s_save_in_progress) {
+        bsp_lvgl_unlock(); return;
+    }
+    const bool handles_long_ok = event == BSP_BTN_LONG && button == BSP_BTN_OK &&
+        (s_state == UI_AIM || s_state == UI_BESTIARY_LIST);
+    if (event == BSP_BTN_LONG && button == BSP_BTN_UP && s_state == UI_HOME) {
+        city_pocket_sleep(&s_pocket);
+        bsp_display_backlight(0);
+        lv_timer_set_period(s_tick, 1000);
+        ESP_LOGI(TAG, "SCREEN_OFF manual");
+        bsp_lvgl_unlock(); return;
+    }
+    if (event != BSP_BTN_CLICK && !handles_long_ok) { bsp_lvgl_unlock(); return; }
+    s_pocket.last_activity_ms = now_ms();
+    if (s_state == UI_PLACE_WILD) {
+        if (button == BSP_BTN_UP) set_state(UI_HOME);
+        else if (button == BSP_BTN_OK) begin_wild_encounter();
+        bsp_lvgl_unlock(); return;
     }
 
     ESP_LOGI(TAG, "BUTTON key=%d event=%d state=%s",
@@ -1308,6 +1433,7 @@ static void on_button(bsp_btn_t button, bsp_btn_ev_t event, void *user)
     case UI_PLACE_STORAGE_ERROR:
         begin_place_scan();
         break;
+    case UI_LOW_BATTERY:
     case UI_PLACE_GRAY:
     case UI_PLACE_WILD:
     case UI_PLACE_UNSTABLE:
@@ -1348,9 +1474,26 @@ static void on_button(bsp_btn_t button, bsp_btn_ev_t event, void *user)
     bsp_lvgl_unlock();
 }
 
+static void battery_task(void *argument)
+{
+    (void)argument;
+    bool ready = false;
+    for (;;) {
+        if (!ready) ready = bsp_battery_init() == ESP_OK;
+        int soc = ready ? bsp_battery_soc() : -1;
+        if (soc < 0 || soc > 100) soc = -1;
+        xQueueOverwrite(s_battery_queue, &soc);
+        ESP_LOGI(TAG, "BATTERY soc=%d", soc);
+        vTaskDelay(pdMS_TO_TICKS(30000));
+    }
+}
+
 void app_main(void)
 {
     ESP_LOGI(TAG, "Pokedex AI Passport boot");
+    ESP_LOGI(TAG, "BUILD_ID version=%s commit=%s source=%s dirty=%u",
+             CITY_BUILD_VERSION, CITY_BUILD_GIT_COMMIT,
+             CITY_BUILD_SOURCE_SHA256, CITY_BUILD_DIRTY);
     ESP_LOGI(TAG, "wake_cause=%d", (int)esp_sleep_get_wakeup_cause());
 
     city_bestiary_init(&s_bestiary);
@@ -1363,22 +1506,31 @@ void app_main(void)
     }
 
     ESP_ERROR_CHECK(bsp_i2c_init());
+    s_battery_queue = xQueueCreate(1, sizeof(int));
+    if (s_battery_queue && xTaskCreate(battery_task, "battery", 3072, NULL, 2, NULL) != pdPASS) {
+        ESP_LOGW(TAG, "Battery worker unavailable");
+    }
     ESP_ERROR_CHECK(bsp_display_init());
     if (bsp_lvgl_init() == NULL) {
         ESP_LOGE(TAG, "LVGL init failed");
         return;
     }
     bsp_display_backlight(100);
-    ESP_ERROR_CHECK(bsp_button_init(on_button, NULL));
 
-    if (bsp_lvgl_lock(1000)) {
+    if (!bsp_lvgl_lock(1000)) {
+        ESP_LOGE(TAG, "Initial UI lock unavailable");
+        return;
+    }
+    {
         s_state = UI_HOME;
         s_state_started_ms = now_ms();
+        s_pocket.last_activity_ms = s_state_started_ms;
         build_state();
         s_tick = lv_timer_create(tick, 33, NULL);
         bsp_lvgl_unlock();
     }
 
+    ESP_ERROR_CHECK(bsp_button_init(on_button, NULL));
     ESP_LOGI(
         TAG,
         "READY display=1 buttons=1 capture_count=%lu place_data=%u",

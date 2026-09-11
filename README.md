@@ -491,3 +491,16 @@ domain state machine and firmware integration boundary.
   <https://my.feishu.cn/wiki/XSr5wfrmxiy1bskO2UDcB6lnnxg>
 - Existing foundation:
   <https://github.com/chenjie1129/MayDayFansInTraePassport>
+
+## Encounter eligibility and firmware identity
+
+Current-scan evidence now controls encounter eligibility independently of the
+remembered place. Gray, empty, sparse and failed scans cannot create ordinary
+place encounters during the stability lock. Firmware versions include a source
+fingerprint and an explicit dirty marker, with matching hash manifests for
+device-test packages. See [implementation and test procedure](docs/architecture/encounter-eligibility-and-build-identity.md).
+
+Wild Mode and pocket controls now add a separate sparse-signal encounter pool,
+a durable 30-minute opportunity cooldown, Home long-UP screen-off, consumed-button
+wake, and asynchronous battery status. See
+[behavior, persistence and device checks](docs/architecture/wild-mode-and-pocket-controls.md).

@@ -7,6 +7,7 @@ idf_component_register(
     INCLUDE_DIRS
         "."
         "assets"
+        "${CMAKE_BINARY_DIR}/identity"
     REQUIRES
         bsp
         city_domain

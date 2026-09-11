@@ -6,8 +6,10 @@ idf_component_register(
         "src/game_loop.c"
         "src/location_mode.c"
         "src/place_fingerprint.c"
+        "src/place_scan_policy.c"
         "src/place_profile_codec.c"
         "src/privacy_tokenizer.c"
         "src/wild_reward_guard.c"
+        "src/pocket_policy.c"
     INCLUDE_DIRS "include"
 )

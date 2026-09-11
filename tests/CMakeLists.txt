@@ -16,9 +16,11 @@ add_library(city_domain STATIC
     ../components/city_domain/src/game_loop.c
     ../components/city_domain/src/location_mode.c
     ../components/city_domain/src/place_fingerprint.c
+    ../components/city_domain/src/place_scan_policy.c
     ../components/city_domain/src/place_profile_codec.c
     ../components/city_domain/src/privacy_tokenizer.c
     ../components/city_domain/src/wild_reward_guard.c
+    ../components/city_domain/src/pocket_policy.c
 )
 target_include_directories(city_domain PUBLIC
     ../components/city_domain/include
@@ -50,3 +52,12 @@ add_city_test(test_encounter_selector test_encounter_selector.c)
 add_city_test(test_bestiary_service test_bestiary_service.c)
 add_city_test(test_game_loop test_game_loop.c)
 add_city_test(city_mvp_scenario ../tools/city_mvp_scenario.c)
+
+add_city_test(test_encounter_eligibility test_encounter_eligibility.c)
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+add_test(NAME test_build_identity
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_build_identity.py")
+add_city_test(test_pocket_features test_pocket_features.c)
+add_city_test(test_battery_driver test_battery_driver.c)
+target_include_directories(test_battery_driver PRIVATE
+    battery_stubs ../components/bsp/include)

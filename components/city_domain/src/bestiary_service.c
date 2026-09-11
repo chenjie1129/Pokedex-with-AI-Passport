@@ -13,6 +13,8 @@
 #define CITY_BESTIARY_SCHEMA_V1 1U
 #define CITY_BESTIARY_SCHEMA_V2 2U
 #define CITY_BESTIARY_SCHEMA_V3 3U
+#define CITY_BESTIARY_SCHEMA_V4 4U
+#define CITY_BESTIARY_WILD_OFFSET 76U
 #define CITY_BESTIARY_V3_SEQUENCE_OFFSET 16U
 
 static const city_species_definition_t species_definitions[CITY_SPECIES_COUNT] = {
@@ -452,6 +454,7 @@ bool city_bestiary_encode(
         output + CITY_BESTIARY_V4_RECORDS_OFFSET +
             (2U * CITY_BESTIARY_V4_RECORD_BYTES),
         &bestiary->squirtle);
+    output[CITY_BESTIARY_WILD_OFFSET] = bestiary->wild_cooldown_active ? 1U : 0U;
     write_u32_le(
         output + CITY_BESTIARY_CHECKSUM_OFFSET,
         crc32(output, CITY_BESTIARY_CHECKSUM_OFFSET));
@@ -552,12 +555,17 @@ bool city_bestiary_decode(
 
     const uint16_t stored_schema_version = read_u16_le(data + 4U);
     city_bestiary_t decoded;
-    if (stored_schema_version == CITY_BESTIARY_SCHEMA_VERSION) {
+    if (stored_schema_version == CITY_BESTIARY_SCHEMA_VERSION ||
+        stored_schema_version == CITY_BESTIARY_SCHEMA_V4) {
         if (read_u16_le(data + 6U) != CITY_SPECIES_COUNT) {
             return false;
         }
         memset(&decoded, 0, sizeof(decoded));
         decoded.schema_version = CITY_BESTIARY_SCHEMA_VERSION;
+        if (stored_schema_version == CITY_BESTIARY_SCHEMA_VERSION) {
+            if (data[CITY_BESTIARY_WILD_OFFSET] > 1U) return false;
+            decoded.wild_cooldown_active = data[CITY_BESTIARY_WILD_OFFSET] == 1U;
+        }
         decoded.last_settled_sequence =
             read_u64_le(data + CITY_BESTIARY_V4_SEQUENCE_OFFSET);
         decode_record(
@@ -586,4 +594,39 @@ bool city_bestiary_decode(
     }
     *bestiary = decoded;
     return true;
+}
+
+city_bestiary_result_t city_bestiary_reserve_wild(
+    city_bestiary_t *bestiary, city_wild_reward_guard_t *guard,
+    uint64_t now_ms, uint16_t species_id,
+    city_bestiary_persist_fn persist, void *context)
+{
+    if (!bestiary_is_valid(bestiary) || guard == NULL || persist == NULL ||
+        (species_id != CITY_SPECIES_BULBASAUR && species_id != CITY_SPECIES_SQUIRTLE)) {
+        return CITY_BESTIARY_INVALID;
+    }
+    if (!city_wild_reward_available(guard, now_ms)) return CITY_BESTIARY_COOLDOWN;
+    city_bestiary_t next = *bestiary;
+    city_creature_record_t *record = city_bestiary_record(&next, species_id);
+    if (record->state == CITY_DISCOVERY_UNKNOWN) record->state = CITY_DISCOVERY_SEEN;
+    next.wild_cooldown_active = true;
+    if (!persist(&next, context)) return CITY_BESTIARY_STORAGE_FAILED;
+    *bestiary = next;
+    (void)city_wild_reward_settle(guard, now_ms);
+    return CITY_BESTIARY_APPLIED;
+}
+
+city_bestiary_result_t city_bestiary_clear_wild_cooldown(
+    city_bestiary_t *bestiary, city_wild_reward_guard_t *guard,
+    uint64_t now_ms, city_bestiary_persist_fn persist, void *context)
+{
+    if (!bestiary_is_valid(bestiary) || guard == NULL || persist == NULL)
+        return CITY_BESTIARY_INVALID;
+    if (!city_wild_reward_available(guard, now_ms)) return CITY_BESTIARY_COOLDOWN;
+    if (!bestiary->wild_cooldown_active) return CITY_BESTIARY_UNCHANGED;
+    city_bestiary_t next = *bestiary;
+    next.wild_cooldown_active = false;
+    if (!persist(&next, context)) return CITY_BESTIARY_STORAGE_FAILED;
+    *bestiary = next;
+    return CITY_BESTIARY_APPLIED;
 }

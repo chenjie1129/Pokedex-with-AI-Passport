@@ -70,3 +70,10 @@ city_wild_reward_snapshot_t city_wild_reward_snapshot(
     };
     return snapshot;
 }
+
+uint64_t city_wild_reward_remaining_ms(const city_wild_reward_guard_t *guard, uint64_t now_ms)
+{
+    if (guard == NULL || !guard->blocked) return 0U;
+    if (guard->blocked_until_ms == UINT64_MAX) return CITY_WILD_REWARD_COOLDOWN_MS;
+    return now_ms < guard->blocked_until_ms ? guard->blocked_until_ms - now_ms : 0U;
+}

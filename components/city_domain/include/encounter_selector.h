@@ -20,3 +20,5 @@ bool city_encounter_select(
     const city_bestiary_t *bestiary,
     uint32_t seed,
     city_encounter_selection_t *selection);
+
+bool city_wild_encounter_select(uint32_t seed, city_encounter_selection_t *selection);

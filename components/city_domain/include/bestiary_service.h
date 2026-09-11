@@ -3,11 +3,13 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include "wild_reward_guard.h"
 
-#define CITY_BESTIARY_SCHEMA_VERSION 4U
+#define CITY_BESTIARY_SCHEMA_VERSION 5U
 #define CITY_BESTIARY_MAGIC UINT32_C(0x31545342)
 #define CITY_BESTIARY_ENCODED_BYTES 156U
 #define CITY_SPECIES_COUNT 3U
+#define CITY_WILD_PLACE_ID 0U
 #define CITY_SPECIES_BULBASAUR 1U
 #define CITY_SPECIES_CHARMANDER 4U
 #define CITY_SPECIES_SQUIRTLE 7U
@@ -49,6 +51,7 @@ typedef struct {
     city_creature_record_t charmander;
     city_creature_record_t squirtle;
     uint64_t last_settled_sequence;
+    bool wild_cooldown_active;
 } city_bestiary_t;
 
 typedef bool (*city_bestiary_persist_fn)(
@@ -62,6 +65,7 @@ typedef enum {
     CITY_BESTIARY_DUPLICATE,
     CITY_BESTIARY_COUNTER_FULL,
     CITY_BESTIARY_STORAGE_FAILED,
+    CITY_BESTIARY_COOLDOWN,
 } city_bestiary_result_t;
 
 const city_species_definition_t *city_species_definition(
@@ -120,3 +124,12 @@ bool city_bestiary_decode(
     const uint8_t data[CITY_BESTIARY_ENCODED_BYTES],
     size_t length,
     city_bestiary_t *bestiary);
+
+/* Reserve before showing a Wild encounter; discovery and cooldown share one blob. */
+city_bestiary_result_t city_bestiary_reserve_wild(
+    city_bestiary_t *bestiary, city_wild_reward_guard_t *guard,
+    uint64_t now_ms, uint16_t species_id,
+    city_bestiary_persist_fn persist, void *context);
+city_bestiary_result_t city_bestiary_clear_wild_cooldown(
+    city_bestiary_t *bestiary, city_wild_reward_guard_t *guard,
+    uint64_t now_ms, city_bestiary_persist_fn persist, void *context);

@@ -88,24 +88,12 @@ static place_scan_result_t result_from_output(
         .error = ESP_OK,
     };
 
-    switch (output->event) {
-    case CITY_LOCATION_EVENT_LOCKED:
-    case CITY_LOCATION_EVENT_KNOWN_PLACE:
-        result.kind = PLACE_RESULT_KNOWN;
-        break;
-    case CITY_LOCATION_EVENT_NEW_PENDING:
-        result.kind = PLACE_RESULT_CANDIDATE_WAIT;
-        break;
-    case CITY_LOCATION_EVENT_GRAY_ZONE:
-        result.kind = PLACE_RESULT_GRAY;
-        break;
-    case CITY_LOCATION_EVENT_WILD:
-        result.kind = PLACE_RESULT_WILD;
-        break;
-    default:
-        result.kind = PLACE_RESULT_SCAN_ERROR;
+    const city_place_scan_decision_t decision =
+        city_place_scan_decide(output, false);
+    result.kind = decision.kind;
+    result.encounter_eligible = decision.encounter_eligible;
+    if (result.kind == PLACE_RESULT_SCAN_ERROR) {
         result.error = ESP_ERR_INVALID_STATE;
-        break;
     }
     return result;
 }
@@ -194,7 +182,10 @@ static place_scan_result_t persist_confirmed_place(
     s_context.location = next_location;
     secure_zero(&next_catalog, sizeof(next_catalog));
     secure_zero(&next_location, sizeof(next_location));
-    result.kind = PLACE_RESULT_NEW_CONFIRMED;
+    const city_place_scan_decision_t decision =
+        city_place_scan_decide(output, true);
+    result.kind = decision.kind;
+    result.encounter_eligible = decision.encounter_eligible;
     result.place_id = place_id;
     result.free_heap_after = esp_get_free_heap_size();
     result.minimum_free_heap = esp_get_minimum_free_heap_size();

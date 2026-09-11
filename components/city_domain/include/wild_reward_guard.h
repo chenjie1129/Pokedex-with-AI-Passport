@@ -32,3 +32,5 @@ bool city_wild_reward_settle(
 city_wild_reward_snapshot_t city_wild_reward_snapshot(
     const city_wild_reward_guard_t *guard,
     uint64_t now_ms);
+
+uint64_t city_wild_reward_remaining_ms(const city_wild_reward_guard_t *guard, uint64_t now_ms);

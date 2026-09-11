@@ -35,6 +35,7 @@ static city_location_output_t output_from_state(
         .mode = state->mode,
         .region_id = state->region_id,
         .confidence_permille = state->confidence_permille,
+        .encounter_eligible = event == CITY_LOCATION_EVENT_KNOWN_PLACE,
     };
     return output;
 }
@@ -75,7 +76,10 @@ city_location_output_t city_location_mode_step(
          input->fingerprint != NULL &&
          !city_place_fingerprint_is_usable(input->fingerprint))) {
         if (lock_active) {
-            return output_from_state(state, CITY_LOCATION_EVENT_LOCKED);
+            city_location_output_t output =
+                output_from_state(state, CITY_LOCATION_EVENT_WILD);
+            output.confidence_permille = 0U;
+            return output;
         }
         state->mode = CITY_LOCATION_WILD;
         state->region_id = CITY_PLACE_INVALID_ID;
@@ -96,10 +100,21 @@ city_location_output_t city_location_mode_step(
         city_place_classify(match.score_permille);
 
     if (lock_active && match.has_profile &&
-        ((relation == CITY_PLACE_RELATION_KNOWN &&
-          match.place_id == state->region_id) ||
-         relation == CITY_PLACE_RELATION_GRAY)) {
-        return output_from_state(state, CITY_LOCATION_EVENT_LOCKED);
+        relation == CITY_PLACE_RELATION_GRAY) {
+        city_location_output_t output =
+            output_from_state(state, CITY_LOCATION_EVENT_GRAY_ZONE);
+        output.confidence_permille = match.score_permille;
+        return output;
+    }
+
+    if (lock_active && match.has_profile &&
+        relation == CITY_PLACE_RELATION_KNOWN &&
+        match.place_id == state->region_id) {
+        city_location_output_t output =
+            output_from_state(state, CITY_LOCATION_EVENT_LOCKED);
+        output.confidence_permille = match.score_permille;
+        output.encounter_eligible = true;
+        return output;
     }
 
     if (match.has_profile && relation == CITY_PLACE_RELATION_KNOWN) {

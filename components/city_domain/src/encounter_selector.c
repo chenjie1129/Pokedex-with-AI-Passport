@@ -141,3 +141,12 @@ bool city_encounter_select(
         selection->species_id, place_id, seed);
     return true;
 }
+
+bool city_wild_encounter_select(uint32_t seed, city_encounter_selection_t *selection)
+{
+    if (selection == NULL) return false;
+    selection->species_id = mix32(seed) % 100U < 70U
+        ? CITY_SPECIES_BULBASAUR : CITY_SPECIES_SQUIRTLE;
+    selection->stats = generate_stats(selection->species_id, CITY_WILD_PLACE_ID, seed);
+    return true;
+}

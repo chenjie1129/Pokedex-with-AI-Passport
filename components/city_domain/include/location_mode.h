@@ -52,6 +52,8 @@ typedef struct {
     city_location_mode_t mode;
     uint16_t region_id;
     uint16_t confidence_permille;
+    /* Fresh usable evidence only; retained display state never authorizes play. */
+    bool encounter_eligible;
 } city_location_output_t;
 
 void city_location_mode_init(city_location_state_t *state);
