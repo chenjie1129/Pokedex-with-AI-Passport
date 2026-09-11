@@ -134,6 +134,48 @@ static void test_duplicate_encounter_is_idempotent(void)
     CHECK(probe.calls == 1U);
 }
 
+static void test_seen_transition_is_transactional(void)
+{
+    city_bestiary_t bestiary;
+    city_bestiary_init(&bestiary);
+    persist_probe_t probe = {0};
+
+    CHECK(city_bestiary_mark_seen(
+              &bestiary,
+              CITY_SPECIES_CHARMANDER,
+              persist_probe,
+              &probe) == CITY_BESTIARY_STORAGE_FAILED);
+    CHECK(bestiary.charmander.state == CITY_DISCOVERY_UNKNOWN);
+    CHECK(probe.calls == 1U);
+
+    probe.succeed = true;
+    CHECK(city_bestiary_mark_seen(
+              &bestiary,
+              CITY_SPECIES_CHARMANDER,
+              persist_probe,
+              &probe) == CITY_BESTIARY_APPLIED);
+    CHECK(bestiary.charmander.state == CITY_DISCOVERY_SEEN);
+    CHECK(bestiary.charmander.capture_count == 0U);
+    CHECK(probe.calls == 2U);
+
+    CHECK(city_bestiary_mark_seen(
+              &bestiary,
+              CITY_SPECIES_CHARMANDER,
+              persist_probe,
+              &probe) == CITY_BESTIARY_UNCHANGED);
+    CHECK(probe.calls == 2U);
+
+    CHECK(city_bestiary_capture(
+              &bestiary,
+              UINT64_C(7001),
+              CITY_SPECIES_CHARMANDER,
+              2U,
+              persist_probe,
+              &probe) == CITY_BESTIARY_APPLIED);
+    CHECK(bestiary.charmander.state == CITY_DISCOVERY_CAPTURED);
+    CHECK(bestiary.charmander.capture_count == 1U);
+}
+
 static void test_legacy_count_import_preserves_unknown_history(void)
 {
     city_bestiary_t bestiary;
@@ -388,6 +430,7 @@ int main(void)
     test_catalog_contains_charmander();
     test_capture_commits_only_after_persistence();
     test_duplicate_encounter_is_idempotent();
+    test_seen_transition_is_transactional();
     test_legacy_count_import_preserves_unknown_history();
     test_zero_legacy_count_remains_unknown();
     test_capture_count_outlives_idempotency_window();

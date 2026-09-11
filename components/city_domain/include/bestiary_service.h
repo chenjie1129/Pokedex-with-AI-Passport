@@ -45,6 +45,7 @@ typedef bool (*city_bestiary_persist_fn)(
 typedef enum {
     CITY_BESTIARY_INVALID = 0,
     CITY_BESTIARY_APPLIED,
+    CITY_BESTIARY_UNCHANGED,
     CITY_BESTIARY_DUPLICATE,
     CITY_BESTIARY_COUNTER_FULL,
     CITY_BESTIARY_STORAGE_FAILED,
@@ -58,6 +59,12 @@ void city_bestiary_init(city_bestiary_t *bestiary);
 bool city_bestiary_import_legacy_count(
     city_bestiary_t *bestiary,
     uint32_t capture_count);
+
+city_bestiary_result_t city_bestiary_mark_seen(
+    city_bestiary_t *bestiary,
+    uint16_t species_id,
+    city_bestiary_persist_fn persist,
+    void *context);
 
 city_bestiary_result_t city_bestiary_capture(
     city_bestiary_t *bestiary,

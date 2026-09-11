@@ -91,6 +91,26 @@ LVGL task. The Poke Ball is drawn from primitives, and the 215x215 official
 Pokedex artwork must be converted to the device color format during firmware
 asset packaging.
 
+## Persistent navigation and discovery states
+
+The firmware boots into a permanent home screen with `EXPLORE` and `BESTIARY`
+entries. UP and DOWN move the selection and OK opens it. The bestiary supports
+an empty state, a one-row list, a detail view and an explicit path back home;
+no capture is required to open it.
+
+The discovery model has three durable states:
+
+- `UNKNOWN`: omitted from the list;
+- `SEEN`: visible with zero captures and an unknown capture place;
+- `CAPTURED`: visible with lifetime count and the most recent capture place.
+
+A first encounter calls `city_bestiary_mark_seen()` on the NVS worker before
+the encounter screen is published. A failed write therefore cannot leak a
+reward or discovery into the UI. Capture upgrades the same record to
+`CAPTURED`; three misses return home while the durable `SEEN` entry remains
+browsable. The browser simulator mirrors the same home, list, detail and
+three-state transitions.
+
 ## Firmware integration boundary
 
 The production firmware now owns a `city_bestiary_t` read model and delegates

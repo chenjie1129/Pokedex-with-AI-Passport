@@ -152,6 +152,29 @@ bool city_bestiary_import_legacy_count(
     return bestiary_is_valid(bestiary);
 }
 
+city_bestiary_result_t city_bestiary_mark_seen(
+    city_bestiary_t *bestiary,
+    uint16_t species_id,
+    city_bestiary_persist_fn persist,
+    void *context)
+{
+    if (!bestiary_is_valid(bestiary) ||
+        city_species_definition(species_id) == NULL || persist == NULL) {
+        return CITY_BESTIARY_INVALID;
+    }
+    if (bestiary->charmander.state != CITY_DISCOVERY_UNKNOWN) {
+        return CITY_BESTIARY_UNCHANGED;
+    }
+
+    city_bestiary_t next = *bestiary;
+    next.charmander.state = CITY_DISCOVERY_SEEN;
+    if (!persist(&next, context)) {
+        return CITY_BESTIARY_STORAGE_FAILED;
+    }
+    *bestiary = next;
+    return CITY_BESTIARY_APPLIED;
+}
+
 city_bestiary_result_t city_bestiary_capture(
     city_bestiary_t *bestiary,
     uint64_t encounter_id,

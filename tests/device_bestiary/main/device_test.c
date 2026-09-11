@@ -131,6 +131,82 @@ static void test_legacy_store_migration(void)
         restored.ledger_count);
 }
 
+static void test_seen_store_round_trip(void)
+{
+    const bsp_bestiary_store_t seen_store = {
+        .namespace_name = "city_seen_tst",
+        .blob_key = "snapshot",
+        .legacy_count_key = "caught_004",
+    };
+
+    nvs_handle_t handle;
+    if (nvs_open(
+            seen_store.namespace_name,
+            NVS_READWRITE,
+            &handle) != ESP_OK ||
+        nvs_erase_all(handle) != ESP_OK ||
+        nvs_commit(handle) != ESP_OK) {
+        fail("seen_seed");
+    }
+    nvs_close(handle);
+
+    city_bestiary_t bestiary;
+    bool migrated = true;
+    if (bsp_bestiary_store_load(
+            &seen_store, &bestiary, &migrated) != ESP_OK ||
+        migrated ||
+        bestiary.charmander.state != CITY_DISCOVERY_UNKNOWN) {
+        fail("seen_empty_load");
+    }
+    if (city_bestiary_mark_seen(
+            &bestiary,
+            CITY_SPECIES_CHARMANDER,
+            bsp_bestiary_store_persist,
+            (void *)&seen_store) != CITY_BESTIARY_APPLIED) {
+        fail("seen_commit");
+    }
+
+    city_bestiary_t restored;
+    if (bsp_bestiary_store_load(
+            &seen_store, &restored, NULL) != ESP_OK ||
+        restored.charmander.state != CITY_DISCOVERY_SEEN ||
+        restored.charmander.capture_count != 0U) {
+        fail("seen_restore");
+    }
+    if (city_bestiary_capture(
+            &restored,
+            UINT64_C(7001),
+            CITY_SPECIES_CHARMANDER,
+            1U,
+            bsp_bestiary_store_persist,
+            (void *)&seen_store) != CITY_BESTIARY_APPLIED) {
+        fail("seen_capture");
+    }
+
+    city_bestiary_t captured;
+    if (bsp_bestiary_store_load(
+            &seen_store, &captured, NULL) != ESP_OK ||
+        captured.charmander.state != CITY_DISCOVERY_CAPTURED ||
+        captured.charmander.capture_count != 1U) {
+        fail("seen_capture_restore");
+    }
+
+    if (nvs_open(
+            seen_store.namespace_name,
+            NVS_READWRITE,
+            &handle) != ESP_OK ||
+        nvs_erase_key(handle, seen_store.blob_key) != ESP_OK ||
+        nvs_commit(handle) != ESP_OK) {
+        fail("seen_cleanup");
+    }
+    nvs_close(handle);
+    ESP_LOGI(
+        TAG,
+        "DEVICE_SEEN_PASS state=%u count=%" PRIu32,
+        captured.charmander.state,
+        captured.charmander.capture_count);
+}
+
 static void run_first_boot(device_store_t *store)
 {
     city_bestiary_t bestiary;
@@ -228,6 +304,7 @@ void app_main(void)
         fail("nvs_init");
     }
     test_legacy_store_migration();
+    test_seen_store_round_trip();
 
     device_store_t store;
     if (nvs_open(
