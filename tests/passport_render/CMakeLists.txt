@@ -16,5 +16,6 @@ add_executable(passport_render "${CMAKE_CURRENT_BINARY_DIR}/render.c"
     "${ROOT}/components/city_domain/src/bestiary_service.c"
     "${ROOT}/components/city_domain/src/wild_reward_guard.c"
     "${ROOT}/components/city_domain/src/pocket_policy.c")
-target_include_directories(passport_render PRIVATE "${ROOT}/components/city_domain/include")
+target_sources(passport_render PRIVATE "${ROOT}/main/assets/charmander_sprite.c" "${ROOT}/main/assets/starter_sprites.c" "${ROOT}/main/assets/roster_sprites.c")
+target_include_directories(passport_render PRIVATE "${ROOT}/components/city_domain/include" "${ROOT}/main" "${ROOT}/main/assets")
 target_link_libraries(passport_render PRIVATE lvgl)

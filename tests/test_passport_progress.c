@@ -49,6 +49,9 @@ int main(void)
     catch_species(&b, CITY_SPECIES_SQUIRTLE);
     p = city_passport_progress(&stamps, &b);
     assert(p.discovered == 3 && p.captured == 3); // Species, not number of captures.
+    assert(p.goal == CITY_PASSPORT_CATCH_SPECIES && p.target == CITY_SPECIES_PIKACHU);
+    for (uint8_t i = 3; i < CITY_SPECIES_COUNT; ++i) catch_species(&b, city_species_id_at(i));
+    p = city_passport_progress(&stamps, &b);
     assert(p.goal == CITY_PASSPORT_NEW_PLACE && p.target == 3);
     // Wild opportunity changes neither stamps nor place goal.
     city_wild_reward_guard_t guard; city_wild_reward_guard_init(&guard, NULL, 0);

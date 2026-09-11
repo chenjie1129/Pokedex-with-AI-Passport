@@ -23,13 +23,14 @@ static bool persist_ok(const city_bestiary_t *next, void *context)
 
 static void test_places_have_distinct_weight_profiles(void)
 {
-    CHECK(city_encounter_place_weight(1U, CITY_SPECIES_CHARMANDER) == 60U);
-    CHECK(city_encounter_place_weight(1U, CITY_SPECIES_BULBASAUR) == 25U);
-    CHECK(city_encounter_place_weight(1U, CITY_SPECIES_SQUIRTLE) == 15U);
-    CHECK(city_encounter_place_weight(2U, CITY_SPECIES_BULBASAUR) == 60U);
-    CHECK(city_encounter_place_weight(3U, CITY_SPECIES_SQUIRTLE) == 60U);
-    CHECK(city_encounter_place_weight(
-              CITY_PLACE_INVALID_ID, CITY_SPECIES_CHARMANDER) == 0U);
+    unsigned total = 0;
+    for (uint8_t i = 0; i < CITY_SPECIES_COUNT; ++i) total += city_encounter_place_weight(1, city_species_id_at(i));
+    CHECK(total == 32);
+    CHECK(city_encounter_place_weight(1, CITY_SPECIES_BULBASAUR) == 6);
+    CHECK(city_encounter_place_weight(2, CITY_SPECIES_CHARMANDER) == 6);
+    CHECK(city_encounter_place_weight(3, CITY_SPECIES_SQUIRTLE) == 6);
+    CHECK(city_encounter_place_weight(0, CITY_SPECIES_PIKACHU) == 0);
+    CHECK(city_encounter_place_weight(CITY_PLACE_INVALID_ID, CITY_SPECIES_CHARMANDER) == 0);
 }
 
 static void test_new_place_prioritizes_unknown_species(void)
@@ -68,9 +69,8 @@ static void test_known_place_uses_weighted_pool(void)
             ++squirtle;
         }
     }
-    CHECK(charmander > bulbasaur);
-    CHECK(bulbasaur > squirtle);
-    CHECK(charmander > 500U && charmander < 700U);
+    CHECK(bulbasaur > charmander && bulbasaur > squirtle);
+    CHECK(bulbasaur > 140U && bulbasaur < 240U);
 }
 
 static void test_stats_are_deterministic_and_vary(void)

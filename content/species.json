@@ -1,0 +1,149 @@
+{
+  "version": 2,
+  "species": [
+    {
+      "id": 1,
+      "name": "Bulbasaur",
+      "element": "Grass",
+      "hp": 45,
+      "attack": 49,
+      "defense": 49,
+      "pool": 0,
+      "wild": true,
+      "description": "A little seed companion for your next outing.",
+      "artwork": "https://www.pokemon.com/static-assets/content-assets/cms2/img/pokedex/full/001.png"
+    },
+    {
+      "id": 4,
+      "name": "Charmander",
+      "element": "Fire",
+      "hp": 39,
+      "attack": 52,
+      "defense": 43,
+      "pool": 1,
+      "wild": false,
+      "description": "A bright flame for a curious explorer.",
+      "artwork": "https://www.pokemon.com/static-assets/content-assets/cms2/img/pokedex/full/004.png"
+    },
+    {
+      "id": 7,
+      "name": "Squirtle",
+      "element": "Water",
+      "hp": 44,
+      "attack": 48,
+      "defense": 65,
+      "pool": 2,
+      "wild": true,
+      "description": "A small shell with plenty of courage.",
+      "artwork": "https://www.pokemon.com/static-assets/content-assets/cms2/img/pokedex/full/007.png"
+    },
+    {
+      "id": 25,
+      "name": "Pikachu",
+      "element": "Electric",
+      "hp": 35,
+      "attack": 55,
+      "defense": 40,
+      "pool": 1,
+      "wild": false,
+      "description": "A spark of energy on every adventure.",
+      "artwork": "https://www.pokemon.com/static-assets/content-assets/cms2/img/pokedex/full/025.png"
+    },
+    {
+      "id": 39,
+      "name": "Jigglypuff",
+      "element": "Normal",
+      "hp": 115,
+      "attack": 45,
+      "defense": 20,
+      "pool": 2,
+      "wild": true,
+      "description": "A round companion with a song to share.",
+      "artwork": "https://www.pokemon.com/static-assets/content-assets/cms2/img/pokedex/full/039.png"
+    },
+    {
+      "id": 43,
+      "name": "Oddish",
+      "element": "Grass",
+      "hp": 45,
+      "attack": 50,
+      "defense": 55,
+      "pool": 0,
+      "wild": true,
+      "description": "Little leaves, big plans for an outing.",
+      "artwork": "https://www.pokemon.com/static-assets/content-assets/cms2/img/pokedex/full/043.png"
+    },
+    {
+      "id": 52,
+      "name": "Meowth",
+      "element": "Normal",
+      "hp": 40,
+      "attack": 45,
+      "defense": 35,
+      "pool": 1,
+      "wild": true,
+      "description": "Always curious about the next discovery.",
+      "artwork": "https://www.pokemon.com/static-assets/content-assets/cms2/img/pokedex/full/052.png"
+    },
+    {
+      "id": 54,
+      "name": "Psyduck",
+      "element": "Water",
+      "hp": 50,
+      "attack": 52,
+      "defense": 48,
+      "pool": 2,
+      "wild": true,
+      "description": "A puzzled face with surprising potential.",
+      "artwork": "https://www.pokemon.com/static-assets/content-assets/cms2/img/pokedex/full/054.png"
+    },
+    {
+      "id": 58,
+      "name": "Growlithe",
+      "element": "Fire",
+      "hp": 55,
+      "attack": 70,
+      "defense": 45,
+      "pool": 1,
+      "wild": false,
+      "description": "A loyal companion ready to explore.",
+      "artwork": "https://www.pokemon.com/static-assets/content-assets/cms2/img/pokedex/full/058.png"
+    },
+    {
+      "id": 74,
+      "name": "Geodude",
+      "element": "Rock",
+      "hp": 40,
+      "attack": 80,
+      "defense": 100,
+      "pool": 0,
+      "wild": false,
+      "description": "A sturdy friend for the road ahead.",
+      "artwork": "https://www.pokemon.com/static-assets/content-assets/cms2/img/pokedex/full/074.png"
+    },
+    {
+      "id": 92,
+      "name": "Gastly",
+      "element": "Ghost",
+      "hp": 30,
+      "attack": 35,
+      "defense": 30,
+      "pool": 0,
+      "wild": false,
+      "description": "A playful mystery drifting into view.",
+      "artwork": "https://www.pokemon.com/static-assets/content-assets/cms2/img/pokedex/full/092.png"
+    },
+    {
+      "id": 133,
+      "name": "Eevee",
+      "element": "Normal",
+      "hp": 55,
+      "attack": 55,
+      "defense": 50,
+      "pool": 2,
+      "wild": false,
+      "description": "A curious companion full of possibility.",
+      "artwork": "https://www.pokemon.com/static-assets/content-assets/cms2/img/pokedex/full/133.png"
+    }
+  ]
+}

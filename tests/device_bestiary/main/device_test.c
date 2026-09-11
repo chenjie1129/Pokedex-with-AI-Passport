@@ -84,8 +84,8 @@ static void test_legacy_store_migration(void)
             &migrated_bestiary,
             &migrated) != ESP_OK ||
         !migrated ||
-        migrated_bestiary.charmander.capture_count != 4U ||
-        migrated_bestiary.charmander.last_place_id != UINT16_MAX ||
+        migrated_bestiary.records[1].capture_count != 4U ||
+        migrated_bestiary.records[1].last_place_id != UINT16_MAX ||
         migrated_bestiary.last_settled_sequence != 4U) {
         fail("legacy_migration");
     }
@@ -104,8 +104,8 @@ static void test_legacy_store_migration(void)
     migrated = true;
     if (bsp_bestiary_store_load(
             &migration_store, &restored, &migrated) != ESP_OK ||
-        migrated || restored.charmander.capture_count != 5U ||
-        restored.charmander.last_place_id != 1U ||
+        migrated || restored.records[1].capture_count != 5U ||
+        restored.records[1].last_place_id != 1U ||
         restored.last_settled_sequence != UINT64_C(8001)) {
         fail("migrated_restore");
     }
@@ -118,7 +118,7 @@ static void test_legacy_store_migration(void)
         nvs_get_u32(
             handle,
             migration_store.legacy_count_key,
-            &legacy_count) != ESP_ERR_NVS_NOT_FOUND ||
+            &legacy_count) != ESP_OK || legacy_count != 4U ||
         nvs_erase_key(handle, migration_store.blob_key) != ESP_OK ||
         nvs_commit(handle) != ESP_OK) {
         fail("migration_cleanup");
@@ -127,8 +127,8 @@ static void test_legacy_store_migration(void)
     ESP_LOGI(
         TAG,
         "DEVICE_MIGRATION_PASS legacy=4 count=%" PRIu32
-        " sequence=%" PRIu64 " old_key=removed",
-        restored.charmander.capture_count,
+        " sequence=%" PRIu64 " old_key=retained",
+        restored.records[1].capture_count,
         restored.last_settled_sequence);
 }
 
@@ -156,7 +156,7 @@ static void test_seen_store_round_trip(void)
     if (bsp_bestiary_store_load(
             &seen_store, &bestiary, &migrated) != ESP_OK ||
         migrated ||
-        bestiary.charmander.state != CITY_DISCOVERY_UNKNOWN) {
+        bestiary.records[1].state != CITY_DISCOVERY_UNKNOWN) {
         fail("seen_empty_load");
     }
     if (city_bestiary_mark_seen(
@@ -170,8 +170,8 @@ static void test_seen_store_round_trip(void)
     city_bestiary_t restored;
     if (bsp_bestiary_store_load(
             &seen_store, &restored, NULL) != ESP_OK ||
-        restored.charmander.state != CITY_DISCOVERY_SEEN ||
-        restored.charmander.capture_count != 0U) {
+        restored.records[1].state != CITY_DISCOVERY_SEEN ||
+        restored.records[1].capture_count != 0U) {
         fail("seen_restore");
     }
     if (city_bestiary_capture(
@@ -187,8 +187,8 @@ static void test_seen_store_round_trip(void)
     city_bestiary_t captured;
     if (bsp_bestiary_store_load(
             &seen_store, &captured, NULL) != ESP_OK ||
-        captured.charmander.state != CITY_DISCOVERY_CAPTURED ||
-        captured.charmander.capture_count != 1U ||
+        captured.records[1].state != CITY_DISCOVERY_CAPTURED ||
+        captured.records[1].capture_count != 1U ||
         captured.last_settled_sequence != UINT64_C(7001)) {
         fail("seen_capture_restore");
     }
@@ -205,8 +205,8 @@ static void test_seen_store_round_trip(void)
     ESP_LOGI(
         TAG,
         "DEVICE_SEEN_PASS state=%u count=%" PRIu32,
-        captured.charmander.state,
-        captured.charmander.capture_count);
+        captured.records[1].state,
+        captured.records[1].capture_count);
 }
 
 static bool persist_before_write_failure(
@@ -262,14 +262,14 @@ static void test_interrupted_commit_recovery(void)
             1U,
             persist_before_write_failure,
             (void *)&fault_store) != CITY_BESTIARY_STORAGE_FAILED ||
-        bestiary.charmander.state != CITY_DISCOVERY_SEEN) {
+        bestiary.records[1].state != CITY_DISCOVERY_SEEN) {
         fail("prewrite_interrupt");
     }
 
     city_bestiary_t restored;
     if (bsp_bestiary_store_load(
             &fault_store, &restored, NULL) != ESP_OK ||
-        restored.charmander.state != CITY_DISCOVERY_SEEN ||
+        restored.records[1].state != CITY_DISCOVERY_SEEN ||
         restored.last_settled_sequence != 0U) {
         fail("prewrite_restore");
     }
@@ -281,14 +281,14 @@ static void test_interrupted_commit_recovery(void)
             1U,
             persist_commit_report_failure,
             (void *)&fault_store) != CITY_BESTIARY_STORAGE_FAILED ||
-        restored.charmander.state != CITY_DISCOVERY_SEEN) {
+        restored.records[1].state != CITY_DISCOVERY_SEEN) {
         fail("postcommit_ambiguous");
     }
 
     city_bestiary_t committed;
     if (bsp_bestiary_store_load(
             &fault_store, &committed, NULL) != ESP_OK ||
-        committed.charmander.capture_count != 1U ||
+        committed.records[1].capture_count != 1U ||
         committed.last_settled_sequence != 1U ||
         city_bestiary_capture(
             &committed,
@@ -297,7 +297,7 @@ static void test_interrupted_commit_recovery(void)
             1U,
             bsp_bestiary_store_persist,
             (void *)&fault_store) != CITY_BESTIARY_DUPLICATE ||
-        committed.charmander.capture_count != 1U) {
+        committed.records[1].capture_count != 1U) {
         fail("postcommit_retry");
     }
 
@@ -365,7 +365,7 @@ static void run_first_boot(device_store_t *store)
             fail("capture_1_to_20");
         }
     }
-    if (bestiary.charmander.capture_count != 20U ||
+    if (bestiary.records[1].capture_count != 20U ||
         bestiary.last_settled_sequence != 20U) {
         fail("phase1_state");
     }
@@ -374,7 +374,7 @@ static void run_first_boot(device_store_t *store)
         TAG,
         "DEVICE_TEST_PHASE1_PASS count=%" PRIu32
         " sequence=%" PRIu64,
-        bestiary.charmander.capture_count,
+        bestiary.records[1].capture_count,
         bestiary.last_settled_sequence);
     nvs_close(store->handle);
     vTaskDelay(pdMS_TO_TICKS(250));
@@ -386,7 +386,7 @@ static void run_second_boot(device_store_t *store)
     city_bestiary_t bestiary;
     city_bestiary_init(&bestiary);
     if (!load_snapshot(store->handle, &bestiary) ||
-        bestiary.charmander.capture_count != 20U ||
+        bestiary.records[1].capture_count != 20U ||
         bestiary.last_settled_sequence != 20U) {
         fail("reboot_restore");
     }
@@ -398,7 +398,7 @@ static void run_second_boot(device_store_t *store)
             1U,
             persist_snapshot,
             store) != CITY_BESTIARY_DUPLICATE ||
-        bestiary.charmander.capture_count != 20U ||
+        bestiary.records[1].capture_count != 20U ||
         city_bestiary_capture(
             &bestiary,
             1U,
@@ -406,7 +406,7 @@ static void run_second_boot(device_store_t *store)
             1U,
             persist_snapshot,
             store) != CITY_BESTIARY_DUPLICATE ||
-        bestiary.charmander.capture_count != 20U) {
+        bestiary.records[1].capture_count != 20U) {
         fail("stale_duplicate");
     }
 
@@ -417,7 +417,7 @@ static void run_second_boot(device_store_t *store)
             1U,
             persist_snapshot,
             store) != CITY_BESTIARY_APPLIED ||
-        bestiary.charmander.capture_count != 21U ||
+        bestiary.records[1].capture_count != 21U ||
         bestiary.last_settled_sequence != 21U) {
         fail("capture_21");
     }
@@ -425,7 +425,7 @@ static void run_second_boot(device_store_t *store)
     city_bestiary_t persisted;
     city_bestiary_init(&persisted);
     if (!load_snapshot(store->handle, &persisted) ||
-        persisted.charmander.capture_count != 21U ||
+        persisted.records[1].capture_count != 21U ||
         persisted.last_settled_sequence != 21U) {
         fail("nvs_round_trip");
     }
@@ -438,7 +438,7 @@ static void run_second_boot(device_store_t *store)
         TAG,
         "DEVICE_TEST_PASS count=%" PRIu32
         " sequence=%" PRIu64 " stale=protected reboot=verified nvs=verified",
-        persisted.charmander.capture_count,
+        persisted.records[1].capture_count,
         persisted.last_settled_sequence);
 }
 
@@ -467,7 +467,7 @@ void app_main(void)
         continue_after_reboot =
             load_snapshot(store.handle, &persisted) &&
             persisted.schema_version == CITY_BESTIARY_SCHEMA_VERSION &&
-            persisted.charmander.capture_count == 20U &&
+            persisted.records[1].capture_count == 20U &&
             persisted.last_settled_sequence == 20U;
     }
     if (!continue_after_reboot) {

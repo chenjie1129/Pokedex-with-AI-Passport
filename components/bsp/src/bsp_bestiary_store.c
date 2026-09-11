@@ -11,7 +11,8 @@ static const char *TAG = "bsp_bestiary";
 
 const bsp_bestiary_store_t BSP_BESTIARY_STORE_DEFAULT = {
     .namespace_name = "pokedex",
-    .blob_key = "bestiary_004",
+    .blob_key = "bestiary_v6",
+    .legacy_blob_key = "bestiary_004",
     .legacy_count_key = "caught_004",
 };
 
@@ -19,7 +20,8 @@ static bool store_is_valid(const bsp_bestiary_store_t *store)
 {
     return store != NULL && store->namespace_name != NULL &&
            store->blob_key != NULL && store->legacy_count_key != NULL &&
-           strcmp(store->blob_key, store->legacy_count_key) != 0;
+           strcmp(store->blob_key, store->legacy_count_key) != 0 &&
+           (!store->legacy_blob_key || strcmp(store->blob_key, store->legacy_blob_key) != 0);
 }
 
 static esp_err_t encode_and_stage(
@@ -34,110 +36,61 @@ static esp_err_t encode_and_stage(
     return nvs_set_blob(handle, key, encoded, sizeof(encoded));
 }
 
-esp_err_t bsp_bestiary_store_load(
-    const bsp_bestiary_store_t *store,
-    city_bestiary_t *bestiary,
-    bool *migrated)
+static esp_err_t read_model(nvs_handle_t handle, const char *key, city_bestiary_t *model)
 {
-    if (!store_is_valid(store) || bestiary == NULL) {
-        return ESP_ERR_INVALID_ARG;
-    }
-    if (migrated != NULL) {
-        *migrated = false;
-    }
+    size_t length = 0;
+    esp_err_t err = nvs_get_blob(handle, key, NULL, &length);
+    if (err != ESP_OK) return err;
+    if (length > CITY_BESTIARY_ENCODED_BYTES || length < 12) return ESP_ERR_INVALID_SIZE;
+    uint8_t bytes[CITY_BESTIARY_ENCODED_BYTES];
+    err = nvs_get_blob(handle, key, bytes, &length);
+    if (err != ESP_OK) return err;
+    return city_bestiary_decode(bytes, length, model) ? ESP_OK : ESP_ERR_INVALID_STATE;
+}
 
+esp_err_t bsp_bestiary_store_load(
+    const bsp_bestiary_store_t *store, city_bestiary_t *bestiary, bool *migrated)
+{
+    if (!store_is_valid(store) || !bestiary) return ESP_ERR_INVALID_ARG;
+    if (migrated) *migrated = false;
     nvs_handle_t handle;
-    esp_err_t err = nvs_open(
-        store->namespace_name, NVS_READWRITE, &handle);
-    if (err != ESP_OK) {
-        return err;
-    }
-
-    size_t length = 0U;
-    err = nvs_get_blob(handle, store->blob_key, NULL, &length);
+    esp_err_t err = nvs_open(store->namespace_name, NVS_READWRITE, &handle);
+    if (err != ESP_OK) return err;
+    city_bestiary_t next;
+    err = read_model(handle, store->blob_key, &next);
     if (err == ESP_OK) {
-        if (length != CITY_BESTIARY_ENCODED_BYTES) {
-            nvs_close(handle);
-            return ESP_ERR_INVALID_SIZE;
-        }
-
-        uint8_t encoded[CITY_BESTIARY_ENCODED_BYTES];
-        err = nvs_get_blob(handle, store->blob_key, encoded, &length);
-        if (err != ESP_OK) {
-            nvs_close(handle);
-            return err;
-        }
-
-        city_bestiary_t decoded;
-        uint8_t canonical[CITY_BESTIARY_ENCODED_BYTES];
-        if (!city_bestiary_decode(encoded, length, &decoded) ||
-            !city_bestiary_encode(&decoded, canonical)) {
-            nvs_close(handle);
-            return ESP_ERR_INVALID_STATE;
-        }
-        if (memcmp(encoded, canonical, sizeof(encoded)) != 0) {
-            err = nvs_set_blob(
-                handle, store->blob_key, canonical, sizeof(canonical));
-            if (err == ESP_OK) {
-                err = nvs_commit(handle);
-            }
-            if (err != ESP_OK) {
-                nvs_close(handle);
-                return err;
-            }
-            if (migrated != NULL) {
-                *migrated = true;
-            }
-            ESP_LOGI(TAG, "Migrated bestiary blob to schema=%u",
-                     decoded.schema_version);
-        }
-        nvs_close(handle);
-        *bestiary = decoded;
-        return ESP_OK;
+        nvs_close(handle); *bestiary = next; return ESP_OK;
     }
-    if (err != ESP_ERR_NVS_NOT_FOUND) {
-        nvs_close(handle);
-        return err;
-    }
-
-    uint32_t legacy_count = 0U;
-    err = nvs_get_u32(
-        handle, store->legacy_count_key, &legacy_count);
+    // Never hide a corrupt/newer save by falling back to stale legacy progress.
+    if (err != ESP_ERR_NVS_NOT_FOUND) { nvs_close(handle); return err; }
+    if (store->legacy_blob_key)
+        err = read_model(handle, store->legacy_blob_key, &next);
     if (err == ESP_ERR_NVS_NOT_FOUND) {
-        nvs_close(handle);
-        city_bestiary_init(bestiary);
-        return ESP_OK;
+        uint32_t count = 0;
+        err = nvs_get_u32(handle, store->legacy_count_key, &count);
+        if (err == ESP_ERR_NVS_NOT_FOUND) {
+            nvs_close(handle); city_bestiary_init(bestiary); return ESP_OK;
+        }
+        if (err == ESP_OK && !city_bestiary_import_legacy_count(&next, count)) err = ESP_ERR_INVALID_STATE;
     }
-    if (err != ESP_OK) {
-        nvs_close(handle);
-        return err;
-    }
-
-    city_bestiary_t imported;
-    if (!city_bestiary_import_legacy_count(
-            &imported, legacy_count)) {
-        nvs_close(handle);
-        return ESP_ERR_INVALID_STATE;
-    }
-    err = encode_and_stage(handle, store->blob_key, &imported);
+    if (err != ESP_OK) { nvs_close(handle); return err; }
+    err = encode_and_stage(handle, store->blob_key, &next);
+    if (err == ESP_OK) err = nvs_commit(handle);
     if (err == ESP_OK) {
-        err = nvs_erase_key(handle, store->legacy_count_key);
-    }
-    if (err == ESP_OK) {
-        err = nvs_commit(handle);
+        city_bestiary_t readback;
+        err = read_model(handle, store->blob_key, &readback);
+        if (err == ESP_OK) {
+            uint8_t expected[CITY_BESTIARY_ENCODED_BYTES], actual[CITY_BESTIARY_ENCODED_BYTES];
+            if (!city_bestiary_encode(&next, expected) || !city_bestiary_encode(&readback, actual) ||
+                memcmp(expected, actual, sizeof(expected)) != 0) err = ESP_ERR_INVALID_STATE;
+        }
     }
     nvs_close(handle);
-    if (err != ESP_OK) {
-        return err;
-    }
-
-    *bestiary = imported;
-    if (migrated != NULL) {
-        *migrated = true;
-    }
-    ESP_LOGI(
-        TAG, "Migrated legacy capture count=%lu",
-        (unsigned long)legacy_count);
+    if (err != ESP_OK) return err;
+    *bestiary = next;
+    if (migrated) *migrated = true;
+    ESP_LOGI(TAG, "Migrated bestiary to schema=%u species=%u; legacy snapshot retained",
+             CITY_BESTIARY_SCHEMA_VERSION, CITY_SPECIES_COUNT);
     return ESP_OK;
 }
 

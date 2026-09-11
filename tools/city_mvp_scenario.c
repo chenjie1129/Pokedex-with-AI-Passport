@@ -123,8 +123,8 @@ int main(void)
     city_bestiary_init(&reloaded);
     if (!city_bestiary_decode(
             store.bytes, sizeof(store.bytes), &reloaded) ||
-        reloaded.charmander.state != CITY_DISCOVERY_CAPTURED ||
-        reloaded.charmander.capture_count != 1U) {
+        reloaded.records[1].state != CITY_DISCOVERY_CAPTURED ||
+        reloaded.records[1].capture_count != 1U) {
         fputs("{\"ok\":false,\"stage\":\"bestiary\"}\n", stderr);
         return 1;
     }

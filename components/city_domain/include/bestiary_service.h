@@ -5,14 +5,12 @@
 #include <stdint.h>
 #include "wild_reward_guard.h"
 
-#define CITY_BESTIARY_SCHEMA_VERSION 5U
+#include "species_catalog.h"
+#define CITY_BESTIARY_SCHEMA_VERSION 6U
 #define CITY_BESTIARY_MAGIC UINT32_C(0x31545342)
-#define CITY_BESTIARY_ENCODED_BYTES 156U
-#define CITY_SPECIES_COUNT 3U
+#define CITY_BESTIARY_LEGACY_BYTES 156U
+#define CITY_BESTIARY_ENCODED_BYTES (32U + CITY_SPECIES_COUNT * 20U + 4U)
 #define CITY_WILD_PLACE_ID 0U
-#define CITY_SPECIES_BULBASAUR 1U
-#define CITY_SPECIES_CHARMANDER 4U
-#define CITY_SPECIES_SQUIRTLE 7U
 
 typedef enum {
     CITY_DISCOVERY_UNKNOWN = 0,
@@ -28,6 +26,8 @@ typedef struct {
     uint8_t base_hp;
     uint8_t base_attack;
     uint8_t base_defense;
+    uint8_t place_pool;
+    bool wild_eligible;
 } city_species_definition_t;
 
 typedef struct {
@@ -47,9 +47,7 @@ typedef struct {
 
 typedef struct {
     uint16_t schema_version;
-    city_creature_record_t bulbasaur;
-    city_creature_record_t charmander;
-    city_creature_record_t squirtle;
+    city_creature_record_t records[CITY_SPECIES_COUNT];
     uint64_t last_settled_sequence;
     bool wild_cooldown_active;
 } city_bestiary_t;
@@ -68,6 +66,10 @@ typedef enum {
     CITY_BESTIARY_COOLDOWN,
 } city_bestiary_result_t;
 
+uint16_t city_species_id_at(uint8_t index);
+uint8_t city_species_index(uint16_t species_id);
+bool city_bestiary_encounter_status(const city_bestiary_t *bestiary, uint16_t species_id,
+                                    city_discovery_state_t *previous_state);
 const city_species_definition_t *city_species_definition(
     uint16_t species_id);
 
@@ -123,7 +125,7 @@ bool city_bestiary_encode(
     uint8_t output[CITY_BESTIARY_ENCODED_BYTES]);
 
 bool city_bestiary_decode(
-    const uint8_t data[CITY_BESTIARY_ENCODED_BYTES],
+    const uint8_t *data,
     size_t length,
     city_bestiary_t *bestiary);
 

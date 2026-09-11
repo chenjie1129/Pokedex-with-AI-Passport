@@ -49,12 +49,11 @@ city_passport_progress_t city_passport_progress(const city_passport_stamps_t *st
     if (p.captured == 0) { p.goal = CITY_PASSPORT_FIRST_CAPTURE; return p; }
     if (p.places < 2) { p.goal = CITY_PASSPORT_NEW_PLACE; p.target = p.places + 1; return p; }
     if (p.captured < CITY_SPECIES_COUNT) {
-        const uint16_t species[] = {CITY_SPECIES_BULBASAUR, CITY_SPECIES_CHARMANDER, CITY_SPECIES_SQUIRTLE};
         p.goal = CITY_PASSPORT_CATCH_SPECIES;
         for (unsigned i = 0; i < CITY_SPECIES_COUNT; ++i) {
-            const city_creature_record_t *r = city_bestiary_record_const(bestiary, species[i]);
+            const city_creature_record_t *r = city_bestiary_record_const(bestiary, city_species_id_at(i));
             if (r->state != CITY_DISCOVERY_CAPTURED) {
-                p.target = species[i]; p.target_seen = r->state == CITY_DISCOVERY_SEEN; break;
+                p.target = city_species_id_at(i); p.target_seen = r->state == CITY_DISCOVERY_SEEN; break;
             }
         }
         return p;

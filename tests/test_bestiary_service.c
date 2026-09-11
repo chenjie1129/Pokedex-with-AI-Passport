@@ -95,15 +95,15 @@ static void test_species_stats_track_latest_and_best(void)
     CHECK(city_bestiary_capture_with_stats(
               &bestiary, 1U, CITY_SPECIES_BULBASAUR, 2U, &first,
               persist_probe, &probe) == CITY_BESTIARY_APPLIED);
-    CHECK(bestiary.bulbasaur.capture_count == 1U);
-    CHECK(bestiary.bulbasaur.latest_stats.attack == 53U);
-    CHECK(bestiary.bulbasaur.best_stats.attack == 53U);
+    CHECK(bestiary.records[0].capture_count == 1U);
+    CHECK(bestiary.records[0].latest_stats.attack == 53U);
+    CHECK(bestiary.records[0].best_stats.attack == 53U);
     CHECK(city_bestiary_capture_with_stats(
               &bestiary, 2U, CITY_SPECIES_BULBASAUR, 3U, &weaker,
               persist_probe, &probe) == CITY_BESTIARY_APPLIED);
-    CHECK(bestiary.bulbasaur.capture_count == 2U);
-    CHECK(bestiary.bulbasaur.latest_stats.attack == 50U);
-    CHECK(bestiary.bulbasaur.best_stats.attack == 53U);
+    CHECK(bestiary.records[0].capture_count == 2U);
+    CHECK(bestiary.records[0].latest_stats.attack == 50U);
+    CHECK(bestiary.records[0].best_stats.attack == 53U);
     CHECK(city_bestiary_discovered_count(&bestiary) == 1U);
     CHECK(city_bestiary_captured_count(&bestiary) == 1U);
 
@@ -111,8 +111,8 @@ static void test_species_stats_track_latest_and_best(void)
     city_bestiary_t decoded;
     CHECK(city_bestiary_encode(&bestiary, encoded));
     CHECK(city_bestiary_decode(encoded, sizeof(encoded), &decoded));
-    CHECK(decoded.bulbasaur.latest_stats.attack == 50U);
-    CHECK(decoded.bulbasaur.best_stats.attack == 53U);
+    CHECK(decoded.records[0].latest_stats.attack == 50U);
+    CHECK(decoded.records[0].best_stats.attack == 53U);
 }
 
 static void test_capture_commits_only_after_persistence(void)
@@ -141,9 +141,9 @@ static void test_capture_commits_only_after_persistence(void)
               1U,
               persist_probe,
               &probe) == CITY_BESTIARY_APPLIED);
-    CHECK(bestiary.charmander.state == CITY_DISCOVERY_CAPTURED);
-    CHECK(bestiary.charmander.capture_count == 1U);
-    CHECK(bestiary.charmander.last_place_id == 1U);
+    CHECK(bestiary.records[1].state == CITY_DISCOVERY_CAPTURED);
+    CHECK(bestiary.records[1].capture_count == 1U);
+    CHECK(bestiary.records[1].last_place_id == 1U);
     CHECK(bestiary.last_settled_sequence == UINT64_C(0x1001));
     CHECK(probe.calls == 2U);
 }
@@ -168,7 +168,7 @@ static void test_duplicate_encounter_is_idempotent(void)
               1U,
               persist_probe,
               &probe) == CITY_BESTIARY_DUPLICATE);
-    CHECK(bestiary.charmander.capture_count == 1U);
+    CHECK(bestiary.records[1].capture_count == 1U);
     CHECK(bestiary.last_settled_sequence == 77U);
     CHECK(probe.calls == 1U);
 }
@@ -184,7 +184,7 @@ static void test_seen_transition_is_transactional(void)
               CITY_SPECIES_CHARMANDER,
               persist_probe,
               &probe) == CITY_BESTIARY_STORAGE_FAILED);
-    CHECK(bestiary.charmander.state == CITY_DISCOVERY_UNKNOWN);
+    CHECK(bestiary.records[1].state == CITY_DISCOVERY_UNKNOWN);
     CHECK(probe.calls == 1U);
 
     probe.succeed = true;
@@ -193,8 +193,8 @@ static void test_seen_transition_is_transactional(void)
               CITY_SPECIES_CHARMANDER,
               persist_probe,
               &probe) == CITY_BESTIARY_APPLIED);
-    CHECK(bestiary.charmander.state == CITY_DISCOVERY_SEEN);
-    CHECK(bestiary.charmander.capture_count == 0U);
+    CHECK(bestiary.records[1].state == CITY_DISCOVERY_SEEN);
+    CHECK(bestiary.records[1].capture_count == 0U);
     CHECK(probe.calls == 2U);
 
     CHECK(city_bestiary_mark_seen(
@@ -211,17 +211,17 @@ static void test_seen_transition_is_transactional(void)
               2U,
               persist_probe,
               &probe) == CITY_BESTIARY_APPLIED);
-    CHECK(bestiary.charmander.state == CITY_DISCOVERY_CAPTURED);
-    CHECK(bestiary.charmander.capture_count == 1U);
+    CHECK(bestiary.records[1].state == CITY_DISCOVERY_CAPTURED);
+    CHECK(bestiary.records[1].capture_count == 1U);
 }
 
 static void test_legacy_count_import_preserves_unknown_history(void)
 {
     city_bestiary_t bestiary;
     CHECK(city_bestiary_import_legacy_count(&bestiary, 4U));
-    CHECK(bestiary.charmander.state == CITY_DISCOVERY_CAPTURED);
-    CHECK(bestiary.charmander.capture_count == 4U);
-    CHECK(bestiary.charmander.last_place_id == UINT16_MAX);
+    CHECK(bestiary.records[1].state == CITY_DISCOVERY_CAPTURED);
+    CHECK(bestiary.records[1].capture_count == 4U);
+    CHECK(bestiary.records[1].last_place_id == UINT16_MAX);
     CHECK(bestiary.last_settled_sequence == 4U);
 
     uint8_t encoded[CITY_BESTIARY_ENCODED_BYTES];
@@ -239,8 +239,8 @@ static void test_legacy_count_import_preserves_unknown_history(void)
               1U,
               persist_probe,
               &probe) == CITY_BESTIARY_APPLIED);
-    CHECK(decoded.charmander.capture_count == 5U);
-    CHECK(decoded.charmander.last_place_id == 1U);
+    CHECK(decoded.records[1].capture_count == 5U);
+    CHECK(decoded.records[1].last_place_id == 1U);
     CHECK(decoded.last_settled_sequence == UINT64_C(9001));
 }
 
@@ -248,8 +248,8 @@ static void test_zero_legacy_count_remains_unknown(void)
 {
     city_bestiary_t bestiary;
     CHECK(city_bestiary_import_legacy_count(&bestiary, 0U));
-    CHECK(bestiary.charmander.state == CITY_DISCOVERY_UNKNOWN);
-    CHECK(bestiary.charmander.capture_count == 0U);
+    CHECK(bestiary.records[1].state == CITY_DISCOVERY_UNKNOWN);
+    CHECK(bestiary.records[1].capture_count == 0U);
     CHECK(!city_bestiary_import_legacy_count(NULL, 1U));
 }
 
@@ -268,7 +268,7 @@ static void test_high_water_rejects_all_old_sequences(void)
                   persist_probe,
                   &probe) == CITY_BESTIARY_APPLIED);
     }
-    CHECK(bestiary.charmander.capture_count == 100U);
+    CHECK(bestiary.records[1].capture_count == 100U);
     CHECK(bestiary.last_settled_sequence == 100U);
     CHECK(probe.calls == 100U);
 
@@ -284,7 +284,7 @@ static void test_high_water_rejects_all_old_sequences(void)
                   persist_probe,
                   &probe) == CITY_BESTIARY_DUPLICATE);
     }
-    CHECK(bestiary.charmander.capture_count == 100U);
+    CHECK(bestiary.records[1].capture_count == 100U);
     CHECK(probe.calls == 100U);
 
     uint64_t next_sequence = 0U;
@@ -298,7 +298,7 @@ static void test_high_water_rejects_all_old_sequences(void)
               3U,
               persist_probe,
               &probe) == CITY_BESTIARY_APPLIED);
-    CHECK(bestiary.charmander.capture_count == 101U);
+    CHECK(bestiary.records[1].capture_count == 101U);
     CHECK(bestiary.last_settled_sequence == 101U);
 }
 
@@ -326,7 +326,7 @@ static void test_high_water_rolls_back_when_persistence_fails(void)
               persist_probe,
               &probe) == CITY_BESTIARY_STORAGE_FAILED);
     CHECK(memcmp(&bestiary, &before, sizeof(bestiary)) == 0);
-    CHECK(bestiary.charmander.capture_count == 1U);
+    CHECK(bestiary.records[1].capture_count == 1U);
     CHECK(bestiary.last_settled_sequence == 1U);
 }
 
@@ -343,7 +343,7 @@ static void test_ambiguous_commit_is_safe_after_reload(void)
               4U,
               persist_probe,
               &probe) == CITY_BESTIARY_STORAGE_FAILED);
-    CHECK(bestiary.charmander.capture_count == 0U);
+    CHECK(bestiary.records[1].capture_count == 0U);
 
     bestiary = probe.last;
     probe.succeed = true;
@@ -354,7 +354,7 @@ static void test_ambiguous_commit_is_safe_after_reload(void)
               4U,
               persist_probe,
               &probe) == CITY_BESTIARY_DUPLICATE);
-    CHECK(bestiary.charmander.capture_count == 1U);
+    CHECK(bestiary.records[1].capture_count == 1U);
     CHECK(bestiary.last_settled_sequence == 1U);
     CHECK(probe.calls == 1U);
 }
@@ -373,7 +373,7 @@ static void test_invalid_place_never_calls_storage(void)
               persist_probe,
               &probe) == CITY_BESTIARY_INVALID);
     CHECK(probe.calls == 0U);
-    CHECK(bestiary.charmander.state == CITY_DISCOVERY_UNKNOWN);
+    CHECK(bestiary.records[1].state == CITY_DISCOVERY_UNKNOWN);
 }
 
 static void test_codec_round_trip_and_corruption(void)
@@ -404,9 +404,9 @@ static void test_v1_snapshot_migrates_to_high_water(void)
 {
     enum {
         ledger_offset = 16,
-        checksum_offset = CITY_BESTIARY_ENCODED_BYTES - 4,
+        checksum_offset = CITY_BESTIARY_LEGACY_BYTES - 4,
     };
-    uint8_t encoded[CITY_BESTIARY_ENCODED_BYTES];
+    uint8_t encoded[CITY_BESTIARY_LEGACY_BYTES];
     memset(encoded, 0, sizeof(encoded));
     write_u32_le(encoded, CITY_BESTIARY_MAGIC);
     write_u16_le(encoded + 4U, 1U);
@@ -425,7 +425,7 @@ static void test_v1_snapshot_migrates_to_high_water(void)
     city_bestiary_init(&migrated);
     CHECK(city_bestiary_decode(encoded, sizeof(encoded), &migrated));
     CHECK(migrated.schema_version == CITY_BESTIARY_SCHEMA_VERSION);
-    CHECK(migrated.charmander.capture_count == 2U);
+    CHECK(migrated.records[1].capture_count == 2U);
     CHECK(migrated.last_settled_sequence == 2U);
 }
 
@@ -434,9 +434,9 @@ static void test_v2_snapshot_migrates_to_high_water(void)
     enum {
         ledger_offset = 16,
         ledger_next_offset = 144,
-        checksum_offset = CITY_BESTIARY_ENCODED_BYTES - 4,
+        checksum_offset = CITY_BESTIARY_LEGACY_BYTES - 4,
     };
-    uint8_t encoded[CITY_BESTIARY_ENCODED_BYTES];
+    uint8_t encoded[CITY_BESTIARY_LEGACY_BYTES];
     memset(encoded, 0, sizeof(encoded));
     write_u32_le(encoded, CITY_BESTIARY_MAGIC);
     write_u16_le(encoded + 4U, 2U);
@@ -459,7 +459,7 @@ static void test_v2_snapshot_migrates_to_high_water(void)
     city_bestiary_init(&migrated);
     CHECK(city_bestiary_decode(encoded, sizeof(encoded), &migrated));
     CHECK(migrated.schema_version == CITY_BESTIARY_SCHEMA_VERSION);
-    CHECK(migrated.charmander.capture_count == 20U);
+    CHECK(migrated.records[1].capture_count == 20U);
     CHECK(migrated.last_settled_sequence == 20U);
 
     uint64_t next_sequence = 0U;

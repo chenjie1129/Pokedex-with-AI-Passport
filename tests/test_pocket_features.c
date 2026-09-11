@@ -17,13 +17,13 @@ static bool persist(const city_bestiary_t *next, void *unused)
 static void checksum(void)
 {
     uint32_t crc = UINT32_MAX;
-    for (unsigned i = 0; i < 152; ++i) {
+    for (unsigned i = 0; i < sizeof(disk) - 4; ++i) {
         crc ^= disk[i];
         for (unsigned b = 0; b < 8; ++b)
             crc = (crc >> 1) ^ (0xedb88320U & (uint32_t)-(int32_t)(crc & 1));
     }
     crc = ~crc;
-    for (unsigned i = 0; i < 4; ++i) disk[152+i] = (uint8_t)(crc >> (i*8));
+    for (unsigned i = 0; i < 4; ++i) disk[sizeof(disk)-4+i] = (uint8_t)(crc >> (i*8));
 }
 static void reboot(city_bestiary_t *b, city_wild_reward_guard_t *g)
 {
@@ -43,11 +43,11 @@ static void test_wild_transaction(void)
     save_ok = false;
     assert(city_bestiary_reserve_wild(&b, &g, 100, CITY_SPECIES_BULBASAUR, persist, NULL) == CITY_BESTIARY_STORAGE_FAILED);
     assert(!b.wild_cooldown_active && !g.blocked);
-    assert(b.bulbasaur.state == CITY_DISCOVERY_UNKNOWN);
+    assert(b.records[0].state == CITY_DISCOVERY_UNKNOWN);
     save_ok = true;
     assert(city_bestiary_reserve_wild(&b, &g, 100, CITY_SPECIES_CHARMANDER, persist, NULL) == CITY_BESTIARY_INVALID);
     assert(city_bestiary_reserve_wild(&b, &g, 100, CITY_SPECIES_BULBASAUR, persist, NULL) == CITY_BESTIARY_APPLIED);
-    assert(b.wild_cooldown_active && b.bulbasaur.state == CITY_DISCOVERY_SEEN);
+    assert(b.wild_cooldown_active && b.records[0].state == CITY_DISCOVERY_SEEN);
     assert(city_wild_reward_remaining_ms(&g, 101) == CITY_WILD_REWARD_COOLDOWN_MS - 1);
     const unsigned before = writes;
     assert(city_bestiary_reserve_wild(&b, &g, 101, CITY_SPECIES_SQUIRTLE, persist, NULL) == CITY_BESTIARY_COOLDOWN);
@@ -80,16 +80,7 @@ static void test_wild_transaction(void)
     const unsigned cleared = writes;
     assert(city_bestiary_clear_wild_cooldown(&b, &g, 0, persist, NULL) == CITY_BESTIARY_UNCHANGED);
     assert(writes == cleared);
-    // Actual v4 wire layout migrates preserving every record and sequence.
-    const city_bestiary_t expected = b;
-    disk[4] = 4; disk[5] = 0; checksum();
-    reboot(&b, &g);
-    assert(b.schema_version == 5 && !b.wild_cooldown_active);
-    assert(memcmp(&b.bulbasaur, &expected.bulbasaur, sizeof(b.bulbasaur)) == 0);
-    assert(memcmp(&b.charmander, &expected.charmander, sizeof(b.charmander)) == 0);
-    assert(memcmp(&b.squirtle, &expected.squirtle, sizeof(b.squirtle)) == 0);
-    assert(b.last_settled_sequence == expected.last_settled_sequence);
-    disk[4] = 5; disk[76] = 2; checksum();
+    disk[16] = 2; checksum();
     assert(!city_bestiary_decode(disk, sizeof(disk), &b));
 }
 static void test_pool(void)
@@ -100,10 +91,10 @@ static void test_pool(void)
         assert(city_wild_encounter_select(seed, &a));
         assert(city_wild_encounter_select(seed, &b));
         assert(a.species_id == b.species_id && a.stats.hp == b.stats.hp);
-        assert(a.species_id == CITY_SPECIES_BULBASAUR || a.species_id == CITY_SPECIES_SQUIRTLE);
+        assert(city_species_definition(a.species_id)->wild_eligible);
         if (a.species_id == CITY_SPECIES_BULBASAUR) ++bulbasaur;
     }
-    assert(bulbasaur > 6500 && bulbasaur < 7500);
+    assert(bulbasaur > 1400 && bulbasaur < 1900);
     assert(!city_wild_encounter_select(0, NULL));
 }
 static void test_power(void)

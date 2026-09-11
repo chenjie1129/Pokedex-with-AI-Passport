@@ -63,3 +63,8 @@ add_city_test(test_battery_driver test_battery_driver.c)
 target_include_directories(test_battery_driver PRIVATE
     battery_stubs ../components/bsp/include)
 add_city_test(test_passport_progress test_passport_progress.c)
+add_city_test(test_roster_expansion test_roster_expansion.c)
+add_test(NAME test_species_catalog COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/../tools/generate_species.py" --check)
+add_city_test(test_bestiary_adapter test_bestiary_adapter.c)
+target_sources(test_bestiary_adapter PRIVATE ../components/bsp/src/bsp_bestiary_store.c)
+target_include_directories(test_bestiary_adapter PRIVATE battery_stubs ../components/bsp/include)

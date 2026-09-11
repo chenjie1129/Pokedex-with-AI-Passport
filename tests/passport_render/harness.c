@@ -1,11 +1,18 @@
 #include "lvgl.h"
+#include "charmander_sprite.h"
+#include "starter_sprites.h"
+#include "roster_sprites.h"
 #include "passport_progress.h"
 #include "pocket_policy.h"
 #include <stdio.h>
 #include <assert.h>
 #include <string.h>
 #define ESP_LOGI(...) ((void)0)
-static lv_obj_t *s_screen, *s_status, *s_battery_label;
+static lv_obj_t *s_screen, *s_status, *s_battery_label, *s_field;
+static uint8_t s_encounter_selection, s_bestiary_selection;
+static uint16_t s_current_species_id;
+static city_creature_stats_t s_current_stats;
+static city_discovery_state_t s_encounter_previous_state;
 static int s_battery_soc = 95;
 static uint8_t s_home_selection, s_passport_page;
 static city_bestiary_t s_bestiary;
@@ -40,10 +47,14 @@ static void check_labels(lv_obj_t *o)
     }
     for (uint32_t i = 0; i < lv_obj_get_child_count(o); ++i) check_labels(lv_obj_get_child(o, i));
 }
-static void snapshot(const char *name, bool home)
+static void snapshot(const char *name, unsigned mode)
 {
     lv_obj_t *old = s_screen;
-    if (home) build_home(); else build_passport();
+    if (mode == 1) build_home();
+    else if (mode == 2) build_encounter();
+    else if (mode == 3) build_bestiary_list();
+    else if (mode == 4) build_bestiary_detail();
+    else build_passport();
     lv_screen_load(s_screen);
     if (old) lv_obj_delete(old);
     lv_obj_update_layout(s_screen);
@@ -69,9 +80,22 @@ int main(void)
     lv_display_set_flush_cb(d, flush);
     city_bestiary_init(&s_bestiary);
     snapshot("passport-empty", false);
-    const uint16_t ids[] = {CITY_SPECIES_BULBASAUR, CITY_SPECIES_CHARMANDER, CITY_SPECIES_SQUIRTLE};
-    for (unsigned i = 0; i < 3; ++i)
-        assert(city_bestiary_capture(&s_bestiary, i + 1, ids[i], 1, persist, NULL) == CITY_BESTIARY_APPLIED);
+    snapshot("bestiary-unknown", 3);
+    for (unsigned i = 0; i < CITY_SPECIES_COUNT; ++i)
+        assert(city_bestiary_capture(&s_bestiary, i + 1, city_species_id_at(i), 1, persist, NULL) == CITY_BESTIARY_APPLIED);
+    for (unsigned i = 0; i <= CITY_SPECIES_COUNT; ++i) {
+        char name[80];
+        s_bestiary_selection = i;
+        snprintf(name,sizeof(name),"bestiary-row-%02u",i); snapshot(name,3);
+        if (i == CITY_SPECIES_COUNT) continue;
+        snprintf(name,sizeof(name),"detail-%03u",city_species_id_at(i)); snapshot(name,4);
+        s_current_species_id = city_species_id_at(i);
+        s_current_stats = s_bestiary.records[i].latest_stats;
+        for (unsigned status = 0; status < 3; ++status) {
+            s_encounter_previous_state = status;
+            snprintf(name,sizeof(name),"encounter-%03u-status-%u",s_current_species_id,status); snapshot(name,2);
+        }
+    }
     fixture.count = 2; fixture.place_ids[0] = 1; fixture.place_ids[1] = 2;
     s_home_selection = 2;
     snapshot("home-passport", true);

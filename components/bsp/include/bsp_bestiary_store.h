@@ -9,6 +9,7 @@ typedef struct {
     const char *namespace_name;
     const char *blob_key;
     const char *legacy_count_key;
+    const char *legacy_blob_key;
 } bsp_bestiary_store_t;
 
 extern const bsp_bestiary_store_t BSP_BESTIARY_STORE_DEFAULT;

@@ -4,12 +4,6 @@
 
 #include "place_fingerprint.h"
 
-static const uint16_t encounter_species[CITY_SPECIES_COUNT] = {
-    CITY_SPECIES_CHARMANDER,
-    CITY_SPECIES_BULBASAUR,
-    CITY_SPECIES_SQUIRTLE,
-};
-
 static uint32_t mix32(uint32_t value)
 {
     value ^= value >> 16U;
@@ -20,37 +14,11 @@ static uint32_t mix32(uint32_t value)
     return value;
 }
 
-static size_t species_index(uint16_t species_id)
+uint8_t city_encounter_place_weight(uint16_t place_id, uint16_t species_id)
 {
-    for (size_t i = 0U; i < CITY_SPECIES_COUNT; ++i) {
-        if (encounter_species[i] == species_id) {
-            return i;
-        }
-    }
-    return CITY_SPECIES_COUNT;
-}
-
-uint8_t city_encounter_place_weight(
-    uint16_t place_id,
-    uint16_t species_id)
-{
-    if (place_id == CITY_PLACE_INVALID_ID) {
-        return 0U;
-    }
-    const size_t requested = species_index(species_id);
-    if (requested == CITY_SPECIES_COUNT) {
-        return 0U;
-    }
-
-    const size_t affinity = (size_t)((place_id - 1U) %
-                                     CITY_SPECIES_COUNT);
-    if (requested == affinity) {
-        return 60U;
-    }
-    if (requested == (affinity + 1U) % CITY_SPECIES_COUNT) {
-        return 25U;
-    }
-    return 15U;
+    const city_species_definition_t *def = city_species_definition(species_id);
+    if (place_id == 0 || place_id == CITY_PLACE_INVALID_ID || !def) return 0;
+    return def->place_pool == (place_id - 1U) % 3U ? 6 : 1;
 }
 
 static city_creature_stats_t generate_stats(
@@ -78,75 +46,51 @@ static city_creature_stats_t generate_stats(
     return stats;
 }
 
-bool city_encounter_select(
-    uint16_t place_id,
-    bool first_encounter_at_place,
-    const city_bestiary_t *bestiary,
-    uint32_t seed,
-    city_encounter_selection_t *selection)
+bool city_encounter_select(uint16_t place_id, bool first_encounter_at_place,
+    const city_bestiary_t *bestiary, uint32_t seed, city_encounter_selection_t *selection)
 {
-    if (place_id == CITY_PLACE_INVALID_ID || bestiary == NULL ||
-        selection == NULL) {
-        return false;
+    if (!selection || !city_bestiary_is_valid(bestiary) || place_id == 0 ||
+        place_id == CITY_PLACE_INVALID_ID) return false;
+    city_discovery_state_t priority = CITY_DISCOVERY_CAPTURED;
+    if (first_encounter_at_place) {
+        for (uint8_t i = 0; i < CITY_SPECIES_COUNT; ++i)
+            if (bestiary->records[i].state < priority) priority = bestiary->records[i].state;
     }
-
+    uint16_t total = 0;
     uint8_t weights[CITY_SPECIES_COUNT];
-    uint16_t total = 0U;
-    bool has_unknown = false;
-    for (size_t i = 0U; i < CITY_SPECIES_COUNT; ++i) {
-        const city_creature_record_t *record =
-            city_bestiary_record_const(bestiary, encounter_species[i]);
-        if (record == NULL) {
-            return false;
+    for (uint8_t i = 0; i < CITY_SPECIES_COUNT; ++i) {
+        weights[i] = bestiary->records[i].state > priority ? 0 : city_encounter_place_weight(place_id, city_species_id_at(i));
+        total += weights[i];
+    }
+    if (total == 0) return false;
+    uint16_t roll = mix32(seed ^ ((uint32_t)place_id * UINT32_C(0x9e3779b9))) % total;
+    for (uint8_t i = 0; i < CITY_SPECIES_COUNT; ++i) {
+        if (roll < weights[i]) {
+            selection->species_id = city_species_id_at(i);
+            selection->stats = generate_stats(selection->species_id, place_id, seed);
+            return true;
         }
-        if (record->state == CITY_DISCOVERY_UNKNOWN) {
-            has_unknown = true;
-        }
-        weights[i] = city_encounter_place_weight(
-            place_id, encounter_species[i]);
+        roll -= weights[i];
     }
-
-    if (first_encounter_at_place && has_unknown) {
-        total = 0U;
-        for (size_t i = 0U; i < CITY_SPECIES_COUNT; ++i) {
-            const city_creature_record_t *record =
-                city_bestiary_record_const(bestiary, encounter_species[i]);
-            if (record->state != CITY_DISCOVERY_UNKNOWN) {
-                weights[i] = 0U;
-            }
-            total = (uint16_t)(total + weights[i]);
-        }
-    } else {
-        total = 100U;
-    }
-    if (total == 0U) {
-        return false;
-    }
-
-    uint16_t roll = (uint16_t)(mix32(
-        seed ^ ((uint32_t)place_id * UINT32_C(0x9e3779b9))) % total);
-    size_t selected_index = 0U;
-    for (; selected_index < CITY_SPECIES_COUNT; ++selected_index) {
-        if (roll < weights[selected_index]) {
-            break;
-        }
-        roll = (uint16_t)(roll - weights[selected_index]);
-    }
-    if (selected_index == CITY_SPECIES_COUNT) {
-        return false;
-    }
-
-    selection->species_id = encounter_species[selected_index];
-    selection->stats = generate_stats(
-        selection->species_id, place_id, seed);
-    return true;
+    return false;
 }
 
 bool city_wild_encounter_select(uint32_t seed, city_encounter_selection_t *selection)
 {
-    if (selection == NULL) return false;
-    selection->species_id = mix32(seed) % 100U < 70U
-        ? CITY_SPECIES_BULBASAUR : CITY_SPECIES_SQUIRTLE;
-    selection->stats = generate_stats(selection->species_id, CITY_WILD_PLACE_ID, seed);
-    return true;
+    if (!selection) return false;
+    uint16_t total = 0;
+    for (uint8_t i = 0; i < CITY_SPECIES_COUNT; ++i)
+        total += city_species_definition(city_species_id_at(i))->wild_eligible;
+    if (total == 0) return false;
+    uint16_t roll = mix32(seed) % total;
+    for (uint8_t i = 0; i < CITY_SPECIES_COUNT; ++i) {
+        const uint16_t id = city_species_id_at(i);
+        if (!city_species_definition(id)->wild_eligible) continue;
+        if (roll-- == 0) {
+            selection->species_id = id;
+            selection->stats = generate_stats(id, CITY_WILD_PLACE_ID, seed);
+            return true;
+        }
+    }
+    return false;
 }

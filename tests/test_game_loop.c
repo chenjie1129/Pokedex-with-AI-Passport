@@ -55,7 +55,7 @@ static void test_complete_loop_opens_captured_bestiary(void)
               game_persist,
               &store) == CITY_GAME_EVENT_CAPTURED);
     CHECK(session.stage == CITY_GAME_CAPTURED);
-    CHECK(bestiary.charmander.capture_count == 1U);
+    CHECK(bestiary.records[1].capture_count == 1U);
     CHECK(store.calls == 1U);
     CHECK(city_game_open_bestiary(&session) ==
           CITY_GAME_EVENT_BESTIARY_OPENED);
@@ -82,9 +82,9 @@ static void test_selected_species_and_stats_are_persisted(void)
     CHECK(city_game_throw(
               &session, target_time(&session), &bestiary,
               game_persist, &store) == CITY_GAME_EVENT_CAPTURED);
-    CHECK(bestiary.squirtle.capture_count == 1U);
-    CHECK(bestiary.squirtle.latest_stats.hp == 54U);
-    CHECK(bestiary.squirtle.best_stats.defense == 76U);
+    CHECK(bestiary.records[2].capture_count == 1U);
+    CHECK(bestiary.records[2].latest_stats.hp == 54U);
+    CHECK(bestiary.records[2].best_stats.defense == 76U);
 }
 
 static void test_three_misses_end_encounter_without_reward(void)
@@ -111,7 +111,7 @@ static void test_three_misses_end_encounter_without_reward(void)
               &session, 100U, &bestiary, game_persist, &store) ==
           CITY_GAME_EVENT_ESCAPED);
     CHECK(session.stage == CITY_GAME_ESCAPED);
-    CHECK(bestiary.charmander.capture_count == 0U);
+    CHECK(bestiary.records[1].capture_count == 0U);
     CHECK(store.calls == 0U);
 }
 
@@ -167,7 +167,7 @@ static void test_shared_deadline_forces_escape(void)
               game_persist,
               &store) == CITY_GAME_EVENT_ESCAPED);
     CHECK(store.calls == 0U);
-    CHECK(bestiary.charmander.capture_count == 0U);
+    CHECK(bestiary.records[1].capture_count == 0U);
 }
 
 static void test_storage_failure_is_retryable_and_not_visible(void)
@@ -190,8 +190,8 @@ static void test_storage_failure_is_retryable_and_not_visible(void)
               &store) == CITY_GAME_EVENT_STORAGE_FAILED);
     CHECK(session.stage == CITY_GAME_STORAGE_ERROR);
     CHECK(session.reward_pending);
-    CHECK(bestiary.charmander.state == CITY_DISCOVERY_UNKNOWN);
-    CHECK(bestiary.charmander.capture_count == 0U);
+    CHECK(bestiary.records[1].state == CITY_DISCOVERY_UNKNOWN);
+    CHECK(bestiary.records[1].capture_count == 0U);
 
     store.succeed = true;
     CHECK(city_game_retry_persist(
@@ -199,7 +199,7 @@ static void test_storage_failure_is_retryable_and_not_visible(void)
           CITY_GAME_EVENT_CAPTURED);
     CHECK(session.stage == CITY_GAME_CAPTURED);
     CHECK(!session.reward_pending);
-    CHECK(bestiary.charmander.capture_count == 1U);
+    CHECK(bestiary.records[1].capture_count == 1U);
     CHECK(store.calls == 2U);
 }
 
@@ -228,7 +228,7 @@ static void test_duplicate_event_does_not_increment_count(void)
               &bestiary,
               game_persist,
               &store) == CITY_GAME_EVENT_CAPTURED);
-    CHECK(bestiary.charmander.capture_count == 1U);
+    CHECK(bestiary.records[1].capture_count == 1U);
     CHECK(store.calls == 1U);
 }
 
@@ -247,7 +247,7 @@ static void test_abandon_before_and_during_capture_never_rewards(void)
     CHECK(session.attempts_remaining == 0U);
     CHECK(!session.reward_pending);
     CHECK(store.calls == 0U);
-    CHECK(bestiary.charmander.capture_count == 0U);
+    CHECK(bestiary.records[1].capture_count == 0U);
     CHECK(city_game_begin_capture(&session, 500U) == CITY_GAME_EVENT_INVALID);
 
     city_game_init(&session);
@@ -259,7 +259,7 @@ static void test_abandon_before_and_during_capture_never_rewards(void)
     CHECK(session.stage == CITY_GAME_ABANDONED);
     CHECK(!session.capture_round.active);
     CHECK(store.calls == 0U);
-    CHECK(bestiary.charmander.capture_count == 0U);
+    CHECK(bestiary.records[1].capture_count == 0U);
     CHECK(city_game_throw(
               &session, 600U, &bestiary, game_persist, &store) ==
           CITY_GAME_EVENT_INVALID);

@@ -10,6 +10,7 @@
 #include "game_loop.h"
 #include "charmander_sprite.h"
 #include "starter_sprites.h"
+#include "roster_sprites.h"
 #include "place_scan_coordinator.h"
 
 #include "esp_log.h"
@@ -99,6 +100,7 @@ static bool s_save_in_progress;
 static uint8_t s_home_selection;
 static uint8_t s_passport_page;
 static uint8_t s_encounter_selection;
+static city_discovery_state_t s_encounter_previous_state;
 static uint8_t s_bestiary_selection;
 static write_operation_t s_pending_write;
 static uint64_t s_encounter_sequence;
@@ -138,9 +140,9 @@ static uint64_t now_ms(void)
 
 static uint64_t total_capture_count(void)
 {
-    return (uint64_t)s_bestiary.bulbasaur.capture_count +
-           s_bestiary.charmander.capture_count +
-           s_bestiary.squirtle.capture_count;
+    uint64_t total = 0;
+    for (uint8_t i = 0; i < CITY_SPECIES_COUNT; ++i) total += s_bestiary.records[i].capture_count;
+    return total;
 }
 
 static const char *state_name(ui_state_t state)
@@ -260,13 +262,13 @@ static lv_obj_t *create_species(
     bool small)
 {
     lv_obj_t *image = lv_image_create(parent);
-    const lv_image_dsc_t *source = small ? &charmander_small
-                                          : &charmander_large;
-    if (species_id == CITY_SPECIES_BULBASAUR) {
-        source = small ? &bulbasaur_small : &bulbasaur_large;
-    } else if (species_id == CITY_SPECIES_SQUIRTLE) {
-        source = small ? &squirtle_small : &squirtle_large;
-    }
+    static const struct { uint16_t id; const lv_image_dsc_t *large, *small; } images[] = {
+#include "assets/species_images.inc"
+    };
+    const lv_image_dsc_t *source = NULL;
+    for (unsigned i = 0; i < CITY_SPECIES_COUNT; ++i)
+        if (images[i].id == species_id) source = small ? images[i].small : images[i].large;
+    if (!source) return image;
     lv_image_set_src(image, source);
     lv_obj_set_pos(image, small ? 69 : 55, small ? 12 : 26);
     return image;
@@ -274,13 +276,7 @@ static lv_obj_t *create_species(
 
 static uint8_t species_selection_index(uint16_t species_id)
 {
-    if (species_id == CITY_SPECIES_BULBASAUR) {
-        return 0U;
-    }
-    if (species_id == CITY_SPECIES_CHARMANDER) {
-        return 1U;
-    }
-    return 2U;
+    return city_species_index(species_id);
 }
 
 static void ball_geometry(int x, int y, int size)
@@ -476,9 +472,17 @@ static void build_encounter(void)
         definition->species_id, definition->element,
         s_current_stats.hp, s_current_stats.attack,
         s_current_stats.defense);
-    s_screen = new_screen(title, "UP/DN SELECT  OK CONFIRM");
+    s_screen = new_screen(title, "UP/DN  OK CONFIRM");
     s_field = create_field(s_screen);
     create_species(s_field, s_current_species_id, false);
+    const char *record_status = s_encounter_previous_state == CITY_DISCOVERY_CAPTURED
+        ? "CAUGHT - IN BESTIARY" : s_encounter_previous_state == CITY_DISCOVERY_SEEN
+        ? "SEEN - NOT CAUGHT" : "NEW - FIRST ENCOUNTER";
+    lv_obj_t *badge = label_at(s_field, record_status, &lv_font_montserrat_14,
+        s_encounter_previous_state == CITY_DISCOVERY_CAPTURED ? COLOR_GRASS_D : COLOR_INK,
+        5, 5, 210);
+    lv_obj_set_style_bg_color(badge, lv_color_hex(0xF7FBF8), 0);
+    lv_obj_set_style_bg_opa(badge, LV_OPA_COVER, 0);
 
     const char *choices[] = {"CATCH", "LEAVE"};
     for (uint8_t i = 0U; i < 2U; ++i) {
@@ -616,101 +620,55 @@ static void build_abandoned(void)
 
 static void build_bestiary_list(void)
 {
-    s_screen = new_screen("BESTIARY", "UP/DN SELECT  HOLD OK HOME");
-    const uint16_t species_ids[CITY_SPECIES_COUNT] = {
-        CITY_SPECIES_BULBASAUR,
-        CITY_SPECIES_CHARMANDER,
-        CITY_SPECIES_SQUIRTLE,
-    };
-    for (uint8_t i = 0U; i < CITY_SPECIES_COUNT; ++i) {
-        const city_creature_record_t *record =
-            city_bestiary_record_const(&s_bestiary, species_ids[i]);
-        const city_species_definition_t *definition =
-            city_species_definition(species_ids[i]);
+    s_screen = new_screen("BESTIARY", "OK OPEN / HOLD HOME");
+    const uint8_t start = (s_bestiary_selection / 4U) * 4U;
+    for (uint8_t row_index = 0; row_index < 4; ++row_index) {
+        const uint8_t i = start + row_index;
+        if (i > CITY_SPECIES_COUNT) break;
+        const bool back = i == CITY_SPECIES_COUNT;
         const bool selected = s_bestiary_selection == i;
         lv_obj_t *row = lv_obj_create(s_screen);
         style_plain(row, selected ? 0xE4F4E8 : 0xF7FBF8);
         lv_obj_set_style_radius(row, 6, 0);
         lv_obj_set_style_border_width(row, selected ? 2 : 1, 0);
-        lv_obj_set_style_border_color(
-            row, lv_color_hex(selected ? COLOR_GREEN : 0xD5E0DD), 0);
-        lv_obj_set_size(row, 220, 42);
-        lv_obj_set_pos(row, 10, 72 + (int)i * 44);
-
-        char name[32];
-        snprintf(
-            name, sizeof(name), "No.%03u %s",
-            species_ids[i],
-            record->state == CITY_DISCOVERY_UNKNOWN
-                ? "???"
-                : definition->name);
-        lv_obj_t *name_label = label_at(
-            row, name, &lv_font_montserrat_14,
-            COLOR_INK, 10, 5, 138);
-        lv_obj_set_style_text_align(name_label, LV_TEXT_ALIGN_LEFT, 0);
-        const char *status = record->state == CITY_DISCOVERY_CAPTURED
-                                 ? "CAUGHT"
-                                 : record->state == CITY_DISCOVERY_SEEN
-                                       ? "SEEN"
-                                       : "UNKNOWN";
-        lv_obj_t *status_label = label_at(
-            row, status, &lv_font_montserrat_14,
-            record->state == CITY_DISCOVERY_CAPTURED
-                ? COLOR_CORAL
-                : record->state == CITY_DISCOVERY_SEEN
-                      ? COLOR_GREEN
-                      : COLOR_MUTED,
-            148, 5, 62);
-        lv_obj_set_style_text_align(status_label, LV_TEXT_ALIGN_RIGHT, 0);
+        lv_obj_set_style_border_color(row, lv_color_hex(selected ? COLOR_GREEN : 0xD5E0DD), 0);
+        lv_obj_set_size(row, 220, 38);
+        lv_obj_set_pos(row, 10, 74 + row_index * 42);
+        if (back) {
+            label_at(row, "BACK TO HOME", &lv_font_montserrat_14, COLOR_INK, 8, 10, 196);
+            continue;
+        }
+        const uint16_t id = city_species_id_at(i);
+        const city_creature_record_t *record = city_bestiary_record_const(&s_bestiary, id);
+        const city_species_definition_t *definition = city_species_definition(id);
+        char name[40];
+        snprintf(name, sizeof(name), "%03u %s", id,
+                 record->state == CITY_DISCOVERY_UNKNOWN ? "???" : definition->name);
+        lv_obj_t *label = label_at(row, name, &lv_font_montserrat_14, COLOR_INK, 7, 3, 132);
+        lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_LEFT, 0);
+        const char *status = record->state == CITY_DISCOVERY_CAPTURED ? "CAUGHT" :
+                             record->state == CITY_DISCOVERY_SEEN ? "SEEN" : "NEW";
+        label_at(row, status, &lv_font_montserrat_14,
+                 record->state == CITY_DISCOVERY_CAPTURED ? COLOR_GRASS_D : COLOR_MUTED, 145, 3, 68);
         if (record->state == CITY_DISCOVERY_CAPTURED) {
-            char count[20];
-            snprintf(
-                count, sizeof(count), "COUNT %lu",
-                (unsigned long)record->capture_count);
-            lv_obj_t *count_label = label_at(
-                row, count, &lv_font_montserrat_14,
-                COLOR_MUTED, 10, 23, 120);
-            lv_obj_set_style_text_align(count_label, LV_TEXT_ALIGN_LEFT, 0);
+            char count[32]; snprintf(count, sizeof(count), "Caught %lu", (unsigned long)record->capture_count);
+            label = label_at(row, count, &lv_font_montserrat_14, COLOR_MUTED, 7, 19, 198);
+            lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_LEFT, 0);
         }
     }
-
-    const bool back_selected =
-        s_bestiary_selection == CITY_SPECIES_COUNT;
-    lv_obj_t *back = lv_obj_create(s_screen);
-    style_plain(back, back_selected ? 0xE4F4E8 : 0xF7FBF8);
-    lv_obj_set_style_radius(back, 6, 0);
-    lv_obj_set_style_border_width(back, back_selected ? 2 : 1, 0);
-    lv_obj_set_style_border_color(
-        back, lv_color_hex(back_selected ? COLOR_GREEN : 0xD5E0DD), 0);
-    lv_obj_set_size(back, 220, 36);
-    lv_obj_set_pos(back, 10, 206);
-    lv_obj_t *back_label = label_at(
-        back, "BACK", &lv_font_montserrat_14,
-        COLOR_INK, 10, 9, 160);
-    lv_obj_set_style_text_align(back_label, LV_TEXT_ALIGN_LEFT, 0);
-    label_at(
-        back, back_selected ? ">" : "", &lv_font_montserrat_14,
-        COLOR_CORAL, 190, 9, 20);
-    char progress[28];
-    snprintf(
-        progress, sizeof(progress), "Discovered %u / %u",
-        city_bestiary_discovered_count(&s_bestiary), CITY_SPECIES_COUNT);
-    label_at(
-        s_screen, progress, &lv_font_montserrat_14,
-        COLOR_MUTED, 10, META_Y, 220);
+    char progress[48];
+    snprintf(progress, sizeof(progress), "SEEN %u/%u   PAGE %u/%u",
+             city_bestiary_discovered_count(&s_bestiary), CITY_SPECIES_COUNT,
+             s_bestiary_selection / 4U + 1U, (CITY_SPECIES_COUNT + 4U) / 4U);
+    label_at(s_screen, progress, &lv_font_montserrat_14, COLOR_MUTED, 5, META_Y, 230);
 }
 
 static void build_bestiary_detail(void)
 {
-    const uint16_t species_ids[CITY_SPECIES_COUNT] = {
-        CITY_SPECIES_BULBASAUR,
-        CITY_SPECIES_CHARMANDER,
-        CITY_SPECIES_SQUIRTLE,
-    };
     if (s_bestiary_selection >= CITY_SPECIES_COUNT) {
         return;
     }
-    const uint16_t species_id = species_ids[s_bestiary_selection];
+    const uint16_t species_id = city_species_id_at(s_bestiary_selection);
     const city_creature_record_t *record =
         city_bestiary_record_const(&s_bestiary, species_id);
     const city_species_definition_t *definition =
@@ -779,7 +737,7 @@ static void build_bestiary_detail(void)
         lv_obj_set_style_text_align(latest_label, LV_TEXT_ALIGN_LEFT, 0);
         lv_obj_t *best_label = label_at(
             s_field, best, &lv_font_montserrat_14,
-            COLOR_GREEN, 10, 146, 200);
+            COLOR_INK, 10, 146, 200);
         lv_obj_set_style_text_align(best_label, LV_TEXT_ALIGN_LEFT, 0);
     }
     label_at(
@@ -1145,6 +1103,7 @@ static void begin_wild_encounter(void)
     s_current_stats = selection.stats;
     s_attempts = CITY_GAME_CAPTURE_ATTEMPTS;
     s_encounter_selection = 0U;
+    if (!city_bestiary_encounter_status(&s_bestiary, s_current_species_id, &s_encounter_previous_state)) return;
     if (!request_bestiary_write(WRITE_WILD)) set_state(UI_STORAGE_ERROR);
 }
 
@@ -1199,6 +1158,9 @@ static void handle_place_result(const place_scan_result_t *result)
             s_current_place_id, s_current_species_id,
             s_current_stats.hp, s_current_stats.attack,
             s_current_stats.defense);
+        if (!city_bestiary_encounter_status(&s_bestiary, s_current_species_id, &s_encounter_previous_state)) {
+            set_state(UI_STORAGE_ERROR); break;
+        }
         if (!request_bestiary_write(WRITE_DISCOVERY)) {
             set_state(UI_STORAGE_ERROR);
         }
@@ -1482,15 +1444,10 @@ static void on_button(bsp_btn_t button, bsp_btn_ev_t event, void *user)
             if (s_bestiary_selection == CITY_SPECIES_COUNT) {
                 set_state(UI_HOME);
             } else {
-                const uint16_t species_ids[CITY_SPECIES_COUNT] = {
-                    CITY_SPECIES_BULBASAUR,
-                    CITY_SPECIES_CHARMANDER,
-                    CITY_SPECIES_SQUIRTLE,
-                };
                 const city_creature_record_t *record =
                     city_bestiary_record_const(
                         &s_bestiary,
-                        species_ids[s_bestiary_selection]);
+                        city_species_id_at(s_bestiary_selection));
                 if (record->state != CITY_DISCOVERY_UNKNOWN) {
                     set_state(UI_BESTIARY_DETAIL);
                 }

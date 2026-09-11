@@ -4,6 +4,7 @@ idf_component_register(
         "place_scan_coordinator.c"
         "assets/charmander_sprite.c"
         "assets/starter_sprites.c"
+        "assets/roster_sprites.c"
     INCLUDE_DIRS
         "."
         "assets"

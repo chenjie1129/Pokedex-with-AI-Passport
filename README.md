@@ -508,3 +508,8 @@ wake, and asynchronous battery status. See
 The Home menu also includes **Passport**: anonymous stamps for confirmed saved
 places, species collection progress, and a next exploration goal. See
 [Passport behavior and verification](docs/architecture/passport-progress.md).
+
+The device roster now contains **12 Pokémon**. Encounters show **NEW**, **SEEN**,
+or **CAUGHT** using the state before the encounter; the paginated Bestiary and
+Passport share the generated catalog. See
+[roster, migration and status rules](docs/architecture/twelve-species-roster.md).
