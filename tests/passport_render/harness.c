@@ -9,6 +9,7 @@
 #include <string.h>
 #define ESP_LOGI(...) ((void)0)
 static lv_obj_t *s_screen, *s_status, *s_battery_label, *s_field;
+static lv_obj_t *s_ball, *s_ball_red, *s_ball_band, *s_ball_button, *s_ball_button_inner;
 static uint8_t s_encounter_selection, s_bestiary_selection;
 static uint16_t s_current_species_id;
 static city_creature_stats_t s_current_stats;
@@ -22,7 +23,7 @@ static city_passport_stamps_t fixture;
 static bool place_scan_coordinator_passport(city_passport_stamps_t *s)
 { *s = fixture; return have_places; }
 /* PRODUCTION */
-static uint16_t framebuffer[240 * 320], draw_buffer[240 * 320];
+static uint16_t framebuffer[240 * 320], draw_buffer[240 * 20];
 static void flush(lv_display_t *d, const lv_area_t *a, uint8_t *pixels)
 {
     const uint16_t *src = (const uint16_t *)pixels;
@@ -50,7 +51,9 @@ static void check_labels(lv_obj_t *o)
 static void snapshot(const char *name, unsigned mode)
 {
     lv_obj_t *old = s_screen;
-    if (mode == 1) build_home();
+    if (mode == 6) build_throwing();
+    else if (mode == 5) build_catching();
+    else if (mode == 1) build_home();
     else if (mode == 2) build_encounter();
     else if (mode == 3) build_bestiary_list();
     else if (mode == 4) build_bestiary_detail();
@@ -76,9 +79,12 @@ int main(void)
     lv_init();
     lv_display_t *d = lv_display_create(240, 320);
     lv_display_set_color_format(d, LV_COLOR_FORMAT_RGB565);
-    lv_display_set_buffers(d, draw_buffer, NULL, sizeof(draw_buffer), LV_DISPLAY_RENDER_MODE_FULL);
+    lv_display_set_buffers(d, draw_buffer, NULL, sizeof(draw_buffer), LV_DISPLAY_RENDER_MODE_PARTIAL);
     lv_display_set_flush_cb(d, flush);
     city_bestiary_init(&s_bestiary);
+    snapshot("ball-fixed", 5);
+    snapshot("ball-launch", 6);
+    snapshot("home-no-buddy", 1);
     snapshot("passport-empty", false);
     snapshot("bestiary-unknown", 3);
     for (unsigned i = 0; i < CITY_SPECIES_COUNT; ++i)
@@ -94,6 +100,16 @@ int main(void)
         for (unsigned status = 0; status < 3; ++status) {
             s_encounter_previous_state = status;
             snprintf(name,sizeof(name),"encounter-%03u-status-%u",s_current_species_id,status); snapshot(name,2);
+        }
+    }
+    for (unsigned i = 0; i < CITY_SPECIES_COUNT; ++i) {
+        assert(city_bestiary_choose_buddy(&s_bestiary, city_species_id_at(i), persist, NULL) == CITY_BESTIARY_APPLIED);
+        char name[80];
+        for (unsigned points = 0; points <= 100; points += 50) {
+            s_bestiary.records[i].friendship = points;
+            snprintf(name,sizeof(name),"buddy-%03u-%u",city_species_id_at(i),points); snapshot(name,1);
+            s_bestiary_selection = i;
+            snprintf(name,sizeof(name),"buddy-detail-%03u-%u",city_species_id_at(i),points); snapshot(name,4);
         }
     }
     fixture.count = 2; fixture.place_ids[0] = 1; fixture.place_ids[1] = 2;

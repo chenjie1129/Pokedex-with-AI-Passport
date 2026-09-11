@@ -513,3 +513,5 @@ The device roster now contains **12 Pokémon**. Encounters show **NEW**, **SEEN*
 or **CAUGHT** using the state before the encounter; the paginated Bestiary and
 Passport share the generated catalog. See
 [roster, migration and status rules](docs/architecture/twelve-species-roster.md).
+
+Buddy Pokemon: choose a caught species with UP in its Bestiary detail. Home shows its bond progress; captures and first captures at saved places grow friendship. See [buddy and Poké Ball design](docs/architecture/buddy-and-pokeball.md).

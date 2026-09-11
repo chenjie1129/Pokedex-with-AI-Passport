@@ -6,7 +6,7 @@
 #include "wild_reward_guard.h"
 
 #include "species_catalog.h"
-#define CITY_BESTIARY_SCHEMA_VERSION 6U
+#define CITY_BESTIARY_SCHEMA_VERSION 7U
 #define CITY_BESTIARY_MAGIC UINT32_C(0x31545342)
 #define CITY_BESTIARY_LEGACY_BYTES 156U
 #define CITY_BESTIARY_ENCODED_BYTES (32U + CITY_SPECIES_COUNT * 20U + 4U)
@@ -43,6 +43,8 @@ typedef struct {
     uint16_t last_place_id;
     city_creature_stats_t latest_stats;
     city_creature_stats_t best_stats;
+    uint16_t friendship;
+    uint16_t buddy_places;
 } city_creature_record_t;
 
 typedef struct {
@@ -50,6 +52,7 @@ typedef struct {
     city_creature_record_t records[CITY_SPECIES_COUNT];
     uint64_t last_settled_sequence;
     bool wild_cooldown_active;
+    uint16_t buddy_species_id; /* Zero means no buddy selected. */
 } city_bestiary_t;
 
 typedef bool (*city_bestiary_persist_fn)(
@@ -137,3 +140,9 @@ city_bestiary_result_t city_bestiary_reserve_wild(
 city_bestiary_result_t city_bestiary_clear_wild_cooldown(
     city_bestiary_t *bestiary, city_wild_reward_guard_t *guard,
     uint64_t now_ms, city_bestiary_persist_fn persist, void *context);
+
+#define CITY_BUDDY_MAX_FRIENDSHIP 100U
+/* Progress belongs to each species and survives switching buddies. */
+city_bestiary_result_t city_bestiary_choose_buddy(
+    city_bestiary_t *bestiary, uint16_t species_id,
+    city_bestiary_persist_fn persist, void *context);

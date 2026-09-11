@@ -68,3 +68,5 @@ add_test(NAME test_species_catalog COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURR
 add_city_test(test_bestiary_adapter test_bestiary_adapter.c)
 target_sources(test_bestiary_adapter PRIVATE ../components/bsp/src/bsp_bestiary_store.c)
 target_include_directories(test_bestiary_adapter PRIVATE battery_stubs ../components/bsp/include)
+
+add_city_test(test_buddy test_buddy.c)

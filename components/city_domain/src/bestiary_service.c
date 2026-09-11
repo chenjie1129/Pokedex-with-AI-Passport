@@ -164,7 +164,8 @@ static bool record_is_valid(const city_creature_record_t *record)
 {
     if (record == NULL ||
         city_species_definition(record->species_id) == NULL ||
-        record->state > CITY_DISCOVERY_CAPTURED) {
+        record->state > CITY_DISCOVERY_CAPTURED ||
+        record->friendship > CITY_BUDDY_MAX_FRIENDSHIP) {
         return false;
     }
     if (record->state == CITY_DISCOVERY_CAPTURED) {
@@ -176,7 +177,8 @@ static bool record_is_valid(const city_creature_record_t *record)
                stats_total(&record->best_stats) >=
                    stats_total(&record->latest_stats);
     }
-    return record->capture_count == 0U &&
+    return record->friendship == 0U && record->buddy_places == 0U &&
+           record->capture_count == 0U &&
            record->last_place_id == UINT16_MAX &&
            stats_are_zero(&record->latest_stats) &&
            stats_are_zero(&record->best_stats);
@@ -185,6 +187,10 @@ static bool record_is_valid(const city_creature_record_t *record)
 bool city_bestiary_is_valid(const city_bestiary_t *bestiary)
 {
     if (!bestiary || bestiary->schema_version != CITY_BESTIARY_SCHEMA_VERSION) return false;
+    if (bestiary->buddy_species_id) {
+        const city_creature_record_t *buddy = city_bestiary_record_const(bestiary, bestiary->buddy_species_id);
+        if (!buddy || buddy->state != CITY_DISCOVERY_CAPTURED) return false;
+    }
     uint64_t total = 0;
     for (uint8_t i = 0; i < CITY_SPECIES_COUNT; ++i) {
         if (bestiary->records[i].species_id != city_species_id_at(i) ||
@@ -319,6 +325,16 @@ city_bestiary_result_t city_bestiary_capture_with_stats(
         next_record->best_stats = *stats;
     }
     next.last_settled_sequence = encounter_sequence;
+    if (next.buddy_species_id) {
+        city_creature_record_t *buddy = city_bestiary_record(&next, next.buddy_species_id);
+        unsigned gain = 1; /* A successfully settled capture, including Wild. */
+        if (place_id >= 1 && place_id <= 16) {
+            const uint16_t bit = (uint16_t)(1U << (place_id - 1));
+            if (!(buddy->buddy_places & bit)) { gain += 2; buddy->buddy_places |= bit; }
+        }
+        unsigned points = buddy->friendship + gain;
+        buddy->friendship = points > CITY_BUDDY_MAX_FRIENDSHIP ? CITY_BUDDY_MAX_FRIENDSHIP : points;
+    }
 
     if (!persist(&next, context)) {
         return CITY_BESTIARY_STORAGE_FAILED;
@@ -355,6 +371,8 @@ static void encode_record(
     output[13] = record->best_stats.hp;
     output[14] = record->best_stats.attack;
     output[15] = record->best_stats.defense;
+    write_u16_le(output + 16, record->friendship);
+    write_u16_le(output + 18, record->buddy_places);
 }
 
 static void decode_record(
@@ -391,6 +409,7 @@ bool city_bestiary_encode(
         bestiary->last_settled_sequence);
     output[16] = bestiary->wild_cooldown_active ? 1U : 0U;
     write_u32_le(output + 20U, CITY_CATALOG_VERSION);
+    write_u16_le(output + 24U, bestiary->buddy_species_id);
     for (uint8_t i = 0; i < CITY_SPECIES_COUNT; ++i)
         encode_record(output + 32U + i * 20U, &bestiary->records[i]);
     write_u32_le(
@@ -488,15 +507,20 @@ bool city_bestiary_decode(
     const uint16_t version = read_u16_le(data + 4);
     city_bestiary_t decoded;
     city_bestiary_init(&decoded);
-    if (version == CITY_BESTIARY_SCHEMA_VERSION) {
+    if (version == 6 || version == CITY_BESTIARY_SCHEMA_VERSION) {
         const uint16_t count = read_u16_le(data + 6);
         if (count == 0 || count > CITY_SPECIES_COUNT || length != 32U + count * 20U + 4U || data[16] > 1) return false;
         decoded.last_settled_sequence = read_u64_le(data + 8);
         decoded.wild_cooldown_active = data[16] == 1;
+        if (version >= 7) decoded.buddy_species_id = read_u16_le(data + 24);
         bool present[CITY_SPECIES_COUNT] = {false};
         for (uint16_t i = 0; i < count; ++i) {
             city_creature_record_t record;
             decode_record(data + 32U + i * 20U, &record);
+            if (version >= 7) {
+                record.friendship = read_u16_le(data + 32U + i * 20U + 16U);
+                record.buddy_places = read_u16_le(data + 32U + i * 20U + 18U);
+            }
             const uint8_t index = city_species_index(record.species_id);
             if (index == CITY_SPECIES_COUNT || present[index]) return false;
             present[index] = true;
@@ -552,6 +576,21 @@ city_bestiary_result_t city_bestiary_clear_wild_cooldown(
     if (!bestiary->wild_cooldown_active) return CITY_BESTIARY_UNCHANGED;
     city_bestiary_t next = *bestiary;
     next.wild_cooldown_active = false;
+    if (!persist(&next, context)) return CITY_BESTIARY_STORAGE_FAILED;
+    *bestiary = next;
+    return CITY_BESTIARY_APPLIED;
+}
+
+city_bestiary_result_t city_bestiary_choose_buddy(
+    city_bestiary_t *bestiary, uint16_t species_id,
+    city_bestiary_persist_fn persist, void *context)
+{
+    if (!city_bestiary_is_valid(bestiary) || !persist) return CITY_BESTIARY_INVALID;
+    const city_creature_record_t *record = city_bestiary_record_const(bestiary, species_id);
+    if (!record || record->state != CITY_DISCOVERY_CAPTURED) return CITY_BESTIARY_INVALID;
+    if (bestiary->buddy_species_id == species_id) return CITY_BESTIARY_UNCHANGED;
+    city_bestiary_t next = *bestiary;
+    next.buddy_species_id = species_id;
     if (!persist(&next, context)) return CITY_BESTIARY_STORAGE_FAILED;
     *bestiary = next;
     return CITY_BESTIARY_APPLIED;

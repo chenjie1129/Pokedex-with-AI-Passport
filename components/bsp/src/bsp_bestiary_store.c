@@ -36,7 +36,7 @@ static esp_err_t encode_and_stage(
     return nvs_set_blob(handle, key, encoded, sizeof(encoded));
 }
 
-static esp_err_t read_model(nvs_handle_t handle, const char *key, city_bestiary_t *model)
+static esp_err_t read_model(nvs_handle_t handle, const char *key, city_bestiary_t *model, bool *outdated)
 {
     size_t length = 0;
     esp_err_t err = nvs_get_blob(handle, key, NULL, &length);
@@ -45,7 +45,9 @@ static esp_err_t read_model(nvs_handle_t handle, const char *key, city_bestiary_
     uint8_t bytes[CITY_BESTIARY_ENCODED_BYTES];
     err = nvs_get_blob(handle, key, bytes, &length);
     if (err != ESP_OK) return err;
-    return city_bestiary_decode(bytes, length, model) ? ESP_OK : ESP_ERR_INVALID_STATE;
+    if (!city_bestiary_decode(bytes, length, model)) return ESP_ERR_INVALID_STATE;
+    if (outdated) *outdated = ((uint16_t)bytes[4] | ((uint16_t)bytes[5] << 8)) != CITY_BESTIARY_SCHEMA_VERSION;
+    return ESP_OK;
 }
 
 esp_err_t bsp_bestiary_store_load(
@@ -57,14 +59,16 @@ esp_err_t bsp_bestiary_store_load(
     esp_err_t err = nvs_open(store->namespace_name, NVS_READWRITE, &handle);
     if (err != ESP_OK) return err;
     city_bestiary_t next;
-    err = read_model(handle, store->blob_key, &next);
+    bool outdated = false;
+    err = read_model(handle, store->blob_key, &next, &outdated);
     if (err == ESP_OK) {
+        if (outdated) goto save_upgrade;
         nvs_close(handle); *bestiary = next; return ESP_OK;
     }
     // Never hide a corrupt/newer save by falling back to stale legacy progress.
     if (err != ESP_ERR_NVS_NOT_FOUND) { nvs_close(handle); return err; }
     if (store->legacy_blob_key)
-        err = read_model(handle, store->legacy_blob_key, &next);
+        err = read_model(handle, store->legacy_blob_key, &next, NULL);
     if (err == ESP_ERR_NVS_NOT_FOUND) {
         uint32_t count = 0;
         err = nvs_get_u32(handle, store->legacy_count_key, &count);
@@ -74,11 +78,12 @@ esp_err_t bsp_bestiary_store_load(
         if (err == ESP_OK && !city_bestiary_import_legacy_count(&next, count)) err = ESP_ERR_INVALID_STATE;
     }
     if (err != ESP_OK) { nvs_close(handle); return err; }
+save_upgrade:
     err = encode_and_stage(handle, store->blob_key, &next);
     if (err == ESP_OK) err = nvs_commit(handle);
     if (err == ESP_OK) {
         city_bestiary_t readback;
-        err = read_model(handle, store->blob_key, &readback);
+        err = read_model(handle, store->blob_key, &readback, NULL);
         if (err == ESP_OK) {
             uint8_t expected[CITY_BESTIARY_ENCODED_BYTES], actual[CITY_BESTIARY_ENCODED_BYTES];
             if (!city_bestiary_encode(&next, expected) || !city_bestiary_encode(&readback, actual) ||
@@ -89,7 +94,7 @@ esp_err_t bsp_bestiary_store_load(
     if (err != ESP_OK) return err;
     *bestiary = next;
     if (migrated) *migrated = true;
-    ESP_LOGI(TAG, "Migrated bestiary to schema=%u species=%u; legacy snapshot retained",
+    ESP_LOGI(TAG, "Migrated bestiary to schema=%u species=%u",
              CITY_BESTIARY_SCHEMA_VERSION, CITY_SPECIES_COUNT);
     return ESP_OK;
 }

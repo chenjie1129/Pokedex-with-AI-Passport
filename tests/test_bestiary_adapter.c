@@ -81,6 +81,18 @@ int main(void)
     assert(city_bestiary_capture(&b,21,CITY_SPECIES_PIKACHU,1,bsp_bestiary_store_persist,(void*)&BSP_BESTIARY_STORE_DEFAULT)==CITY_BESTIARY_APPLIED);
     assert(bsp_bestiary_store_load(&BSP_BESTIARY_STORE_DEFAULT,&b,&migrated)==ESP_OK);
     assert(b.records[3].capture_count==1 && b.records[1].capture_count==20 && b.wild_cooldown_active);
+    /* Upgrade a current-key v6 save in place, only publishing after commit. */
+    saved[4]=6;
+    uint32_t crc=UINT32_MAX;
+    for(size_t i=0;i<saved_len-4;++i){crc^=saved[i];for(unsigned j=0;j<8;++j)crc=(crc>>1)^(0xedb88320U&(uint32_t)-(int32_t)(crc&1));}
+    crc=~crc;for(unsigned j=0;j<4;++j)saved[saved_len-4+j]=(uint8_t)(crc>>(8*j));
+    city_bestiary_t empty;city_bestiary_init(&empty);
+    fail_commit=true;
+    assert(bsp_bestiary_store_load(&BSP_BESTIARY_STORE_DEFAULT,&empty,&migrated)==ESP_FAIL);
+    assert(!migrated && empty.records[1].capture_count==0 && saved[4]==6);
+    fail_commit=false;
+    assert(bsp_bestiary_store_load(&BSP_BESTIARY_STORE_DEFAULT,&empty,&migrated)==ESP_OK);
+    assert(migrated && saved[4]==7 && empty.records[1].capture_count==20 && empty.buddy_species_id==0);
     puts("Bestiary adapter: failed stages, readback, retry, retained legacy and corruption passed");
     return 0;
 }

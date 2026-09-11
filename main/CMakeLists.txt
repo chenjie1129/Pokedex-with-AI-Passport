@@ -15,3 +15,8 @@ idf_component_register(
         esp_timer
         nvs_flash
 )
+
+option(CITY_CAPTURE_RENDER_SMOKE "Run capture rendering on device without saves or input" OFF)
+if(CITY_CAPTURE_RENDER_SMOKE)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE CITY_CAPTURE_RENDER_SMOKE=1)
+endif()

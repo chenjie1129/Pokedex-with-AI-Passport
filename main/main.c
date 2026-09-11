@@ -87,6 +87,7 @@ typedef enum {
     WRITE_CAPTURE,
     WRITE_WILD,
     WRITE_WILD_CLEAR,
+    WRITE_BUDDY,
 } write_operation_t;
 
 static const char *TAG = "pokedex";
@@ -288,8 +289,9 @@ static void ball_geometry(int x, int y, int size)
     lv_obj_set_pos(s_ball, x, y);
     lv_obj_set_style_radius(s_ball, LV_RADIUS_CIRCLE, 0);
 
-    lv_obj_set_size(s_ball_red, size, size / 2 + 1);
+    lv_obj_set_size(s_ball_red, size - 4, (size - 4) / 2);
     lv_obj_set_pos(s_ball_red, 0, 0);
+    lv_obj_set_size(lv_obj_get_child(s_ball_red, 0), size - 4, size - 4);
     lv_obj_set_size(s_ball_band, size, size < 30 ? 4 : 7);
     lv_obj_align(s_ball_band, LV_ALIGN_CENTER, 0, 0);
 
@@ -305,12 +307,20 @@ static lv_obj_t *create_ball(lv_obj_t *parent, int x, int y, int size)
 {
     s_ball = lv_obj_create(parent);
     style_plain(s_ball, 0xF4F7F6);
+    lv_obj_set_style_border_post(s_ball, true, 0);
     lv_obj_set_style_border_width(s_ball, 2, 0);
     lv_obj_set_style_border_color(s_ball, lv_color_hex(COLOR_INK), 0);
     lv_obj_remove_flag(s_ball, LV_OBJ_FLAG_SCROLLABLE);
 
     s_ball_red = lv_obj_create(s_ball);
     style_plain(s_ball_red, COLOR_CORAL);
+    // Rectangular viewport clips a circle to its upper half without a mask layer.
+    lv_obj_set_style_bg_opa(s_ball_red, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_radius(s_ball_red, 0, 0);
+    lv_obj_t *red_disc = lv_obj_create(s_ball_red);
+    style_plain(red_disc, COLOR_CORAL);
+    lv_obj_set_style_radius(red_disc, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_pos(red_disc, 0, 0);
 
     s_ball_band = lv_obj_create(s_ball);
     style_plain(s_ball_band, COLOR_INK);
@@ -327,54 +337,38 @@ static lv_obj_t *create_ball(lv_obj_t *parent, int x, int y, int size)
     return s_ball;
 }
 
-static lv_obj_t *create_menu_row(
-    lv_obj_t *parent,
-    int y,
-    const char *title,
-    const char *subtitle,
-    bool selected)
-{
-    lv_obj_t *row = lv_obj_create(parent);
-    style_plain(row, selected ? 0xE4F4E8 : 0xF7FBF8);
-    lv_obj_set_style_radius(row, 8, 0);
-    lv_obj_set_style_border_width(row, selected ? 2 : 1, 0);
-    lv_obj_set_style_border_color(
-        row, lv_color_hex(selected ? COLOR_GREEN : 0xD5E0DD), 0);
-    lv_obj_set_size(row, 220, 50);
-    lv_obj_set_pos(row, 10, y);
-
-    lv_obj_t *title_label = label_at(
-        row, title, &lv_font_montserrat_20, COLOR_INK, 14, 3, 160);
-    lv_obj_set_style_text_align(title_label, LV_TEXT_ALIGN_LEFT, 0);
-    lv_obj_t *subtitle_label = label_at(
-        row, subtitle, &lv_font_montserrat_14, COLOR_MUTED, 14, 29, 178);
-    lv_obj_set_style_text_align(subtitle_label, LV_TEXT_ALIGN_LEFT, 0);
-    label_at(
-        row, selected ? ">" : "", &lv_font_montserrat_20,
-        selected ? COLOR_CORAL : COLOR_MUTED, 188, 13, 20);
-    return row;
-}
-
 static void build_home(void)
 {
     s_screen = new_screen("CITY SPIRITS", "UP/DN SELECT  OK OPEN");
-    char progress[32];
-    snprintf(
-        progress, sizeof(progress), "%u SEEN  %u CAUGHT",
-        city_bestiary_discovered_count(&s_bestiary),
-        city_bestiary_captured_count(&s_bestiary));
-
-    create_menu_row(
-        s_screen, 76, "EXPLORE", "Find a nearby spirit",
-        s_home_selection == 0U);
-    create_menu_row(
-        s_screen, 132, "BESTIARY", progress,
-        s_home_selection == 1U);
-    create_menu_row(s_screen, 188, "PASSPORT", "Stamps and next goal",
-                    s_home_selection == 2U);
-    label_at(
-        s_screen, "Hold UP: screen off", &lv_font_montserrat_14,
-        COLOR_MUTED, 10, META_Y, 220);
+    const city_creature_record_t *buddy = city_bestiary_record_const(&s_bestiary, s_bestiary.buddy_species_id);
+    if (buddy) {
+        lv_obj_t *image = create_species(s_screen, buddy->species_id, true);
+        lv_obj_set_pos(image, 12, 72);
+        const city_species_definition_t *definition = city_species_definition(buddy->species_id);
+        label_at(s_screen, definition->name, &lv_font_montserrat_14, COLOR_INK, 99, 77, 131);
+        char text[32];
+        snprintf(text, sizeof(text), "Bond %u/100", buddy->friendship);
+        label_at(s_screen, text, &lv_font_montserrat_14, COLOR_GRASS_D, 94, 101, 140);
+        label_at(s_screen, buddy->friendship >= 100 ? "BEST BUDDY" : "Explore together",
+                 &lv_font_montserrat_14, COLOR_MUTED, 94, 126, 140);
+    } else {
+        label_at(s_screen, "Choose your buddy", &lv_font_montserrat_20, COLOR_INK, 10, 85, 220);
+        label_at(s_screen, "Bestiary > caught Pokemon",
+                 &lv_font_montserrat_14, COLOR_MUTED, 10, 116, 220);
+    }
+    const char *titles[] = {"EXPLORE", "BESTIARY", "PASSPORT"};
+    for (unsigned i = 0; i < 3; ++i) {
+        lv_obj_t *row = lv_obj_create(s_screen);
+        style_plain(row, s_home_selection == i ? 0xE4F4E8 : 0xF7FBF8);
+        lv_obj_set_style_radius(row, 8, 0);
+        lv_obj_set_style_border_width(row, 1, 0);
+        lv_obj_set_style_border_color(row, lv_color_hex(s_home_selection == i ? COLOR_GREEN : 0xD5E0DD), 0);
+        lv_obj_set_pos(row, 10, 158 + i * 32);
+        lv_obj_set_size(row, 220, 28);
+        label_at(row, titles[i], &lv_font_montserrat_14, COLOR_INK, 10, 5, 174);
+        label_at(row, s_home_selection == i ? ">" : "", &lv_font_montserrat_14, COLOR_CORAL, 190, 5, 20);
+    }
+    label_at(s_screen, "Hold UP: screen off", &lv_font_montserrat_14, COLOR_MUTED, 10, META_Y, 220);
 }
 
 static void build_passport(void)
@@ -552,17 +546,17 @@ static void build_aim(void)
     lv_obj_set_size(s_marker, 4, 12);
     lv_obj_set_pos(s_marker, 0, -3);
 
-    create_ball(s_field, 80, 118, 60);
+    create_ball(s_field, 80, 106, 60);
     label_at(s_screen, "Throw when ring turns green", &lv_font_montserrat_14,
              COLOR_MUTED, 10, META_Y, 220);
 }
 
 static void build_throwing(void)
 {
-    s_screen = new_screen("FIRST PERSON THROW", "THROWING");
+    s_screen = new_screen("THROWING...", "THROWING");
     s_field = create_field(s_screen);
     create_species(s_field, s_current_species_id, true);
-    create_ball(s_field, 80, 118, 60);
+    create_ball(s_field, 80, 106, 60);
     label_at(s_screen, "Ball in flight", &lv_font_montserrat_14,
              COLOR_MUTED, 10, META_Y, 220);
 }
@@ -677,7 +671,7 @@ static void build_bestiary_detail(void)
     snprintf(
         title, sizeof(title), "No.%03u %s",
         species_id, definition->name);
-    s_screen = new_screen(title, "OK  BACK");
+    s_screen = new_screen(title, record->state == CITY_DISCOVERY_CAPTURED ? "UP BUDDY / OK BACK" : "OK BACK");
     s_field = create_field(s_screen);
 
     lv_obj_t *image = create_species(s_field, species_id, true);
@@ -740,19 +734,21 @@ static void build_bestiary_detail(void)
             COLOR_INK, 10, 146, 200);
         lv_obj_set_style_text_align(best_label, LV_TEXT_ALIGN_LEFT, 0);
     }
-    label_at(
-        s_screen,
-        record->state == CITY_DISCOVERY_CAPTURED
-            ? "Collection entry complete"
-            : "Seen - capture to complete",
-        &lv_font_montserrat_14, COLOR_MUTED, 10, META_Y, 220);
+    char buddy_text[48];
+    if (record->state == CITY_DISCOVERY_CAPTURED)
+        snprintf(buddy_text, sizeof(buddy_text), "%s  FRIENDSHIP %u/100",
+                 s_bestiary.buddy_species_id == species_id ? "BUDDY" : "", record->friendship);
+    else snprintf(buddy_text, sizeof(buddy_text), "Seen - capture to complete");
+    label_at(s_screen, buddy_text, &lv_font_montserrat_14, COLOR_MUTED, 10, META_Y, 220);
 }
 
 static void build_storage_error(void)
 {
     s_screen = new_screen("SAVE FAILED", "OK  RETRY");
     s_field = create_field(s_screen);
-    if (s_pending_write == WRITE_DISCOVERY || s_pending_write == WRITE_WILD) {
+    if (s_pending_write == WRITE_BUDDY) {
+        label_at(s_screen, "Buddy was not changed", &lv_font_montserrat_14, COLOR_CORAL, 10, META_Y, 220);
+    } else if (s_pending_write == WRITE_DISCOVERY || s_pending_write == WRITE_WILD) {
         lv_obj_t *beacon = lv_obj_create(s_field);
         style_plain(beacon, 0xF7FBF8);
         lv_obj_set_style_radius(beacon, 8, 0);
@@ -964,11 +960,20 @@ static bool persist_capture(void)
     return true;
 }
 
+static bool persist_buddy(void)
+{
+    if (!s_bestiary_ready) return false;
+    city_bestiary_result_t result = city_bestiary_choose_buddy(&s_bestiary,
+        city_species_id_at(s_bestiary_selection), bsp_bestiary_store_persist,
+        (void *)&BSP_BESTIARY_STORE_DEFAULT);
+    return result == CITY_BESTIARY_APPLIED || result == CITY_BESTIARY_UNCHANGED;
+}
+
 static void bestiary_write_task(void *argument)
 {
     (void)argument;
     const write_operation_t operation = s_pending_write;
-    const bool saved = operation == WRITE_WILD
+    const bool saved = operation == WRITE_BUDDY ? persist_buddy() : operation == WRITE_WILD
         ? city_bestiary_reserve_wild(&s_bestiary, &s_wild_guard, now_ms(),
             s_current_species_id, bsp_bestiary_store_persist,
             (void *)&BSP_BESTIARY_STORE_DEFAULT) == CITY_BESTIARY_APPLIED
@@ -991,7 +996,7 @@ static void bestiary_write_task(void *argument)
         ESP_LOGI(TAG, "WILD_COOLDOWN_CLEAR saved=%u", saved);
     } else if (saved) {
         s_pending_write = WRITE_NONE;
-        set_state((operation == WRITE_DISCOVERY || operation == WRITE_WILD)
+        set_state(operation == WRITE_BUDDY ? UI_HOME : (operation == WRITE_DISCOVERY || operation == WRITE_WILD)
                       ? UI_ENCOUNTER
                       : UI_CAPTURED);
     } else {
@@ -1039,6 +1044,7 @@ static void load_bestiary(void)
     }
 
     s_bestiary_ready = true;
+    ESP_LOGI(TAG, "BUDDY_READY species=%u", s_bestiary.buddy_species_id);
     const city_wild_reward_snapshot_t snapshot = {
         .schema_version = CITY_WILD_REWARD_SCHEMA_VERSION,
         .cooldown_active = s_bestiary.wild_cooldown_active,
@@ -1261,7 +1267,7 @@ static void update_throw(uint64_t now)
         2 * inverse * (int)permille * 66 +
         (int)permille * (int)permille * 110) / 1000000;
     int center_y = (
-        inverse * inverse * 151 +
+        inverse * inverse * 136 +
         2 * inverse * (int)permille * 45 +
         (int)permille * (int)permille * 61) / 1000000;
     int size = 60 - (int)((38U * permille) / 1000U);
@@ -1457,6 +1463,14 @@ static void on_button(bsp_btn_t button, bsp_btn_ev_t event, void *user)
         return;
     }
 
+    if (s_state == UI_BESTIARY_DETAIL && button == BSP_BTN_UP) {
+        const city_creature_record_t *record = city_bestiary_record_const(&s_bestiary, city_species_id_at(s_bestiary_selection));
+        if (record && record->state == CITY_DISCOVERY_CAPTURED) {
+            if (!request_bestiary_write(WRITE_BUDDY)) set_state(UI_STORAGE_ERROR);
+        }
+        bsp_lvgl_unlock(); return;
+    }
+
     if (button != BSP_BTN_OK) {
         bsp_lvgl_unlock();
         return;
@@ -1561,9 +1575,38 @@ void app_main(void)
         s_pocket.last_activity_ms = s_state_started_ms;
         build_state();
         s_tick = lv_timer_create(tick, 33, NULL);
+#ifdef CITY_CAPTURE_RENDER_SMOKE
+        lv_timer_pause(s_tick);
+#endif
         bsp_lvgl_unlock();
     }
 
+#ifdef CITY_CAPTURE_RENDER_SMOKE
+    // Dedicated diagnostic build: do not register input or run save/capture timers.
+    for (unsigned round = 0; round < 3; ++round) {
+        if (!bsp_lvgl_lock(2000)) { ESP_LOGE(TAG, "RENDER_SMOKE_FAIL lock"); return; }
+        set_state(UI_THROWING);
+        lv_label_set_text(s_status, "RENDER TEST - NO SAVE");
+        bsp_lvgl_unlock();
+        for (int size = 60; size >= 22; size -= 2) {
+            vTaskDelay(pdMS_TO_TICKS(40));
+            if (!bsp_lvgl_lock(2000)) { ESP_LOGE(TAG, "RENDER_SMOKE_FAIL frame"); return; }
+            ball_geometry(110 - size / 2, 100 - size / 2, size);
+            bsp_lvgl_unlock();
+        }
+        if (!bsp_lvgl_lock(2000)) { ESP_LOGE(TAG, "RENDER_SMOKE_FAIL catching"); return; }
+        set_state(UI_CATCHING);
+        lv_label_set_text(s_status, "RENDER TEST - NO SAVE");
+        bsp_lvgl_unlock();
+        vTaskDelay(pdMS_TO_TICKS(500));
+        ESP_LOGI(TAG, "RENDER_SMOKE_ROUND %u", round + 1);
+    }
+    if (!bsp_lvgl_lock(2000)) { ESP_LOGE(TAG, "RENDER_SMOKE_FAIL home"); return; }
+    set_state(UI_HOME);
+    bsp_lvgl_unlock();
+    ESP_LOGI(TAG, "RENDER_SMOKE_PASS captures=%lu", (unsigned long)total_capture_count());
+    return;
+#endif
     ESP_ERROR_CHECK(bsp_button_init(on_button, NULL));
     ESP_LOGI(
         TAG,
