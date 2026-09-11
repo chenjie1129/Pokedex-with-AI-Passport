@@ -27,7 +27,10 @@ const debugPanel = document.querySelector("#debugPanel");
 const debugMode = new URLSearchParams(window.location.search).get("debug") === "1";
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-let state = "arrival";
+let state = "home";
+let homeSelection = 0;
+let bestiarySelection = 0;
+let pendingWrite = null;
 let attempts = 3;
 let markerValue = 0;
 let captureStartedAt = 0;
@@ -47,19 +50,47 @@ function loadSave() {
       captureCount: Number.isInteger(parsed.captureCount) && parsed.captureCount >= 0
         ? parsed.captureCount
         : 0,
+      discoveryState: ["unknown", "seen", "captured"].includes(parsed.discoveryState)
+        ? parsed.discoveryState
+        : parsed.captured === true
+          ? "captured"
+          : "unknown",
       captured: parsed.captured === true,
       placeId: parsed.placeId === 1 ? 1 : null,
     };
   } catch {
-    return { captureCount: 0, captured: false, placeId: null };
+    return {
+      captureCount: 0,
+      discoveryState: "unknown",
+      captured: false,
+      placeId: null,
+    };
   }
 }
 
 let save = loadSave();
 
+function persistSeen() {
+  if (save.discoveryState !== "unknown") {
+    return true;
+  }
+  const next = {
+    ...save,
+    discoveryState: "seen",
+  };
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    save = next;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function persistCapture() {
   const next = {
     captureCount: save.captureCount + 1,
+    discoveryState: "captured",
     captured: true,
     placeId: 1,
   };
@@ -521,6 +552,76 @@ function drawCaptured(now = performance.now()) {
   }
 }
 
+function drawHome() {
+  clearScene("#fffdf7");
+  const rows = [
+    ["探索", "寻找附近的精灵"],
+    ["图鉴", save.discoveryState === "unknown"
+      ? "0 已发现 · 0 已捕获"
+      : save.discoveryState === "seen"
+        ? "1 已发现 · 0 已捕获"
+        : "1 已发现 · 1 已捕获"],
+  ];
+  rows.forEach(([label, detail], index) => {
+    const y = 10 + index * 76;
+    const selected = homeSelection === index;
+    roundedRect(8, y, 224, 66, 8, selected ? "#e4f4e8" : "#f7fbf8");
+    ctx.strokeStyle = selected ? "#55b96d" : "#d5e0dd";
+    ctx.lineWidth = selected ? 3 : 1;
+    ctx.strokeRect(9, y + 1, 222, 64);
+    ctx.fillStyle = "#183238";
+    ctx.font = "800 18px system-ui, sans-serif";
+    ctx.fillText(label, 24, y + 28);
+    ctx.fillStyle = "#60777a";
+    ctx.font = "600 10px system-ui, sans-serif";
+    ctx.fillText(detail, 24, y + 50);
+    if (selected) {
+      ctx.fillStyle = "#ef5b4f";
+      ctx.font = "800 20px system-ui, sans-serif";
+      ctx.fillText(">", 205, y + 38);
+    }
+  });
+}
+
+function drawBestiaryList() {
+  clearScene("#fffdf7");
+  if (save.discoveryState === "unknown") {
+    roundedRect(8, 10, 224, 146, 8, "#f7fbf8");
+    ctx.fillStyle = "#ef5b4f";
+    ctx.font = "800 26px system-ui, sans-serif";
+    ctx.fillText("?", 112, 57);
+    ctx.fillStyle = "#183238";
+    ctx.font = "800 16px system-ui, sans-serif";
+    ctx.fillText("还没有图鉴条目", 64, 91);
+    ctx.fillStyle = "#60777a";
+    ctx.font = "600 11px system-ui, sans-serif";
+    ctx.fillText("先去探索一个地点", 70, 116);
+    return;
+  }
+
+  const selected = bestiarySelection === 0;
+  roundedRect(8, 8, 224, 94, 8, selected ? "#e4f4e8" : "#f7fbf8");
+  ctx.save();
+  if (save.discoveryState === "seen") ctx.globalAlpha = 0.55;
+  drawCharmander(0.76, 9, 13);
+  ctx.restore();
+  ctx.fillStyle = "#183238";
+  ctx.font = "800 13px system-ui, sans-serif";
+  ctx.fillText("No.004 小火龙", 94, 34);
+  ctx.fillStyle = save.discoveryState === "captured" ? "#ef5b4f" : "#55a86c";
+  ctx.font = "800 11px system-ui, sans-serif";
+  ctx.fillText(save.discoveryState === "captured" ? "已捕获" : "已发现", 94, 58);
+  ctx.fillStyle = "#60777a";
+  ctx.font = "600 10px system-ui, sans-serif";
+  ctx.fillText("捕获 " + save.captureCount, 94, 80);
+
+  const backSelected = bestiarySelection === 1;
+  roundedRect(8, 112, 224, 44, 8, backSelected ? "#e4f4e8" : "#f7fbf8");
+  ctx.fillStyle = "#183238";
+  ctx.font = "800 14px system-ui, sans-serif";
+  ctx.fillText("返回首页", 24, 140);
+}
+
 function drawBestiary() {
   clearScene("#ffe4c4");
 
@@ -538,7 +639,10 @@ function drawBestiary() {
   ctx.beginPath();
   ctx.ellipse(60, 127, 43, 9, 0, 0, Math.PI * 2);
   ctx.fill();
+  ctx.save();
+  if (save.discoveryState === "seen") ctx.globalAlpha = 0.55;
   drawCharmander(1.48, 8, 37);
+  ctx.restore();
 
   ctx.fillStyle = "#657b7d";
   ctx.font = "700 9px system-ui, sans-serif";
@@ -547,15 +651,16 @@ function drawBestiary() {
   ctx.font = "800 18px system-ui, sans-serif";
   ctx.fillText("小火龙", 124, 58);
 
-  roundedRect(124, 67, 36, 18, 9, "#ef6658");
+  roundedRect(124, 67, 48, 18, 8,
+    save.discoveryState === "captured" ? "#ef6658" : "#55a86c");
   ctx.fillStyle = "#ffffff";
   ctx.font = "800 9px system-ui, sans-serif";
-  ctx.fillText("火", 138, 80);
+  ctx.fillText(save.discoveryState === "captured" ? "捕获" : "发现", 136, 80);
 
   ctx.fillStyle = "#60777a";
   ctx.font = "600 9px system-ui, sans-serif";
-  ctx.fillText(`捕获次数  ${save.captureCount}`, 124, 105);
-  ctx.fillText("发现地点  城市绿地", 124, 122);
+  ctx.fillText("捕获次数  " + save.captureCount, 124, 105);
+  ctx.fillText(save.placeId ? "发现地点  城市绿地" : "发现地点  --", 124, 122);
 
   ctx.fillStyle = "#d7e8e4";
   ctx.fillRect(124, 136, 86, 6);
@@ -566,7 +671,7 @@ function drawBestiary() {
 function updateTrace() {
   const order = ["place", "encounter", "capture", "bestiary"];
   const activeByState = {
-    arrival: "place",
+    home: "place",
     scanning: "place",
     place: "place",
     encounter: "encounter",
@@ -576,7 +681,8 @@ function updateTrace() {
     captured: "capture",
     storageError: "capture",
     escaped: "capture",
-    bestiary: "bestiary",
+    bestiaryList: "bestiary",
+    bestiaryDetail: "bestiary",
   };
   const active = activeByState[state];
   const activeIndex = order.indexOf(active);
@@ -593,11 +699,24 @@ function render() {
   screen.dataset.state = state;
   captureCount.textContent = String(save.captureCount);
   captureMeter.hidden = state !== "capture";
-  saveState.textContent = save.captured ? "图鉴已保存" : "离线模式";
-  upButton.disabled = state !== "bestiary";
-  downButton.disabled = state !== "bestiary";
+  saveState.textContent = save.discoveryState === "captured"
+    ? "图鉴已捕获"
+    : save.discoveryState === "seen"
+      ? "图鉴已发现"
+      : "离线模式";
+  const navigable = state === "home" ||
+    (state === "bestiaryList" && save.discoveryState !== "unknown");
+  upButton.disabled = !navigable;
+  downButton.disabled = !navigable;
 
-  if (state === "arrival" || state === "scanning" || state === "place") {
+  if (state === "home") {
+    eyebrow.textContent = "离线图鉴";
+    title.textContent = "城市精灵";
+    message.textContent = homeSelection === 0 ? "探索附近地点" : "查看收藏记录";
+    meta.textContent = "使用上下键选择";
+    screenAction.textContent = "上下选择 · OK 打开";
+    drawHome();
+  } else if (state === "scanning" || state === "place") {
     eyebrow.textContent = "城市绿地";
     title.textContent = state === "place" ? "地点确认成功" : "发现附近的气息";
     message.textContent =
@@ -606,13 +725,13 @@ function render() {
     meta.textContent =
       state === "scanning" ? "正在确认地点" :
       state === "place" ? "环境信号稳定" : "按下确认键扫描";
-    screenAction.textContent = state === "arrival" ? "开始扫描" : "正在扫描";
+    screenAction.textContent = "正在扫描";
     drawSignal();
   } else if (state === "encounter") {
     eyebrow.textContent = "野外遭遇";
     title.textContent = "野生的小火龙出现了";
     message.textContent = "尾焰在风里轻轻跳动";
-    meta.textContent = "No.004 · 火属性";
+    meta.textContent = "No.004 · 已写入发现记录";
     screenAction.textContent = "准备捕获";
     drawEncounter();
   } else if (state === "capture") {
@@ -633,7 +752,7 @@ function render() {
     eyebrow.textContent = "捕获中";
     title.textContent = "精灵球命中了";
     message.textContent = "1 · 2 · 3";
-    meta.textContent = "再等一下...";
+    meta.textContent = "正在保存捕获记录";
     screenAction.textContent = "捕获中";
     drawCaptured();
   } else if (state === "captured") {
@@ -646,23 +765,41 @@ function render() {
   } else if (state === "storageError") {
     eyebrow.textContent = "保存失败";
     title.textContent = "记录尚未保存";
-    message.textContent = "没有增加捕获次数";
+    message.textContent = pendingWrite === "discovery"
+      ? "发现不会在保存前显示"
+      : "没有增加捕获次数";
     meta.textContent = "修复存储后重试";
     screenAction.textContent = "重试保存";
-    drawCaptured();
+    pendingWrite === "discovery" ? drawSignal() : drawCaptured();
   } else if (state === "escaped") {
     eyebrow.textContent = "捕获失败";
     title.textContent = "小火龙逃走了";
-    message.textContent = "调整时机再试一次";
-    meta.textContent = "本次没有写入图鉴";
-    screenAction.textContent = "再试一次";
+    message.textContent = "发现记录仍在图鉴中";
+    meta.textContent = "回首页可查看图鉴";
+    screenAction.textContent = "返回首页";
     drawEncounter();
-  } else if (state === "bestiary") {
+  } else if (state === "bestiaryList") {
+    eyebrow.textContent = "本地图鉴";
+    title.textContent = "收藏记录";
+    message.textContent = save.discoveryState === "unknown"
+      ? "还没有发现精灵"
+      : bestiarySelection === 0
+        ? "No.004 · 小火龙"
+        : "返回首页";
+    meta.textContent = "已发现 " +
+      (save.discoveryState === "unknown" ? 0 : 1) + " / 1";
+    screenAction.textContent = save.discoveryState === "unknown"
+      ? "OK 返回"
+      : "上下选择 · OK 打开";
+    drawBestiaryList();
+  } else if (state === "bestiaryDetail") {
     eyebrow.textContent = "图鉴 No.004";
     title.textContent = "小火龙";
-    message.textContent = "已发现 1 / 3";
+    message.textContent = save.discoveryState === "captured"
+      ? "已捕获"
+      : "已发现 · 尚未捕获";
     meta.textContent = "尾巴上的火焰象征生命力";
-    screenAction.textContent = "返回探索";
+    screenAction.textContent = "返回列表";
     drawBestiary();
   }
   updateTrace();
@@ -714,8 +851,14 @@ function finishThrow() {
     if (!reducedMotion) {
       animationFrame = window.requestAnimationFrame(animateCatching);
     }
+    pendingWrite = "capture";
     schedule(() => {
-      state = persistCapture() ? "captured" : "storageError";
+      if (persistCapture()) {
+        pendingWrite = null;
+        state = "captured";
+      } else {
+        state = "storageError";
+      }
       render();
     }, reducedMotion ? 350 : 1300);
     return;
@@ -749,7 +892,13 @@ function throwBall() {
 }
 
 function handleOk() {
-  if (state === "arrival") {
+  if (state === "home") {
+    if (homeSelection === 1) {
+      bestiarySelection = 0;
+      state = "bestiaryList";
+      render();
+      return;
+    }
     state = "scanning";
     render();
     schedule(() => {
@@ -757,7 +906,14 @@ function handleOk() {
       render();
     }, 650);
     schedule(() => {
-      state = "encounter";
+      pendingWrite = "discovery";
+      if (persistSeen()) {
+        pendingWrite = null;
+        attempts = 3;
+        state = "encounter";
+      } else {
+        state = "storageError";
+      }
       render();
     }, 1350);
   } else if (state === "encounter") {
@@ -765,21 +921,29 @@ function handleOk() {
   } else if (state === "capture") {
     throwBall();
   } else if (state === "captured") {
-    state = "bestiary";
+    state = "bestiaryDetail";
     render();
   } else if (state === "storageError") {
-    state = "catching";
+    const operation = pendingWrite;
+    const saved = operation === "discovery" ? persistSeen() : persistCapture();
+    if (saved) {
+      pendingWrite = null;
+      state = operation === "discovery" ? "encounter" : "captured";
+    }
     render();
-    schedule(() => {
-      state = persistCapture() ? "captured" : "storageError";
-      render();
-    }, 300);
   } else if (state === "escaped") {
-    attempts = 3;
-    state = "encounter";
+    state = "home";
     render();
-  } else if (state === "bestiary") {
-    state = "arrival";
+  } else if (state === "bestiaryList") {
+    if (save.discoveryState === "unknown" || bestiarySelection === 1) {
+      state = "home";
+    } else {
+      state = "bestiaryDetail";
+    }
+    render();
+  } else if (state === "bestiaryDetail") {
+    bestiarySelection = 0;
+    state = "bestiaryList";
     render();
   }
 }
@@ -794,24 +958,33 @@ function reset() {
   throwWillSucceed = false;
   catchStartedAt = 0;
   captureMarker.style.left = "0%";
-  state = "arrival";
+  state = "home";
+  homeSelection = 0;
+  bestiarySelection = 0;
+  pendingWrite = null;
   render();
 }
 
+function handleDirection() {
+  if (state === "home") {
+    homeSelection = homeSelection === 0 ? 1 : 0;
+    render();
+  } else if (state === "bestiaryList" &&
+             save.discoveryState !== "unknown") {
+    bestiarySelection = bestiarySelection === 0 ? 1 : 0;
+    render();
+  }
+}
+
 okButton.addEventListener("click", handleOk);
-upButton.addEventListener("click", () => {
-  if (state === "bestiary") {
-    message.textContent = "No.004 · 小火龙";
-  }
-});
-downButton.addEventListener("click", () => {
-  if (state === "bestiary") {
-    message.textContent = "捕获地点 · PLACE 01";
-  }
-});
+upButton.addEventListener("click", handleDirection);
+downButton.addEventListener("click", handleDirection);
 resetButton.addEventListener("click", reset);
 window.addEventListener("keydown", (event) => {
-  if (event.key === "Enter" || event.key === " ") {
+  if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+    event.preventDefault();
+    handleDirection();
+  } else if (event.key === "Enter" || event.key === " ") {
     if (event.target instanceof HTMLButtonElement) {
       return;
     }
@@ -826,6 +999,9 @@ window.citySpiritsMvp = {
     attempts,
     markerValue,
     captureCount: save.captureCount,
+    discoveryState: save.discoveryState,
+    homeSelection,
+    bestiarySelection,
   }),
 };
 
