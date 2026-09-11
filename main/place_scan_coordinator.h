@@ -4,6 +4,7 @@
 #include "bsp_place_store.h"
 #include "esp_err.h"
 #include "place_scan_policy.h"
+#include "passport_progress.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -38,3 +39,6 @@ esp_err_t place_scan_coordinator_start(
 bool place_scan_coordinator_request(void);
 
 bool place_scan_coordinator_receive(place_scan_result_t *result);
+
+// UI caller only, between scans. Reads the committed catalog without flash I/O.
+bool place_scan_coordinator_passport(city_passport_stamps_t *stamps);

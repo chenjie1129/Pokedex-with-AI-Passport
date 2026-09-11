@@ -11,5 +11,6 @@ idf_component_register(
         "src/privacy_tokenizer.c"
         "src/wild_reward_guard.c"
         "src/pocket_policy.c"
+        "src/passport_progress.c"
     INCLUDE_DIRS "include"
 )

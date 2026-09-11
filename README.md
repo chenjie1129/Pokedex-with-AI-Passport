@@ -504,3 +504,7 @@ Wild Mode and pocket controls now add a separate sparse-signal encounter pool,
 a durable 30-minute opportunity cooldown, Home long-UP screen-off, consumed-button
 wake, and asynchronous battery status. See
 [behavior, persistence and device checks](docs/architecture/wild-mode-and-pocket-controls.md).
+
+The Home menu also includes **Passport**: anonymous stamps for confirmed saved
+places, species collection progress, and a next exploration goal. See
+[Passport behavior and verification](docs/architecture/passport-progress.md).

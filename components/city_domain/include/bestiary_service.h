@@ -79,6 +79,8 @@ const city_creature_record_t *city_bestiary_record_const(
     const city_bestiary_t *bestiary,
     uint16_t species_id);
 
+bool city_bestiary_is_valid(const city_bestiary_t *bestiary);
+
 uint8_t city_bestiary_discovered_count(const city_bestiary_t *bestiary);
 
 uint8_t city_bestiary_captured_count(const city_bestiary_t *bestiary);

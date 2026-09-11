@@ -452,3 +452,11 @@ bool place_scan_coordinator_receive(place_scan_result_t *result)
     }
     return true;
 }
+
+bool place_scan_coordinator_passport(city_passport_stamps_t *stamps)
+{
+    // The worker mutates the catalog only during a requested scan. Its final
+    // result queue handoff precedes receive() clearing in_flight on the UI task.
+    if (!s_context.ready || s_context.in_flight) return false;
+    return city_passport_stamps_from_catalog(&s_context.catalog, stamps);
+}

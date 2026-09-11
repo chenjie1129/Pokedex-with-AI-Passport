@@ -21,6 +21,7 @@ add_library(city_domain STATIC
     ../components/city_domain/src/privacy_tokenizer.c
     ../components/city_domain/src/wild_reward_guard.c
     ../components/city_domain/src/pocket_policy.c
+    ../components/city_domain/src/passport_progress.c
 )
 target_include_directories(city_domain PUBLIC
     ../components/city_domain/include
@@ -61,3 +62,4 @@ add_city_test(test_pocket_features test_pocket_features.c)
 add_city_test(test_battery_driver test_battery_driver.c)
 target_include_directories(test_battery_driver PRIVATE
     battery_stubs ../components/bsp/include)
+add_city_test(test_passport_progress test_passport_progress.c)

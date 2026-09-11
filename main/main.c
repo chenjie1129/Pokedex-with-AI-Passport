@@ -77,6 +77,7 @@ typedef enum {
     UI_BESTIARY_DETAIL,
     UI_STORAGE_ERROR,
     UI_LOW_BATTERY,
+    UI_PASSPORT,
 } ui_state_t;
 
 typedef enum {
@@ -96,6 +97,7 @@ static city_bestiary_t s_bestiary;
 static bool s_bestiary_ready;
 static bool s_save_in_progress;
 static uint8_t s_home_selection;
+static uint8_t s_passport_page;
 static uint8_t s_encounter_selection;
 static uint8_t s_bestiary_selection;
 static write_operation_t s_pending_write;
@@ -148,7 +150,7 @@ static const char *state_name(ui_state_t state)
         "place_unstable", "place_error", "place_storage_error",
         "place_full", "encounter", "aim", "throwing", "catching",
         "captured", "escaped", "abandoned", "bestiary_list", "bestiary_detail",
-        "storage_error", "low_battery",
+        "storage_error", "low_battery", "passport",
     };
     return names[state];
 }
@@ -342,18 +344,18 @@ static lv_obj_t *create_menu_row(
     lv_obj_set_style_border_width(row, selected ? 2 : 1, 0);
     lv_obj_set_style_border_color(
         row, lv_color_hex(selected ? COLOR_GREEN : 0xD5E0DD), 0);
-    lv_obj_set_size(row, 220, 62);
+    lv_obj_set_size(row, 220, 50);
     lv_obj_set_pos(row, 10, y);
 
     lv_obj_t *title_label = label_at(
-        row, title, &lv_font_montserrat_20, COLOR_INK, 14, 8, 160);
+        row, title, &lv_font_montserrat_20, COLOR_INK, 14, 3, 160);
     lv_obj_set_style_text_align(title_label, LV_TEXT_ALIGN_LEFT, 0);
     lv_obj_t *subtitle_label = label_at(
-        row, subtitle, &lv_font_montserrat_14, COLOR_MUTED, 14, 37, 178);
+        row, subtitle, &lv_font_montserrat_14, COLOR_MUTED, 14, 29, 178);
     lv_obj_set_style_text_align(subtitle_label, LV_TEXT_ALIGN_LEFT, 0);
     label_at(
         row, selected ? ">" : "", &lv_font_montserrat_20,
-        selected ? COLOR_CORAL : COLOR_MUTED, 188, 19, 20);
+        selected ? COLOR_CORAL : COLOR_MUTED, 188, 13, 20);
     return row;
 }
 
@@ -367,14 +369,70 @@ static void build_home(void)
         city_bestiary_captured_count(&s_bestiary));
 
     create_menu_row(
-        s_screen, 79, "EXPLORE", "Find a nearby spirit",
+        s_screen, 76, "EXPLORE", "Find a nearby spirit",
         s_home_selection == 0U);
     create_menu_row(
-        s_screen, 151, "BESTIARY", progress,
+        s_screen, 132, "BESTIARY", progress,
         s_home_selection == 1U);
+    create_menu_row(s_screen, 188, "PASSPORT", "Stamps and next goal",
+                    s_home_selection == 2U);
     label_at(
         s_screen, "Hold UP: screen off", &lv_font_montserrat_14,
         COLOR_MUTED, 10, META_Y, 220);
+}
+
+static void build_passport(void)
+{
+    city_passport_stamps_t stamps;
+    const bool have_places = place_scan_coordinator_passport(&stamps);
+    const city_passport_progress_t progress = city_passport_progress(
+        have_places ? &stamps : NULL, s_bestiary_ready ? &s_bestiary : NULL);
+    if (s_passport_page >= progress.pages) s_passport_page = 0;
+    s_screen = new_screen("PASSPORT", "UP/DN PAGE  OK HOME");
+    char text[64];
+    if (progress.places_ready)
+        snprintf(text, sizeof(text), "%u/%u PLACES   PAGE %u/%u", progress.places,
+                 CITY_PLACE_MAX_COUNT, s_passport_page + 1, progress.pages);
+    else snprintf(text, sizeof(text), "PLACE DATA UNAVAILABLE");
+    label_at(s_screen, text, &lv_font_montserrat_14, COLOR_INK, 10, 77, 220);
+    if (progress.collection_ready)
+        snprintf(text, sizeof(text), "SEEN %u/%u   CAUGHT %u/%u", progress.discovered,
+                 CITY_SPECIES_COUNT, progress.captured, CITY_SPECIES_COUNT);
+    else snprintf(text, sizeof(text), "COLLECTION UNAVAILABLE");
+    label_at(s_screen, text, &lv_font_montserrat_14, COLOR_MUTED, 10, 101, 220);
+    for (unsigned slot = 0; slot < CITY_PASSPORT_STAMPS_PER_PAGE; ++slot) {
+        const unsigned index = s_passport_page * CITY_PASSPORT_STAMPS_PER_PAGE + slot;
+        const bool earned = progress.places_ready && index < stamps.count;
+        lv_obj_t *stamp = lv_obj_create(s_screen);
+        style_plain(stamp, earned ? 0xE4F4E8 : 0xF7FBF8);
+        lv_obj_set_style_radius(stamp, 16, 0);
+        lv_obj_set_style_border_width(stamp, earned ? 2 : 1, 0);
+        lv_obj_set_style_border_color(stamp, lv_color_hex(earned ? COLOR_GRASS_D : 0xD5E0DD), 0);
+        lv_obj_set_size(stamp, 104, 32);
+        lv_obj_set_pos(stamp, 10 + (slot % 2) * 116, 130 + (slot / 2) * 38);
+        if (earned) snprintf(text, sizeof(text), "PLACE %02u", stamps.place_ids[index]);
+        else snprintf(text, sizeof(text), "--");
+        label_at(stamp, text, &lv_font_montserrat_14,
+                 earned ? COLOR_GRASS_D : COLOR_MUTED, 2, 7, 96);
+    }
+    switch (progress.goal) {
+    case CITY_PASSPORT_FIRST_CAPTURE:
+        snprintf(text, sizeof(text), "Goal: catch your first spirit"); break;
+    case CITY_PASSPORT_NEW_PLACE:
+        snprintf(text, sizeof(text), "Goal: explore %u places", progress.target); break;
+    case CITY_PASSPORT_CATCH_SPECIES:
+        snprintf(text, sizeof(text), "Goal: %s %s", progress.target_seen ? "catch" : "find",
+                 city_species_definition(progress.target)->name); break;
+    case CITY_PASSPORT_COMPLETE:
+        snprintf(text, sizeof(text), "All stamps and spirits collected"); break;
+    default:
+        snprintf(text, sizeof(text), "Saved data unavailable"); break;
+    }
+    label_at(s_screen, text, &lv_font_montserrat_14, COLOR_INK, 5, META_Y, 230);
+    ESP_LOGI(TAG, "PASSPORT places=%u seen=%u caught=%u page=%u/%u goal=%u target=%u ready=%u",
+             progress.places, progress.discovered, progress.captured, s_passport_page + 1,
+             progress.pages, progress.goal, progress.target,
+             progress.places_ready && progress.collection_ready);
 }
 
 static void build_scanning(void)
@@ -769,6 +827,9 @@ static void build_state(void)
     s_wild_countdown = NULL;
 
     switch (s_state) {
+    case UI_PASSPORT:
+        build_passport();
+        break;
     case UI_HOME:
         build_home();
         break;
@@ -1367,18 +1428,34 @@ static void on_button(bsp_btn_t button, bsp_btn_ev_t event, void *user)
 
     if (s_state == UI_HOME) {
         if (button == BSP_BTN_UP || button == BSP_BTN_DOWN) {
-            s_home_selection = s_home_selection == 0U ? 1U : 0U;
+            s_home_selection = city_passport_turn_page(s_home_selection, 3U, button == BSP_BTN_DOWN);
             set_state(UI_HOME);
         } else if (button == BSP_BTN_OK) {
             if (s_home_selection == 0U) {
                 begin_place_scan();
-            } else {
+            } else if (s_home_selection == 1U) {
                 s_bestiary_selection = 0U;
                 set_state(UI_BESTIARY_LIST);
+            } else {
+                s_passport_page = 0U;
+                set_state(UI_PASSPORT);
             }
         }
         bsp_lvgl_unlock();
         return;
+    }
+
+    if (s_state == UI_PASSPORT) {
+        if (button == BSP_BTN_OK) set_state(UI_HOME);
+        else if (button == BSP_BTN_UP || button == BSP_BTN_DOWN) {
+            city_passport_stamps_t stamps;
+            const bool ready = place_scan_coordinator_passport(&stamps);
+            const city_passport_progress_t p = city_passport_progress(
+                ready ? &stamps : NULL, s_bestiary_ready ? &s_bestiary : NULL);
+            s_passport_page = city_passport_turn_page(s_passport_page, p.pages, button == BSP_BTN_DOWN);
+            set_state(UI_PASSPORT);
+        }
+        bsp_lvgl_unlock(); return;
     }
 
     if (s_state == UI_ENCOUNTER &&
