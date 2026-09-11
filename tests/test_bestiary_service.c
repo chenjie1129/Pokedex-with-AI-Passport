@@ -103,8 +103,7 @@ static void test_capture_commits_only_after_persistence(void)
     CHECK(bestiary.charmander.state == CITY_DISCOVERY_CAPTURED);
     CHECK(bestiary.charmander.capture_count == 1U);
     CHECK(bestiary.charmander.last_place_id == 1U);
-    CHECK(bestiary.ledger_count == 1U);
-    CHECK(bestiary.ledger_next == 1U);
+    CHECK(bestiary.last_settled_sequence == UINT64_C(0x1001));
     CHECK(probe.calls == 2U);
 }
 
@@ -129,8 +128,7 @@ static void test_duplicate_encounter_is_idempotent(void)
               persist_probe,
               &probe) == CITY_BESTIARY_DUPLICATE);
     CHECK(bestiary.charmander.capture_count == 1U);
-    CHECK(bestiary.ledger_count == 1U);
-    CHECK(bestiary.ledger_next == 1U);
+    CHECK(bestiary.last_settled_sequence == 77U);
     CHECK(probe.calls == 1U);
 }
 
@@ -183,8 +181,7 @@ static void test_legacy_count_import_preserves_unknown_history(void)
     CHECK(bestiary.charmander.state == CITY_DISCOVERY_CAPTURED);
     CHECK(bestiary.charmander.capture_count == 4U);
     CHECK(bestiary.charmander.last_place_id == UINT16_MAX);
-    CHECK(bestiary.ledger_count == 0U);
-    CHECK(bestiary.ledger_next == 0U);
+    CHECK(bestiary.last_settled_sequence == 4U);
 
     uint8_t encoded[CITY_BESTIARY_ENCODED_BYTES];
     CHECK(city_bestiary_encode(&bestiary, encoded));
@@ -203,7 +200,7 @@ static void test_legacy_count_import_preserves_unknown_history(void)
               &probe) == CITY_BESTIARY_APPLIED);
     CHECK(decoded.charmander.capture_count == 5U);
     CHECK(decoded.charmander.last_place_id == 1U);
-    CHECK(decoded.ledger_count == 1U);
+    CHECK(decoded.last_settled_sequence == UINT64_C(9001));
 }
 
 static void test_zero_legacy_count_remains_unknown(void)
@@ -215,88 +212,110 @@ static void test_zero_legacy_count_remains_unknown(void)
     CHECK(!city_bestiary_import_legacy_count(NULL, 1U));
 }
 
-static void test_capture_count_outlives_idempotency_window(void)
+static void test_high_water_rejects_all_old_sequences(void)
 {
     city_bestiary_t bestiary;
     city_bestiary_init(&bestiary);
     persist_probe_t probe = {.succeed = true};
 
-    for (uint64_t encounter_id = 1U; encounter_id <= 20U;
-         ++encounter_id) {
+    for (uint64_t sequence = 1U; sequence <= 100U; ++sequence) {
         CHECK(city_bestiary_capture(
                   &bestiary,
-                  encounter_id,
+                  sequence,
                   CITY_SPECIES_CHARMANDER,
                   3U,
                   persist_probe,
                   &probe) == CITY_BESTIARY_APPLIED);
     }
+    CHECK(bestiary.charmander.capture_count == 100U);
+    CHECK(bestiary.last_settled_sequence == 100U);
+    CHECK(probe.calls == 100U);
 
-    CHECK(bestiary.charmander.capture_count == 20U);
-    CHECK(bestiary.ledger_count == CITY_BESTIARY_LEDGER_CAPACITY);
-    CHECK(bestiary.ledger_next == 4U);
-    CHECK(probe.calls == 20U);
+    const uint64_t stale_sequences[] = {1U, 50U, 100U};
+    for (size_t i = 0;
+         i < sizeof(stale_sequences) / sizeof(stale_sequences[0]);
+         ++i) {
+        CHECK(city_bestiary_capture(
+                  &bestiary,
+                  stale_sequences[i],
+                  CITY_SPECIES_CHARMANDER,
+                  3U,
+                  persist_probe,
+                  &probe) == CITY_BESTIARY_DUPLICATE);
+    }
+    CHECK(bestiary.charmander.capture_count == 100U);
+    CHECK(probe.calls == 100U);
 
+    uint64_t next_sequence = 0U;
+    CHECK(city_bestiary_next_encounter_sequence(
+        &bestiary, &next_sequence));
+    CHECK(next_sequence == 101U);
     CHECK(city_bestiary_capture(
               &bestiary,
-              20U,
-              CITY_SPECIES_CHARMANDER,
-              3U,
-              persist_probe,
-              &probe) == CITY_BESTIARY_DUPLICATE);
-    CHECK(bestiary.charmander.capture_count == 20U);
-    CHECK(probe.calls == 20U);
-
-    CHECK(city_bestiary_capture(
-              &bestiary,
-              1U,
+              next_sequence,
               CITY_SPECIES_CHARMANDER,
               3U,
               persist_probe,
               &probe) == CITY_BESTIARY_APPLIED);
-    CHECK(bestiary.charmander.capture_count == 21U);
-    CHECK(bestiary.ledger_next == 5U);
-    CHECK(probe.calls == 21U);
-
-    uint8_t encoded[CITY_BESTIARY_ENCODED_BYTES];
-    CHECK(city_bestiary_encode(&bestiary, encoded));
-    city_bestiary_t decoded;
-    city_bestiary_init(&decoded);
-    CHECK(city_bestiary_decode(encoded, sizeof(encoded), &decoded));
-    CHECK(memcmp(&decoded, &bestiary, sizeof(bestiary)) == 0);
+    CHECK(bestiary.charmander.capture_count == 101U);
+    CHECK(bestiary.last_settled_sequence == 101U);
 }
 
-static void test_full_window_rolls_back_when_persistence_fails(void)
+static void test_high_water_rolls_back_when_persistence_fails(void)
 {
     city_bestiary_t bestiary;
     city_bestiary_init(&bestiary);
     persist_probe_t probe = {.succeed = true};
 
-    for (uint64_t encounter_id = 1U;
-         encounter_id <= CITY_BESTIARY_LEDGER_CAPACITY;
-         ++encounter_id) {
-        CHECK(city_bestiary_capture(
-                  &bestiary,
-                  encounter_id,
-                  CITY_SPECIES_CHARMANDER,
-                  4U,
-                  persist_probe,
-                  &probe) == CITY_BESTIARY_APPLIED);
-    }
+    CHECK(city_bestiary_capture(
+              &bestiary,
+              1U,
+              CITY_SPECIES_CHARMANDER,
+              4U,
+              persist_probe,
+              &probe) == CITY_BESTIARY_APPLIED);
     const city_bestiary_t before = bestiary;
 
     probe.succeed = false;
     CHECK(city_bestiary_capture(
               &bestiary,
-              17U,
+              2U,
               CITY_SPECIES_CHARMANDER,
               4U,
               persist_probe,
               &probe) == CITY_BESTIARY_STORAGE_FAILED);
     CHECK(memcmp(&bestiary, &before, sizeof(bestiary)) == 0);
-    CHECK(bestiary.charmander.capture_count ==
-          CITY_BESTIARY_LEDGER_CAPACITY);
-    CHECK(bestiary.encounter_ids[0] == 1U);
+    CHECK(bestiary.charmander.capture_count == 1U);
+    CHECK(bestiary.last_settled_sequence == 1U);
+}
+
+static void test_ambiguous_commit_is_safe_after_reload(void)
+{
+    city_bestiary_t bestiary;
+    city_bestiary_init(&bestiary);
+    persist_probe_t probe = {.succeed = false};
+
+    CHECK(city_bestiary_capture(
+              &bestiary,
+              1U,
+              CITY_SPECIES_CHARMANDER,
+              4U,
+              persist_probe,
+              &probe) == CITY_BESTIARY_STORAGE_FAILED);
+    CHECK(bestiary.charmander.capture_count == 0U);
+
+    bestiary = probe.last;
+    probe.succeed = true;
+    CHECK(city_bestiary_capture(
+              &bestiary,
+              1U,
+              CITY_SPECIES_CHARMANDER,
+              4U,
+              persist_probe,
+              &probe) == CITY_BESTIARY_DUPLICATE);
+    CHECK(bestiary.charmander.capture_count == 1U);
+    CHECK(bestiary.last_settled_sequence == 1U);
+    CHECK(probe.calls == 1U);
 }
 
 static void test_invalid_place_never_calls_storage(void)
@@ -340,7 +359,7 @@ static void test_codec_round_trip_and_corruption(void)
     CHECK(!city_bestiary_decode(encoded, sizeof(encoded), &decoded));
 }
 
-static void test_v1_snapshot_migrates_to_ring_window(void)
+static void test_v1_snapshot_migrates_to_high_water(void)
 {
     enum {
         ledger_offset = 16,
@@ -366,27 +385,65 @@ static void test_v1_snapshot_migrates_to_ring_window(void)
     CHECK(city_bestiary_decode(encoded, sizeof(encoded), &migrated));
     CHECK(migrated.schema_version == CITY_BESTIARY_SCHEMA_VERSION);
     CHECK(migrated.charmander.capture_count == 2U);
-    CHECK(migrated.ledger_count == 2U);
-    CHECK(migrated.ledger_next == 2U);
-    CHECK(migrated.encounter_ids[0] == UINT64_C(1001));
-    CHECK(migrated.encounter_ids[1] == UINT64_C(1002));
+    CHECK(migrated.last_settled_sequence == 2U);
 }
 
-static void test_inconsistent_ledger_is_rejected(void)
+static void test_v2_snapshot_migrates_to_high_water(void)
+{
+    enum {
+        ledger_offset = 16,
+        ledger_next_offset = 144,
+        checksum_offset = CITY_BESTIARY_ENCODED_BYTES - 4,
+    };
+    uint8_t encoded[CITY_BESTIARY_ENCODED_BYTES];
+    memset(encoded, 0, sizeof(encoded));
+    write_u32_le(encoded, CITY_BESTIARY_MAGIC);
+    write_u16_le(encoded + 4U, 2U);
+    write_u16_le(encoded + 6U, CITY_SPECIES_CHARMANDER);
+    encoded[8] = CITY_DISCOVERY_CAPTURED;
+    encoded[9] = 16U;
+    write_u16_le(encoded + 10U, 7U);
+    write_u32_le(encoded + 12U, 20U);
+    for (uint8_t i = 0; i < 16U; ++i) {
+        write_u64_le(
+            encoded + ledger_offset + ((size_t)i * 8U),
+            (uint64_t)i + 5U);
+    }
+    encoded[ledger_next_offset] = 4U;
+    write_u32_le(
+        encoded + checksum_offset,
+        crc32(encoded, checksum_offset));
+
+    city_bestiary_t migrated;
+    city_bestiary_init(&migrated);
+    CHECK(city_bestiary_decode(encoded, sizeof(encoded), &migrated));
+    CHECK(migrated.schema_version == CITY_BESTIARY_SCHEMA_VERSION);
+    CHECK(migrated.charmander.capture_count == 20U);
+    CHECK(migrated.last_settled_sequence == 20U);
+
+    uint64_t next_sequence = 0U;
+    CHECK(city_bestiary_next_encounter_sequence(
+        &migrated, &next_sequence));
+    CHECK(next_sequence == 21U);
+}
+
+static void test_inconsistent_high_water_is_rejected(void)
 {
     city_bestiary_t inconsistent;
     city_bestiary_init(&inconsistent);
-    inconsistent.ledger_count = 1U;
-    inconsistent.encounter_ids[0] = 99U;
+    inconsistent.last_settled_sequence = 1U;
 
     uint8_t encoded[CITY_BESTIARY_ENCODED_BYTES];
     CHECK(!city_bestiary_encode(&inconsistent, encoded));
 
     CHECK(city_bestiary_import_legacy_count(&inconsistent, 4U));
-    inconsistent.ledger_count = 1U;
-    inconsistent.ledger_next = 1U;
-    inconsistent.encounter_ids[0] = 99U;
+    inconsistent.last_settled_sequence = 0U;
     CHECK(!city_bestiary_encode(&inconsistent, encoded));
+
+    inconsistent.last_settled_sequence = UINT64_MAX;
+    uint64_t next_sequence = 0U;
+    CHECK(!city_bestiary_next_encounter_sequence(
+        &inconsistent, &next_sequence));
 }
 
 static void test_invalid_arguments_are_rejected(void)
@@ -433,12 +490,14 @@ int main(void)
     test_seen_transition_is_transactional();
     test_legacy_count_import_preserves_unknown_history();
     test_zero_legacy_count_remains_unknown();
-    test_capture_count_outlives_idempotency_window();
-    test_full_window_rolls_back_when_persistence_fails();
+    test_high_water_rejects_all_old_sequences();
+    test_high_water_rolls_back_when_persistence_fails();
+    test_ambiguous_commit_is_safe_after_reload();
     test_invalid_place_never_calls_storage();
     test_codec_round_trip_and_corruption();
-    test_v1_snapshot_migrates_to_ring_window();
-    test_inconsistent_ledger_is_rejected();
+    test_v1_snapshot_migrates_to_high_water();
+    test_v2_snapshot_migrates_to_high_water();
+    test_inconsistent_high_water_is_rejected();
     test_invalid_arguments_are_rejected();
 
     if (failures == 0) {

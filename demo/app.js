@@ -1,5 +1,6 @@
 const STORAGE_KEY = "city-spirits-passport-mvp";
-const CAPTURE_CYCLE_MS = 6000;
+const CAPTURE_ATTEMPT_MS = 4200;
+const CAPTURE_BUDGET_MS = 15000;
 const TARGET_START = 25;
 const TARGET_END = 75;
 const THROW_DURATION_MS = 850;
@@ -34,6 +35,7 @@ let pendingWrite = null;
 let attempts = 3;
 let markerValue = 0;
 let captureStartedAt = 0;
+let captureDeadlineAt = 0;
 let throwStartedAt = 0;
 let throwWillSucceed = false;
 let catchStartedAt = 0;
@@ -832,15 +834,38 @@ function animateThrow(now) {
 }
 
 function markerAt(now) {
-  const phase = ((now - captureStartedAt) % CAPTURE_CYCLE_MS) / CAPTURE_CYCLE_MS;
-  return phase < 0.5 ? phase * 200 : (1 - phase) * 200;
+  const elapsed = Math.max(0, now - captureStartedAt);
+  return Math.min(100, (elapsed / CAPTURE_ATTEMPT_MS) * 100);
 }
 
-function startCapture() {
+function expireCaptureAttempt() {
+  if (state !== "capture") {
+    return;
+  }
+  clearTimers();
+  attempts -= 1;
+  if (attempts === 0 || performance.now() >= captureDeadlineAt) {
+    state = "escaped";
+    render();
+    return;
+  }
+  startCaptureRound();
+  message.textContent = "超时，再瞄准一次";
+}
+
+function startCaptureRound() {
   state = "capture";
   captureStartedAt = performance.now();
   render();
   animationFrame = window.requestAnimationFrame(animateCapture);
+  const remaining = Math.max(0, captureDeadlineAt - captureStartedAt);
+  schedule(expireCaptureAttempt, Math.min(CAPTURE_ATTEMPT_MS, remaining));
+}
+
+function startCapture() {
+  attempts = 3;
+  captureDeadlineAt = performance.now() + CAPTURE_BUDGET_MS;
+  startCaptureRound();
 }
 
 function finishThrow() {
@@ -865,21 +890,23 @@ function finishThrow() {
   }
 
   attempts -= 1;
-  if (attempts === 0) {
+  if (attempts === 0 || performance.now() >= captureDeadlineAt) {
     state = "escaped";
     render();
     return;
   }
 
-  state = "capture";
-  captureStartedAt = performance.now();
-  render();
+  startCaptureRound();
   message.textContent = "差一点，再瞄准一次";
-  animationFrame = window.requestAnimationFrame(animateCapture);
 }
 
 function throwBall() {
-  window.cancelAnimationFrame(animationFrame);
+  clearTimers();
+  if (performance.now() >= captureDeadlineAt) {
+    state = "escaped";
+    render();
+    return;
+  }
   markerValue = markerAt(performance.now());
   throwWillSucceed = markerValue >= TARGET_START && markerValue <= TARGET_END;
   throwStartedAt = performance.now();

@@ -4,9 +4,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define CITY_BESTIARY_SCHEMA_VERSION 2U
+#define CITY_BESTIARY_SCHEMA_VERSION 3U
 #define CITY_BESTIARY_MAGIC UINT32_C(0x31545342)
-#define CITY_BESTIARY_LEDGER_CAPACITY 16U
 #define CITY_BESTIARY_ENCODED_BYTES 156U
 #define CITY_SPECIES_CHARMANDER 4U
 
@@ -33,9 +32,7 @@ typedef struct {
 typedef struct {
     uint16_t schema_version;
     city_creature_record_t charmander;
-    uint8_t ledger_count;
-    uint8_t ledger_next;
-    uint64_t encounter_ids[CITY_BESTIARY_LEDGER_CAPACITY];
+    uint64_t last_settled_sequence;
 } city_bestiary_t;
 
 typedef bool (*city_bestiary_persist_fn)(
@@ -66,9 +63,13 @@ city_bestiary_result_t city_bestiary_mark_seen(
     city_bestiary_persist_fn persist,
     void *context);
 
+bool city_bestiary_next_encounter_sequence(
+    const city_bestiary_t *bestiary,
+    uint64_t *sequence);
+
 city_bestiary_result_t city_bestiary_capture(
     city_bestiary_t *bestiary,
-    uint64_t encounter_id,
+    uint64_t encounter_sequence,
     uint16_t species_id,
     uint16_t place_id,
     city_bestiary_persist_fn persist,

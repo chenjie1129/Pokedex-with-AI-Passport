@@ -90,6 +90,61 @@ static void test_three_misses_end_encounter_without_reward(void)
     CHECK(store.calls == 0U);
 }
 
+static void test_idle_timeouts_consume_three_attempts(void)
+{
+    city_game_session_t session;
+    city_game_init(&session);
+    CHECK(city_game_arrive(&session, 1U, 1003U, 9U) ==
+          CITY_GAME_EVENT_ENCOUNTER_STARTED);
+    CHECK(city_game_begin_capture(&session, 100U) ==
+          CITY_GAME_EVENT_CAPTURE_STARTED);
+    CHECK(session.capture_deadline_ms ==
+          100U + CITY_GAME_CAPTURE_BUDGET_MS);
+
+    CHECK(city_game_tick(
+              &session,
+              100U + CITY_CAPTURE_DURATION_MS - 1U) ==
+          CITY_GAME_EVENT_NONE);
+    uint64_t now = 100U + CITY_CAPTURE_DURATION_MS;
+    CHECK(city_game_tick(&session, now) ==
+          CITY_GAME_EVENT_ATTEMPT_TIMED_OUT);
+    CHECK(session.attempts_remaining == 2U);
+
+    now += CITY_CAPTURE_DURATION_MS;
+    CHECK(city_game_tick(&session, now) ==
+          CITY_GAME_EVENT_ATTEMPT_TIMED_OUT);
+    CHECK(session.attempts_remaining == 1U);
+
+    now += CITY_CAPTURE_DURATION_MS;
+    CHECK(city_game_tick(&session, now) == CITY_GAME_EVENT_ESCAPED);
+    CHECK(session.stage == CITY_GAME_ESCAPED);
+    CHECK(session.attempts_remaining == 0U);
+    CHECK(now - session.capture_started_ms <=
+          CITY_GAME_CAPTURE_BUDGET_MS);
+}
+
+static void test_shared_deadline_forces_escape(void)
+{
+    city_game_session_t session;
+    city_game_init(&session);
+    city_bestiary_t bestiary;
+    city_bestiary_init(&bestiary);
+    game_store_t store = {.succeed = true};
+
+    CHECK(city_game_arrive(&session, 1U, 1004U, 12U) ==
+          CITY_GAME_EVENT_ENCOUNTER_STARTED);
+    CHECK(city_game_begin_capture(&session, 500U) ==
+          CITY_GAME_EVENT_CAPTURE_STARTED);
+    CHECK(city_game_throw(
+              &session,
+              500U + CITY_GAME_CAPTURE_BUDGET_MS,
+              &bestiary,
+              game_persist,
+              &store) == CITY_GAME_EVENT_ESCAPED);
+    CHECK(store.calls == 0U);
+    CHECK(bestiary.charmander.capture_count == 0U);
+}
+
 static void test_storage_failure_is_retryable_and_not_visible(void)
 {
     city_game_session_t session;
@@ -179,6 +234,8 @@ int main(void)
 {
     test_complete_loop_opens_captured_bestiary();
     test_three_misses_end_encounter_without_reward();
+    test_idle_timeouts_consume_three_attempts();
+    test_shared_deadline_forces_escape();
     test_storage_failure_is_retryable_and_not_visible();
     test_duplicate_event_does_not_increment_count();
     test_invalid_transitions_do_not_mutate_state();

@@ -8,6 +8,7 @@
 #include "place_fingerprint.h"
 
 #define CITY_GAME_CAPTURE_ATTEMPTS 3U
+#define CITY_GAME_CAPTURE_BUDGET_MS UINT32_C(15000)
 
 typedef enum {
     CITY_GAME_WAITING_FOR_PLACE = 0,
@@ -22,9 +23,11 @@ typedef enum {
 
 typedef enum {
     CITY_GAME_EVENT_INVALID = 0,
+    CITY_GAME_EVENT_NONE,
     CITY_GAME_EVENT_ENCOUNTER_STARTED,
     CITY_GAME_EVENT_CAPTURE_STARTED,
     CITY_GAME_EVENT_THROW_MISSED,
+    CITY_GAME_EVENT_ATTEMPT_TIMED_OUT,
     CITY_GAME_EVENT_CAPTURED,
     CITY_GAME_EVENT_ESCAPED,
     CITY_GAME_EVENT_STORAGE_FAILED,
@@ -36,9 +39,11 @@ typedef struct {
     city_game_stage_t stage;
     uint16_t place_id;
     uint16_t species_id;
-    uint64_t encounter_id;
+    uint64_t encounter_sequence;
     uint32_t capture_seed;
     uint8_t attempts_remaining;
+    uint64_t capture_started_ms;
+    uint64_t capture_deadline_ms;
     bool reward_pending;
     city_capture_round_t capture_round;
 } city_game_session_t;
@@ -48,7 +53,7 @@ void city_game_init(city_game_session_t *session);
 city_game_event_t city_game_arrive(
     city_game_session_t *session,
     uint16_t place_id,
-    uint64_t encounter_id,
+    uint64_t encounter_sequence,
     uint32_t seed);
 
 city_game_event_t city_game_begin_capture(
@@ -61,6 +66,10 @@ city_game_event_t city_game_throw(
     city_bestiary_t *bestiary,
     city_bestiary_persist_fn persist,
     void *context);
+
+city_game_event_t city_game_tick(
+    city_game_session_t *session,
+    uint64_t now_ms);
 
 city_game_event_t city_game_retry_persist(
     city_game_session_t *session,

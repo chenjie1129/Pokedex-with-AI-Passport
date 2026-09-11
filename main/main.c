@@ -3,6 +3,7 @@
 #include "bsp_display.h"
 #include "bsp_i2c.h"
 #include "capture_engine.h"
+#include "game_loop.h"
 #include "charmander_sprite.h"
 
 #include "esp_log.h"
@@ -61,9 +62,10 @@ static bool s_save_in_progress;
 static uint8_t s_home_selection;
 static uint8_t s_bestiary_selection;
 static write_operation_t s_pending_write;
-static uint64_t s_encounter_id;
+static uint64_t s_encounter_sequence;
 static bool s_throw_hit;
 static city_capture_round_t s_round;
+static uint64_t s_capture_deadline_ms;
 
 static lv_obj_t *s_screen;
 static lv_obj_t *s_field;
@@ -620,17 +622,25 @@ static void set_state(ui_state_t state)
     }
 }
 
-static void start_capture_round(void)
+static void start_capture_round(uint64_t now)
 {
-    city_capture_begin(&s_round, esp_random(), now_ms());
+    city_capture_begin(&s_round, esp_random(), now);
     set_state(UI_AIM);
 }
 
-static uint64_t new_encounter_id(void)
+static void start_capture_session(void)
 {
-    uint64_t encounter_id = ((uint64_t)esp_random() << 32U) |
-                            (uint32_t)esp_timer_get_time();
-    return encounter_id == 0U ? 1U : encounter_id;
+    const uint64_t now = now_ms();
+    s_attempts = CITY_GAME_CAPTURE_ATTEMPTS;
+    s_capture_deadline_ms = now + CITY_GAME_CAPTURE_BUDGET_MS;
+    start_capture_round(now);
+}
+
+static bool new_encounter_sequence(uint64_t *sequence)
+{
+    return s_bestiary_ready &&
+           city_bestiary_next_encounter_sequence(
+               &s_bestiary, sequence);
 }
 
 static bool persist_discovery(void)
@@ -658,14 +668,14 @@ static bool persist_discovery(void)
 
 static bool persist_capture(void)
 {
-    if (!s_bestiary_ready || s_encounter_id == 0U) {
+    if (!s_bestiary_ready || s_encounter_sequence == 0U) {
         ESP_LOGE(TAG, "Bestiary unavailable; capture not persisted");
         return false;
     }
 
     const city_bestiary_result_t result = city_bestiary_capture(
         &s_bestiary,
-        s_encounter_id,
+        s_encounter_sequence,
         CITY_SPECIES_CHARMANDER,
         1U,
         bsp_bestiary_store_persist,
@@ -678,9 +688,9 @@ static bool persist_capture(void)
 
     ESP_LOGI(
         TAG,
-        "CAPTURE_COMMITTED species=004 count=%lu encounter=%016llx result=%s",
+        "CAPTURE_COMMITTED species=004 count=%lu sequence=%llu result=%s",
         (unsigned long)s_bestiary.charmander.capture_count,
-        (unsigned long long)s_encounter_id,
+        (unsigned long long)s_encounter_sequence,
         result == CITY_BESTIARY_APPLIED ? "applied" : "duplicate");
     return true;
 }
@@ -751,20 +761,35 @@ static void load_bestiary(void)
     s_bestiary_ready = true;
     ESP_LOGI(
         TAG,
-        "BESTIARY_READY schema=%u count=%lu ledger=%u migrated=%u",
+        "BESTIARY_READY schema=%u count=%lu sequence=%llu migrated=%u",
         s_bestiary.schema_version,
         (unsigned long)s_bestiary.charmander.capture_count,
-        s_bestiary.ledger_count,
+        (unsigned long long)s_bestiary.last_settled_sequence,
         migrated ? 1U : 0U);
 }
 
 static void update_aim(uint64_t now)
 {
-    uint64_t elapsed = now - s_round.started_ms;
+    if (now >= s_capture_deadline_ms) {
+        s_attempts = 0U;
+        ESP_LOGI(TAG, "CAPTURE_TIMEOUT budget_ms=%u",
+                 CITY_GAME_CAPTURE_BUDGET_MS);
+        set_state(UI_ESCAPED);
+        return;
+    }
+
+    const uint64_t elapsed = now - s_round.started_ms;
     if (elapsed >= s_round.duration_ms) {
-        city_capture_begin(&s_round, esp_random(), now);
-        position_capture_target();
-        elapsed = 0;
+        if (s_attempts > 0U) {
+            --s_attempts;
+        }
+        ESP_LOGI(TAG, "ATTEMPT_TIMEOUT remaining=%u", s_attempts);
+        if (s_attempts == 0U) {
+            set_state(UI_ESCAPED);
+        } else {
+            start_capture_round(now);
+        }
+        return;
     }
 
     uint16_t progress = city_capture_progress_permille(&s_round, now);
@@ -785,7 +810,7 @@ static void update_aim(uint64_t now)
     lv_obj_set_pos(s_ring, (220 - size) / 2, 53 - size / 2);
 }
 
-static void finish_throw(void)
+static void finish_throw(uint64_t now)
 {
     if (s_throw_hit) {
         set_state(UI_CATCHING);
@@ -793,10 +818,10 @@ static void finish_throw(void)
     }
 
     s_attempts -= 1U;
-    if (s_attempts == 0U) {
+    if (s_attempts == 0U || now >= s_capture_deadline_ms) {
         set_state(UI_ESCAPED);
     } else {
-        start_capture_round();
+        start_capture_round(now);
     }
 }
 
@@ -804,7 +829,7 @@ static void update_throw(uint64_t now)
 {
     uint64_t elapsed = now - s_state_started_ms;
     if (elapsed >= THROW_MS) {
-        finish_throw();
+        finish_throw(now);
         return;
     }
 
@@ -831,8 +856,8 @@ static void tick(lv_timer_t *timer)
         now - s_state_started_ms >= 900U &&
         !s_save_in_progress) {
         s_attempts = 3U;
-        s_encounter_id = new_encounter_id();
-        if (!request_bestiary_write(WRITE_DISCOVERY)) {
+        if (!new_encounter_sequence(&s_encounter_sequence) ||
+            !request_bestiary_write(WRITE_DISCOVERY)) {
             set_state(UI_STORAGE_ERROR);
         }
     } else if (s_state == UI_AIM) {
@@ -909,7 +934,7 @@ static void on_button(bsp_btn_t button, bsp_btn_ev_t event, void *user)
 
     switch (s_state) {
     case UI_ENCOUNTER:
-        start_capture_round();
+        start_capture_session();
         break;
     case UI_AIM:
         throw_ball();

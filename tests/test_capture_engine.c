@@ -20,8 +20,8 @@ static void test_seed_produces_bounded_deterministic_target(void)
     CHECK(city_capture_begin(&first, 42U, 1000U));
     CHECK(city_capture_begin(&second, 42U, 9000U));
     CHECK(first.target_center_ms == second.target_center_ms);
-    CHECK(first.target_center_ms >= 4000U);
-    CHECK(first.target_center_ms <= 8000U);
+    CHECK(first.target_center_ms >= 1000U);
+    CHECK(first.target_center_ms <= 3200U);
     CHECK(first.target_half_width_ms == CITY_CAPTURE_WINDOW_HALF_MS);
     CHECK(first.duration_ms == CITY_CAPTURE_DURATION_MS);
 }

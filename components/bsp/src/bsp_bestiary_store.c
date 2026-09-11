@@ -63,13 +63,36 @@ esp_err_t bsp_bestiary_store_load(
 
         uint8_t encoded[CITY_BESTIARY_ENCODED_BYTES];
         err = nvs_get_blob(handle, store->blob_key, encoded, &length);
-        nvs_close(handle);
         if (err != ESP_OK) {
+            nvs_close(handle);
             return err;
         }
-        if (!city_bestiary_decode(encoded, length, bestiary)) {
+
+        city_bestiary_t decoded;
+        uint8_t canonical[CITY_BESTIARY_ENCODED_BYTES];
+        if (!city_bestiary_decode(encoded, length, &decoded) ||
+            !city_bestiary_encode(&decoded, canonical)) {
+            nvs_close(handle);
             return ESP_ERR_INVALID_STATE;
         }
+        if (memcmp(encoded, canonical, sizeof(encoded)) != 0) {
+            err = nvs_set_blob(
+                handle, store->blob_key, canonical, sizeof(canonical));
+            if (err == ESP_OK) {
+                err = nvs_commit(handle);
+            }
+            if (err != ESP_OK) {
+                nvs_close(handle);
+                return err;
+            }
+            if (migrated != NULL) {
+                *migrated = true;
+            }
+            ESP_LOGI(TAG, "Migrated bestiary blob to schema=%u",
+                     decoded.schema_version);
+        }
+        nvs_close(handle);
+        *bestiary = decoded;
         return ESP_OK;
     }
     if (err != ESP_ERR_NVS_NOT_FOUND) {
