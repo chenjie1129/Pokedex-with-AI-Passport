@@ -63,15 +63,56 @@ static uint32_t crc32(const uint8_t *data, size_t length)
     return ~crc;
 }
 
-static void test_catalog_contains_charmander(void)
+static void test_catalog_contains_three_species(void)
 {
+    const city_species_definition_t *bulbasaur =
+        city_species_definition(CITY_SPECIES_BULBASAUR);
     const city_species_definition_t *definition =
         city_species_definition(CITY_SPECIES_CHARMANDER);
+    const city_species_definition_t *squirtle =
+        city_species_definition(CITY_SPECIES_SQUIRTLE);
+    CHECK(bulbasaur != NULL);
+    CHECK(strcmp(bulbasaur->name, "Bulbasaur") == 0);
     CHECK(definition != NULL);
     CHECK(definition->species_id == CITY_SPECIES_CHARMANDER);
     CHECK(strcmp(definition->name, "Charmander") == 0);
     CHECK(strcmp(definition->element, "Fire") == 0);
+    CHECK(squirtle != NULL);
+    CHECK(strcmp(squirtle->name, "Squirtle") == 0);
     CHECK(city_species_definition(999U) == NULL);
+}
+
+static void test_species_stats_track_latest_and_best(void)
+{
+    city_bestiary_t bestiary;
+    city_bestiary_init(&bestiary);
+    persist_probe_t probe = {.succeed = true};
+    const city_creature_stats_t first = {
+        .hp = 47U, .attack = 53U, .defense = 50U};
+    const city_creature_stats_t weaker = {
+        .hp = 46U, .attack = 50U, .defense = 50U};
+
+    CHECK(city_bestiary_capture_with_stats(
+              &bestiary, 1U, CITY_SPECIES_BULBASAUR, 2U, &first,
+              persist_probe, &probe) == CITY_BESTIARY_APPLIED);
+    CHECK(bestiary.bulbasaur.capture_count == 1U);
+    CHECK(bestiary.bulbasaur.latest_stats.attack == 53U);
+    CHECK(bestiary.bulbasaur.best_stats.attack == 53U);
+    CHECK(city_bestiary_capture_with_stats(
+              &bestiary, 2U, CITY_SPECIES_BULBASAUR, 3U, &weaker,
+              persist_probe, &probe) == CITY_BESTIARY_APPLIED);
+    CHECK(bestiary.bulbasaur.capture_count == 2U);
+    CHECK(bestiary.bulbasaur.latest_stats.attack == 50U);
+    CHECK(bestiary.bulbasaur.best_stats.attack == 53U);
+    CHECK(city_bestiary_discovered_count(&bestiary) == 1U);
+    CHECK(city_bestiary_captured_count(&bestiary) == 1U);
+
+    uint8_t encoded[CITY_BESTIARY_ENCODED_BYTES];
+    city_bestiary_t decoded;
+    CHECK(city_bestiary_encode(&bestiary, encoded));
+    CHECK(city_bestiary_decode(encoded, sizeof(encoded), &decoded));
+    CHECK(decoded.bulbasaur.latest_stats.attack == 50U);
+    CHECK(decoded.bulbasaur.best_stats.attack == 53U);
 }
 
 static void test_capture_commits_only_after_persistence(void)
@@ -484,7 +525,8 @@ static void test_invalid_arguments_are_rejected(void)
 
 int main(void)
 {
-    test_catalog_contains_charmander();
+    test_catalog_contains_three_species();
+    test_species_stats_track_latest_and_best();
     test_capture_commits_only_after_persistence();
     test_duplicate_encounter_is_idempotent();
     test_seen_transition_is_transactional();

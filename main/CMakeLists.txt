@@ -1,7 +1,9 @@
 idf_component_register(
     SRCS
         "main.c"
+        "place_scan_coordinator.c"
         "assets/charmander_sprite.c"
+        "assets/starter_sprites.c"
     INCLUDE_DIRS
         "."
         "assets"

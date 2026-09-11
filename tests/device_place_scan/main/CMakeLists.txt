@@ -1,0 +1,19 @@
+idf_component_register(
+    SRCS
+        "device_test.c"
+        "../../../main/place_scan_coordinator.c"
+        "../../../components/bsp/src/bsp_place_identity.c"
+        "../../../components/bsp/src/bsp_place_store.c"
+        "../../../components/bsp/src/bsp_wifi_scan.c"
+    INCLUDE_DIRS
+        "../../../main"
+        "../../../components/bsp/include"
+    REQUIRES
+        city_domain
+        esp_event
+        esp_hw_support
+        esp_netif
+        esp_timer
+        esp_wifi
+        nvs_flash
+)

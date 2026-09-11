@@ -16,6 +16,7 @@ typedef enum {
     CITY_GAME_CAPTURE,
     CITY_GAME_CAPTURED,
     CITY_GAME_ESCAPED,
+    CITY_GAME_ABANDONED,
     CITY_GAME_STORAGE_ERROR,
     CITY_GAME_REWARD_ERROR,
     CITY_GAME_BESTIARY,
@@ -30,6 +31,7 @@ typedef enum {
     CITY_GAME_EVENT_ATTEMPT_TIMED_OUT,
     CITY_GAME_EVENT_CAPTURED,
     CITY_GAME_EVENT_ESCAPED,
+    CITY_GAME_EVENT_ABANDONED,
     CITY_GAME_EVENT_STORAGE_FAILED,
     CITY_GAME_EVENT_REWARD_REJECTED,
     CITY_GAME_EVENT_BESTIARY_OPENED,
@@ -39,6 +41,7 @@ typedef struct {
     city_game_stage_t stage;
     uint16_t place_id;
     uint16_t species_id;
+    city_creature_stats_t stats;
     uint64_t encounter_sequence;
     uint32_t capture_seed;
     uint8_t attempts_remaining;
@@ -56,9 +59,20 @@ city_game_event_t city_game_arrive(
     uint64_t encounter_sequence,
     uint32_t seed);
 
+city_game_event_t city_game_arrive_with_species(
+    city_game_session_t *session,
+    uint16_t place_id,
+    uint16_t species_id,
+    const city_creature_stats_t *stats,
+    uint64_t encounter_sequence,
+    uint32_t seed);
+
 city_game_event_t city_game_begin_capture(
     city_game_session_t *session,
     uint64_t now_ms);
+
+city_game_event_t city_game_abandon(
+    city_game_session_t *session);
 
 city_game_event_t city_game_throw(
     city_game_session_t *session,

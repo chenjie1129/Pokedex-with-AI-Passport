@@ -4,10 +4,13 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define CITY_BESTIARY_SCHEMA_VERSION 3U
+#define CITY_BESTIARY_SCHEMA_VERSION 4U
 #define CITY_BESTIARY_MAGIC UINT32_C(0x31545342)
 #define CITY_BESTIARY_ENCODED_BYTES 156U
+#define CITY_SPECIES_COUNT 3U
+#define CITY_SPECIES_BULBASAUR 1U
 #define CITY_SPECIES_CHARMANDER 4U
+#define CITY_SPECIES_SQUIRTLE 7U
 
 typedef enum {
     CITY_DISCOVERY_UNKNOWN = 0,
@@ -20,18 +23,31 @@ typedef struct {
     const char *name;
     const char *element;
     const char *description;
+    uint8_t base_hp;
+    uint8_t base_attack;
+    uint8_t base_defense;
 } city_species_definition_t;
+
+typedef struct {
+    uint8_t hp;
+    uint8_t attack;
+    uint8_t defense;
+} city_creature_stats_t;
 
 typedef struct {
     uint16_t species_id;
     city_discovery_state_t state;
     uint32_t capture_count;
     uint16_t last_place_id;
+    city_creature_stats_t latest_stats;
+    city_creature_stats_t best_stats;
 } city_creature_record_t;
 
 typedef struct {
     uint16_t schema_version;
+    city_creature_record_t bulbasaur;
     city_creature_record_t charmander;
+    city_creature_record_t squirtle;
     uint64_t last_settled_sequence;
 } city_bestiary_t;
 
@@ -50,6 +66,18 @@ typedef enum {
 
 const city_species_definition_t *city_species_definition(
     uint16_t species_id);
+
+city_creature_record_t *city_bestiary_record(
+    city_bestiary_t *bestiary,
+    uint16_t species_id);
+
+const city_creature_record_t *city_bestiary_record_const(
+    const city_bestiary_t *bestiary,
+    uint16_t species_id);
+
+uint8_t city_bestiary_discovered_count(const city_bestiary_t *bestiary);
+
+uint8_t city_bestiary_captured_count(const city_bestiary_t *bestiary);
 
 void city_bestiary_init(city_bestiary_t *bestiary);
 
@@ -72,6 +100,15 @@ city_bestiary_result_t city_bestiary_capture(
     uint64_t encounter_sequence,
     uint16_t species_id,
     uint16_t place_id,
+    city_bestiary_persist_fn persist,
+    void *context);
+
+city_bestiary_result_t city_bestiary_capture_with_stats(
+    city_bestiary_t *bestiary,
+    uint64_t encounter_sequence,
+    uint16_t species_id,
+    uint16_t place_id,
+    const city_creature_stats_t *stats,
     city_bestiary_persist_fn persist,
     void *context);
 
