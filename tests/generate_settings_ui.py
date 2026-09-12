@@ -49,7 +49,15 @@ static void enter(void) {
 }
 int main(void) {
     s_settings = city_settings_defaults(); enter(); apply_settings_preview();
-    assert(volume == 60 && brightness == 60 && !muted);
+    assert(volume == 60 && brightness == 60 && !muted &&
+           s_settings.language == CITY_LANGUAGE_ENGLISH);
+    handle_settings_button(BSP_BTN_OK, false);
+    assert(s_settings_draft.language == CITY_LANGUAGE_SIMPLIFIED_CHINESE &&
+           s_settings.language == CITY_LANGUAGE_ENGLISH && !writes);
+    handle_settings_button(BSP_BTN_OK, true);
+    assert(s_state == UI_HOME && s_settings.language == CITY_LANGUAGE_ENGLISH);
+    enter();
+    handle_settings_button(BSP_BTN_DOWN, false);
     handle_settings_button(BSP_BTN_OK, false); assert(s_settings_editing);
     handle_settings_button(BSP_BTN_UP, false); assert(volume == 70 && s_settings.volume == 60 && !writes);
     handle_settings_button(BSP_BTN_OK, false); assert(!s_settings_editing && cry == CITY_SPECIES_PIKACHU);
@@ -59,12 +67,13 @@ int main(void) {
     handle_settings_button(BSP_BTN_DOWN, false); assert(brightness == 50);
     handle_settings_button(BSP_BTN_OK, true);
     assert(s_state == UI_HOME && brightness == 60 && volume == 60 && !muted && !cry && !writes);
-    enter(); handle_settings_button(BSP_BTN_UP, false); assert(s_settings_selection == 4);
+    enter(); handle_settings_button(BSP_BTN_UP, false); assert(s_settings_selection == 5);
     handle_settings_button(BSP_BTN_OK, false); assert(s_state == UI_HOME);
-    enter(); s_settings_selection = 3; handle_settings_button(BSP_BTN_OK, false);
+    enter(); s_settings_selection = 4; handle_settings_button(BSP_BTN_OK, false);
     assert(!writes && s_state == UI_HOME); /* Unchanged settings don't wear flash. */
     enter(); s_settings_draft.volume = 20; s_settings_draft.muted = true;
-    s_settings_selection = 3; fail_queue = true; handle_settings_button(BSP_BTN_OK, false);
+    s_settings_draft.language = CITY_LANGUAGE_SIMPLIFIED_CHINESE;
+    s_settings_selection = 4; fail_queue = true; handle_settings_button(BSP_BTN_OK, false);
     assert(s_settings_error && !s_settings_saving && s_state == UI_SETTINGS);
     fail_queue = false; handle_settings_button(BSP_BTN_OK, false);
     assert(s_settings_saving && writes == 1 && s_settings.volume == 60);
@@ -73,7 +82,9 @@ int main(void) {
     assert(s_state == UI_SETTINGS && s_settings_error && s_settings.volume == 60);
     handle_settings_button(BSP_BTN_OK, false); assert(writes == 2 && s_settings_saving);
     result.error = ESP_OK; finish_settings_save(&result);
-    assert(s_state == UI_HOME && !s_settings_saving && s_settings.volume == 20 && s_settings.muted);
+    assert(s_state == UI_HOME && !s_settings_saving && s_settings.volume == 20 &&
+           s_settings.muted &&
+           s_settings.language == CITY_LANGUAGE_SIMPLIFIED_CHINESE);
     assert(volume == 20 && muted);
     s_settings.brightness = 80; s_battery_soc = 5; apply_settings_preview(); assert(brightness == 30);
     s_battery_soc = 90; apply_settings_preview(); assert(brightness == 80);

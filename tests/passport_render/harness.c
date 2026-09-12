@@ -10,12 +10,14 @@
 #include "user_settings.h"
 #include "capture_engine.h"
 #include "game_loop.h"
+#include "ui_strings.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
 #define ESP_LOGI(...) ((void)0)
-static lv_obj_t *s_screen, *s_status, *s_battery_label, *s_field, *s_wild_countdown;
+static lv_obj_t *s_screen, *s_status, *s_battery_label, *s_field;
+static lv_obj_t *s_wild_countdown, *s_place_countdown;
 static lv_obj_t *s_ball, *s_ball_red, *s_ball_band, *s_ball_button, *s_ball_button_inner;
 static uint16_t s_evolution_source_id;
 static uint8_t s_evolution_selection;
@@ -50,6 +52,10 @@ static lv_obj_t *s_meter, *s_target, *s_marker, *s_ring, *s_aim_cue, *s_aim_stat
 typedef enum { WRITE_NONE, WRITE_DISCOVERY, WRITE_CAPTURE, WRITE_WILD, WRITE_WILD_CLEAR,
     WRITE_BUDDY, WRITE_EVOLUTION, WRITE_RECOVER, WRITE_RELEASE } write_operation_t;
 static write_operation_t s_pending_write;
+static city_language_t visible_language(void) { return s_settings_draft.language; }
+static const char *tr(const char *english) { return ui_text(visible_language(), english); }
+static const char *species_name(const city_species_definition_t *definition)
+{ return ui_species_name(visible_language(), definition->name); }
 /* PRODUCTION */
 static uint16_t framebuffer[240 * 320], draw_buffer[240 * 20];
 static void flush(lv_display_t *d, const lv_area_t *a, uint8_t *pixels)
@@ -206,12 +212,12 @@ int main(int argc, char **argv)
     s_home_selection = 3; snapshot("home-settings", 1); s_home_selection = 0;
     s_settings_draft = city_settings_defaults();
     snapshot("settings-default", 13);
-    for (unsigned selected = 0; selected < 5; ++selected) {
+    for (unsigned selected = 0; selected < 6; ++selected) {
         char name[40]; s_settings_selection = selected;
         snprintf(name, sizeof(name), "settings-row-%u", selected); snapshot(name, 13);
     }
-    s_settings_selection = 2; s_settings_editing = true; snapshot("settings-light-edit", 13);
-    s_settings_selection = 0; snapshot("settings-volume-edit", 13);
+    s_settings_selection = 3; s_settings_editing = true; snapshot("settings-light-edit", 13);
+    s_settings_selection = 1; snapshot("settings-volume-edit", 13);
     s_settings_draft.volume = 100; s_settings_draft.brightness = 100;
     snapshot("settings-max", 13);
     s_settings_draft.muted = true; snapshot("settings-muted", 13);
@@ -221,6 +227,16 @@ int main(int argc, char **argv)
     s_settings_load_error = true; snapshot("settings-load-error", 13); s_settings_load_error = false;
     s_settings_saving = true; snapshot("settings-saving", 13); s_settings_saving = false;
     s_battery_soc = 5; snapshot("settings-low-battery", 13); s_battery_soc = 95;
+    s_settings_draft = city_settings_defaults();
+    s_settings_draft.language = CITY_LANGUAGE_SIMPLIFIED_CHINESE;
+    s_home_selection = 3; snapshot("zh-home", 1);
+    for (unsigned selected = 0; selected < 6; ++selected) {
+        char name[40]; s_settings_selection = selected;
+        snprintf(name, sizeof(name), "zh-settings-row-%u", selected); snapshot(name, 13);
+    }
+    snapshot("zh-passport", 0);
+    snapshot("zh-encounter", 2);
+    snapshot("zh-capture-guide", 14);
     /* Information is readable even when an encounter has not been caught. */
     for (unsigned i = 0; i < CITY_SPECIES_COUNT; ++i) {
         assert(city_bestiary_mark_seen(&s_bestiary, city_species_id_at(i), persist, NULL) == CITY_BESTIARY_APPLIED);

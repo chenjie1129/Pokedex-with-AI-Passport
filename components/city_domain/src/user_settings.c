@@ -3,15 +3,25 @@
 
 city_settings_t city_settings_defaults(void)
 {
-    return (city_settings_t){CITY_SETTINGS_DEFAULT_PERCENT, CITY_SETTINGS_DEFAULT_PERCENT, false};
+    return (city_settings_t){
+        CITY_SETTINGS_DEFAULT_PERCENT,
+        CITY_SETTINGS_DEFAULT_PERCENT,
+        false,
+        CITY_LANGUAGE_ENGLISH,
+    };
 }
 bool city_settings_valid(const city_settings_t *s)
 {
-    return s && s->volume <= 100 && s->brightness >= 10 && s->brightness <= 100;
+    return s && s->volume <= 100 && s->brightness >= 10 &&
+           s->brightness <= 100 &&
+           (s->language == CITY_LANGUAGE_ENGLISH ||
+            s->language == CITY_LANGUAGE_SIMPLIFIED_CHINESE);
 }
 bool city_settings_equal(const city_settings_t *a, const city_settings_t *b)
 {
-    return a && b && a->volume == b->volume && a->brightness == b->brightness && a->muted == b->muted;
+    return a && b && a->volume == b->volume &&
+           a->brightness == b->brightness && a->muted == b->muted &&
+           a->language == b->language;
 }
 city_settings_t city_settings_adjust(city_settings_t s, bool brightness, int delta)
 {
@@ -31,6 +41,13 @@ city_settings_t city_settings_adjust(city_settings_t s, bool brightness, int del
 city_settings_t city_settings_toggle_mute(city_settings_t s)
 {
     s.muted = !s.muted;
+    return s;
+}
+city_settings_t city_settings_toggle_language(city_settings_t s)
+{
+    s.language = s.language == CITY_LANGUAGE_SIMPLIFIED_CHINESE
+                     ? CITY_LANGUAGE_ENGLISH
+                     : CITY_LANGUAGE_SIMPLIFIED_CHINESE;
     return s;
 }
 uint8_t city_settings_backlight(const city_settings_t *s, bool off, bool low)
@@ -53,7 +70,13 @@ bool city_settings_encode(const city_settings_t *s, uint8_t bytes[CITY_SETTINGS_
 {
     if (!city_settings_valid(s) || !bytes) return false;
     memcpy(bytes, "SET1", 4);
-    bytes[4] = 1; bytes[5] = s->volume; bytes[6] = s->brightness; bytes[7] = s->muted;
+    bytes[4] = 1;
+    bytes[5] = s->volume;
+    bytes[6] = s->brightness;
+    bytes[7] = (uint8_t)((s->muted ? 1U : 0U) |
+                         (s->language == CITY_LANGUAGE_SIMPLIFIED_CHINESE
+                              ? 2U
+                              : 0U));
     const uint32_t crc = checksum(bytes, 8);
     for (unsigned i = 0; i < 4; ++i) bytes[8 + i] = (uint8_t)(crc >> (8 * i));
     return true;
@@ -61,10 +84,17 @@ bool city_settings_encode(const city_settings_t *s, uint8_t bytes[CITY_SETTINGS_
 bool city_settings_decode(const uint8_t *bytes, size_t length, city_settings_t *s)
 {
     if (!bytes || !s || length != CITY_SETTINGS_BYTES || memcmp(bytes, "SET1", 4) ||
-        bytes[4] != 1 || bytes[7] > 1) return false;
+        bytes[4] != 1 || bytes[7] > 3) return false;
     uint32_t crc = 0;
     for (unsigned i = 0; i < 4; ++i) crc |= (uint32_t)bytes[8 + i] << (8 * i);
-    city_settings_t next = {bytes[5], bytes[6], bytes[7] != 0};
+    city_settings_t next = {
+        bytes[5],
+        bytes[6],
+        (bytes[7] & 1U) != 0U,
+        (bytes[7] & 2U) != 0U
+            ? CITY_LANGUAGE_SIMPLIFIED_CHINESE
+            : CITY_LANGUAGE_ENGLISH,
+    };
     if (crc != checksum(bytes, 8) || !city_settings_valid(&next)) return false;
     *s = next;
     return true;

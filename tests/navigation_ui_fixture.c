@@ -44,6 +44,8 @@ static bool bsp_lvgl_lock(unsigned ms) { (void)ms; return true; }
 static void bsp_lvgl_unlock(void) {}
 static void bsp_display_backlight(unsigned brightness) { (void)brightness; }
 static const city_settings_t *visible_settings(void) { return &s_settings; }
+static city_language_t visible_language(void) { return CITY_LANGUAGE_ENGLISH; }
+static const char *tr(const char *text) { return text; }
 static void lv_timer_set_period(void *timer, unsigned ms) { (void)timer; (void)ms; }
 static void lv_obj_set_x(void *o, int x) { (void)o; (void)x; }
 static void lv_obj_set_size(void *o, int x, int y) { (void)o; (void)x; (void)y; }

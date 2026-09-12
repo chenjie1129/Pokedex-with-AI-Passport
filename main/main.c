@@ -14,6 +14,7 @@
 #include "place_scan_coordinator.h"
 #include "pokemon_audio.h"
 #include "bsp_settings_store.h"
+#include "ui_strings.h"
 #include "user_settings.h"
 #ifdef CITY_AUDIO_RENDER_SMOKE
 #include "pokemon_cries.h"
@@ -139,6 +140,21 @@ static const city_settings_t *visible_settings(void)
     return s_state == UI_SETTINGS ? &s_settings_draft : &s_settings;
 }
 
+static city_language_t visible_language(void)
+{
+    return visible_settings()->language;
+}
+
+static const char *tr(const char *english)
+{
+    return ui_text(visible_language(), english);
+}
+
+static const char *species_name(const city_species_definition_t *definition)
+{
+    return ui_species_name(visible_language(), definition->name);
+}
+
 static uint8_t s_passport_page;
 static uint8_t s_encounter_selection;
 static city_discovery_state_t s_encounter_previous_state;
@@ -243,7 +259,7 @@ static lv_obj_t *label_at(
     int width)
 {
     lv_obj_t *label = lv_label_create(parent);
-    lv_label_set_text(label, text);
+    lv_label_set_text(label, tr(text));
     lv_obj_set_style_text_font(label, font, 0);
     lv_obj_set_style_text_color(label, lv_color_hex(color), 0);
     lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
@@ -410,11 +426,11 @@ static void build_home(void)
         lv_obj_t *image = create_species(s_screen, buddy->species_id, true);
         lv_obj_set_pos(image, 12, 72);
         const city_species_definition_t *definition = city_species_definition(buddy->species_id);
-        label_at(s_screen, definition->name, &city_font_14, COLOR_INK, 99, 77, 131);
-        char text[32];
-        snprintf(text, sizeof(text), "Health %u/%u", buddy->current_hp, city_bestiary_max_hp(buddy));
+        label_at(s_screen, species_name(definition), &city_font_14, COLOR_INK, 99, 77, 131);
+        char text[96];
+        snprintf(text, sizeof(text), tr("Health %u/%u"), buddy->current_hp, city_bestiary_max_hp(buddy));
         label_at(s_screen, text, &city_font_14, COLOR_GRASS_D, 94, 98, 146);
-        snprintf(text, sizeof(text), "Friendship %u", buddy->friendship);
+        snprintf(text, sizeof(text), tr("Friendship %u"), buddy->friendship);
         label_at(s_screen, text, &city_font_14, COLOR_GRASS_D, 94, 116, 146);
         label_at(s_screen, city_evolution_ready(&s_bestiary, buddy->species_id) ? "Ready to evolve!" : buddy->friendship >= 100 ? "Best buddies!" : "Go out together",
                  &city_font_14, COLOR_MUTED, 94, 135, 140);
@@ -443,24 +459,35 @@ static void build_home(void)
 static void build_settings(void)
 {
     const char *action = s_settings_saving ? "Saving..." : s_settings_editing
-        ? (s_settings_selection == 2
+        ? (s_settings_selection == 3
            ? LV_SYMBOL_UP " Brighter / " LV_SYMBOL_DOWN " Dimmer\nPress OK when done"
            : LV_SYMBOL_UP " Louder / " LV_SYMBOL_DOWN " Softer\nPress OK when done") : LV_SYMBOL_UP " / " LV_SYMBOL_DOWN " Choose\nPress OK to pick";
-    s_screen = new_screen("Sound & screen", action);
-    for (unsigned i = 0; i < 5; ++i) {
+    s_screen = new_screen("Settings", action);
+    for (unsigned i = 0; i < 6; ++i) {
         lv_obj_t *row = lv_obj_create(s_screen);
         const bool selected = i == s_settings_selection;
         style_plain(row, selected ? 0xE4F4E8 : 0xF7FBF8);
         lv_obj_set_style_radius(row, 8, 0);
         lv_obj_set_style_border_width(row, 1, 0);
         lv_obj_set_style_border_color(row, lv_color_hex(selected ? COLOR_GREEN : 0xD5E0DD), 0);
-        lv_obj_set_pos(row, 10, 78 + i * 32);
-        lv_obj_set_size(row, 220, 28);
-        char text[40];
-        if (i == 0) snprintf(text, sizeof(text), "Sound volume  %u%%", s_settings_draft.volume);
-        else if (i == 1) snprintf(text, sizeof(text), "Quiet mode  %s", s_settings_draft.muted ? "On" : "Off");
-        else if (i == 2) snprintf(text, sizeof(text), "Screen light  %u%%", s_settings_draft.brightness);
-        else snprintf(text, sizeof(text), "%s", i == 3 ? "Save and go back" : "Undo and go back");
+        lv_obj_set_pos(row, 10, 70 + i * 28);
+        lv_obj_set_size(row, 220, 26);
+        char text[96];
+        if (i == 0) {
+            snprintf(
+                text, sizeof(text), tr("Language  %s"),
+                tr(s_settings_draft.language == CITY_LANGUAGE_SIMPLIFIED_CHINESE
+                       ? "Simplified Chinese"
+                       : "English"));
+        } else if (i == 1) {
+            snprintf(text, sizeof(text), tr("Sound volume  %u%%"), s_settings_draft.volume);
+        } else if (i == 2) {
+            snprintf(text, sizeof(text), tr("Quiet mode  %s"), tr(s_settings_draft.muted ? "On" : "Off"));
+        } else if (i == 3) {
+            snprintf(text, sizeof(text), tr("Screen light  %u%%"), s_settings_draft.brightness);
+        } else {
+            snprintf(text, sizeof(text), "%s", tr(i == 4 ? "Save and go back" : "Undo and go back"));
+        }
         label_at(row, text, &city_font_14, COLOR_INK, 8, 5, 181);
         label_at(row, selected ? (s_settings_editing ? "*" : ">") : "",
                  &city_font_14, COLOR_CORAL, 195, 5, 16);
@@ -469,7 +496,7 @@ static void build_settings(void)
         s_settings_load_error ? "Please save these settings" :
         city_battery_low(s_battery_soc) ? "Low battery: light at 30%" :
         s_settings_draft.muted || s_settings_draft.volume == 0 ? "Sound is off" :
-        s_settings_editing && s_settings_selection == 0 ? "Press OK to hear it" : "Save to keep your changes";
+        s_settings_editing && s_settings_selection == 1 ? "Press OK to hear it" : "Save to keep your changes";
     label_at(s_screen, message, &city_font_14, COLOR_MUTED, 10, 242, 220);
     label_at(s_screen, "Hold OK to undo changes", &city_font_14, COLOR_MUTED, 10, 264, 220);
 }
@@ -482,16 +509,16 @@ static void build_passport(void)
         have_places ? &stamps : NULL, s_bestiary_ready ? &s_bestiary : NULL);
     if (s_passport_page >= progress.pages) s_passport_page = 0;
     s_screen = new_screen("My stamps", LV_SYMBOL_UP " / " LV_SYMBOL_DOWN " Turn page\nPress OK to go home");
-    char text[64];
+    char text[128];
     if (progress.places_ready)
-        snprintf(text, sizeof(text), "Stamps %u/%u   Page %u/%u", progress.places,
+        snprintf(text, sizeof(text), tr("Stamps %u/%u   Page %u/%u"), progress.places,
                  CITY_PLACE_MAX_COUNT, s_passport_page + 1, progress.pages);
-    else snprintf(text, sizeof(text), "Could not open your stamps");
+    else snprintf(text, sizeof(text), "%s", tr("Could not open your stamps"));
     label_at(s_screen, text, &city_font_14, COLOR_INK, 10, 77, 220);
     if (progress.collection_ready)
-        snprintf(text, sizeof(text), "Found %u/%u   Have %u/%u", progress.discovered,
+        snprintf(text, sizeof(text), tr("Found %u/%u   Have %u/%u"), progress.discovered,
                  CITY_SPECIES_COUNT, progress.captured, CITY_SPECIES_COUNT);
-    else snprintf(text, sizeof(text), "Could not open Pokédex");
+    else snprintf(text, sizeof(text), "%s", tr("Could not open Pokédex"));
     label_at(s_screen, text, &city_font_14, COLOR_MUTED, 10, 101, 220);
     for (unsigned slot = 0; slot < CITY_PASSPORT_STAMPS_PER_PAGE; ++slot) {
         const unsigned index = s_passport_page * CITY_PASSPORT_STAMPS_PER_PAGE + slot;
@@ -503,25 +530,27 @@ static void build_passport(void)
         lv_obj_set_style_border_color(stamp, lv_color_hex(earned ? COLOR_GRASS_D : 0xD5E0DD), 0);
         lv_obj_set_size(stamp, 104, 32);
         lv_obj_set_pos(stamp, 10 + (slot % 2) * 116, 130 + (slot / 2) * 38);
-        if (earned) snprintf(text, sizeof(text), "Place %02u", stamps.place_ids[index]);
+        if (earned) snprintf(text, sizeof(text), tr("Place %02u"), stamps.place_ids[index]);
         else snprintf(text, sizeof(text), "--");
         label_at(stamp, text, &city_font_14,
                  earned ? COLOR_GRASS_D : COLOR_MUTED, 2, 7, 96);
     }
     switch (progress.goal) {
     case CITY_PASSPORT_FIRST_CAPTURE:
-        snprintf(text, sizeof(text), "Next: catch a Pokemon"); break;
+        snprintf(text, sizeof(text), "%s", tr("Next: catch a Pokemon")); break;
     case CITY_PASSPORT_NEW_PLACE:
-        snprintf(text, sizeof(text), "Next: visit %u places", progress.target); break;
+        snprintf(text, sizeof(text), tr("Next: visit %u places"), progress.target); break;
     case CITY_PASSPORT_CATCH_SPECIES:
-        snprintf(text, sizeof(text), "Next: %s %s", progress.target_seen ? "catch" : "find",
-                 city_species_definition(progress.target)->name); break;
+        snprintf(text, sizeof(text), tr("Next: %s %s"),
+                 tr(progress.target_seen ? "catch" : "find"),
+                 species_name(city_species_definition(progress.target))); break;
     case CITY_PASSPORT_EVOLVE_SPECIES:
-        snprintf(text, sizeof(text), "Next: evolve %s", city_species_definition(progress.target)->name); break;
+        snprintf(text, sizeof(text), tr("Next: evolve %s"),
+                 species_name(city_species_definition(progress.target))); break;
     case CITY_PASSPORT_COMPLETE:
-        snprintf(text, sizeof(text), "You found them all!"); break;
+        snprintf(text, sizeof(text), "%s", tr("You found them all!")); break;
     default:
-        snprintf(text, sizeof(text), "Could not open your saves"); break;
+        snprintf(text, sizeof(text), "%s", tr("Could not open your saves")); break;
     }
     label_at(s_screen, text, &city_font_14, COLOR_INK, 5, META_Y, 230);
     ESP_LOGI(TAG, "PASSPORT places=%u seen=%u caught=%u page=%u/%u goal=%u target=%u ready=%u",
@@ -567,7 +596,7 @@ static void build_place_pending(void)
         s_field, "Again in 20s", &city_font_20,
         COLOR_INK, 10, 61, 200);
     label_at(
-        s_screen, "Checking this place once more",
+        s_screen, "Checking this place again",
         &city_font_14, COLOR_MUTED, 10, META_Y, 220);
 }
 
@@ -575,13 +604,14 @@ static void build_encounter(void)
 {
     const city_species_definition_t *definition =
         city_species_definition(s_current_species_id);
-    char title[32];
-    char meta[40];
-    snprintf(title, sizeof(title), "Found %s", definition->name);
+    char title[96];
+    char meta[96];
+    snprintf(title, sizeof(title), tr("Found %s"), species_name(definition));
     snprintf(
-        meta, sizeof(meta), "Type: %s", definition->type_label);
+        meta, sizeof(meta), tr("Type: %s"),
+        ui_species_type(visible_language(), definition->type_label));
     if (s_new_place_stamp)
-        snprintf(meta, sizeof(meta), "New stamp! Place %02u", s_current_place_id);
+        snprintf(meta, sizeof(meta), tr("New stamp! Place %02u"), s_current_place_id);
     s_screen = new_screen(title, LV_SYMBOL_UP " / " LV_SYMBOL_DOWN " Choose\nPress OK to pick");
     s_field = create_field(s_screen);
     create_species(s_field, s_current_species_id, false);
@@ -646,8 +676,8 @@ static void build_aim(void)
 {
     const city_species_definition_t *definition =
         city_species_definition(s_current_species_id);
-    char title[32];
-    snprintf(title, sizeof(title), "Catch %s", definition->name);
+    char title[96];
+    snprintf(title, sizeof(title), tr("Catch %s"), species_name(definition));
     s_screen = new_screen(title, "Press OK to throw");
     s_field = create_field(s_screen);
     create_species(s_field, s_current_species_id, true);
@@ -680,8 +710,8 @@ static void build_aim(void)
     create_ball(s_field, 86, 99, 48);
     s_aim_cue = label_at(s_field, "WAIT", &city_font_14,
                         COLOR_INK, 165, 30, 50);
-    char status[40];
-    snprintf(status, sizeof(status), "%u tries left. Wait for NOW", s_attempts);
+    char status[96];
+    snprintf(status, sizeof(status), tr("%u tries left. Wait for NOW"), s_attempts);
     s_aim_status = label_at(s_screen, status, &city_font_14,
                            COLOR_INK, 5, 247, 230);
     label_at(s_screen, "Hold OK to stop", &city_font_14,
@@ -713,23 +743,23 @@ static void build_captured(void)
     s_field = create_field(s_screen);
     lv_obj_set_height(s_field, 118);
     create_species(s_field, s_current_species_id, true);
-    label_at(s_field, city_species_definition(s_current_species_id)->name,
+    label_at(s_field, species_name(city_species_definition(s_current_species_id)),
              &city_font_14, COLOR_INK, 5, 94, 210);
-    char text[48];
-    if (s_new_place_stamp) snprintf(text, sizeof(text), "New stamp! Place %02u", s_current_place_id);
-    else snprintf(text, sizeof(text), "Saved in your Pokédex");
+    char text[96];
+    if (s_new_place_stamp) snprintf(text, sizeof(text), tr("New stamp! Place %02u"), s_current_place_id);
+    else snprintf(text, sizeof(text), "%s", tr("Saved in your Pokédex"));
     label_at(s_screen, text, &city_font_14, COLOR_GRASS_D, 5, 203, 230);
     if (s_bestiary.buddy_species_id)
-        snprintf(text, sizeof(text), "Friendship +%u", s_capture_bond_gain);
-    else snprintf(text, sizeof(text), "Pick your new buddy!");
+        snprintf(text, sizeof(text), tr("Friendship +%u"), s_capture_bond_gain);
+    else snprintf(text, sizeof(text), "%s", tr("Pick your new buddy!"));
     label_at(s_screen, text, &city_font_14, COLOR_INK, 5, 226, 230);
     city_passport_stamps_t stamps;
     const bool ready = place_scan_coordinator_passport(&stamps);
     const city_passport_progress_t progress = city_passport_progress(ready ? &stamps : NULL, &s_bestiary);
-    if (!s_bestiary.buddy_species_id) snprintf(text, sizeof(text), "Next: pick a buddy");
+    if (!s_bestiary.buddy_species_id) snprintf(text, sizeof(text), "%s", tr("Next: pick a buddy"));
     else if (progress.goal == CITY_PASSPORT_NEW_PLACE)
-        snprintf(text, sizeof(text), "Next: visit %u places", progress.target);
-    else snprintf(text, sizeof(text), "Next: look at My stamps");
+        snprintf(text, sizeof(text), tr("Next: visit %u places"), progress.target);
+    else snprintf(text, sizeof(text), "%s", tr("Next: look at My stamps"));
     label_at(s_screen, text, &city_font_14, COLOR_MUTED, 5, 255, 230);
 }
 
@@ -746,8 +776,8 @@ static void build_abandoned(void)
 {
     const city_species_definition_t *definition =
         city_species_definition(s_current_species_id);
-    char message[48];
-    snprintf(message, sizeof(message), "See you, %s!", definition->name);
+    char message[96];
+    snprintf(message, sizeof(message), tr("See you, %s!"), species_name(definition));
     s_screen = new_screen("You left it alone", "Press OK to go home");
     s_field = create_field(s_screen);
     create_species(s_field, s_current_species_id, false);
@@ -778,9 +808,9 @@ static void build_bestiary_list(void)
         const uint16_t id = city_species_id_at(i);
         const city_creature_record_t *record = city_bestiary_record_const(&s_bestiary, id);
         const city_species_definition_t *definition = city_species_definition(id);
-        char name[40];
+        char name[96];
         snprintf(name, sizeof(name), "%03u %s", id,
-                 record->state == CITY_DISCOVERY_UNKNOWN ? "???" : definition->name);
+                 record->state == CITY_DISCOVERY_UNKNOWN ? "???" : species_name(definition));
         lv_obj_t *label = label_at(row, name, &city_font_14, COLOR_INK, 7, 3, 132);
         lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_LEFT, 0);
         const char *status = record->evolution_obtained ? "Evolved" : record->state == CITY_DISCOVERY_CAPTURED ? "Caught" :
@@ -788,15 +818,15 @@ static void build_bestiary_list(void)
         label_at(row, status, &city_font_14,
                  record->state == CITY_DISCOVERY_CAPTURED ? COLOR_GRASS_D : COLOR_MUTED, 145, 3, 68);
         if (record->state == CITY_DISCOVERY_CAPTURED) {
-            char count[32];
-            if (record->evolution_obtained) snprintf(count, sizeof(count), "Grew by evolving");
-            else snprintf(count, sizeof(count), "Caught %lu", (unsigned long)record->capture_count);
+            char count[96];
+            if (record->evolution_obtained) snprintf(count, sizeof(count), "%s", tr("Grew by evolving"));
+            else snprintf(count, sizeof(count), tr("Caught %lu"), (unsigned long)record->capture_count);
             label = label_at(row, count, &city_font_14, COLOR_MUTED, 7, 21, 198);
             lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_LEFT, 0);
         }
     }
-    char progress[48];
-    snprintf(progress, sizeof(progress), "Found %u/%u   Page %u/%u",
+    char progress[96];
+    snprintf(progress, sizeof(progress), tr("Found %u/%u   Page %u/%u"),
              city_bestiary_discovered_count(&s_bestiary), CITY_SPECIES_COUNT,
              s_bestiary_selection / 4U + 1U, (CITY_SPECIES_COUNT + 4U) / 4U);
     label_at(s_screen, progress, &city_font_14, COLOR_MUTED, 5, META_Y, 230);
@@ -823,10 +853,10 @@ static void build_bestiary_detail(void)
         city_bestiary_record_const(&s_bestiary, species_id);
     const city_species_definition_t *definition =
         city_species_definition(species_id);
-    char title[32];
+    char title[96];
     snprintf(
         title, sizeof(title), "No.%03u %s",
-        species_id, definition->name);
+        species_id, species_name(definition));
     s_screen = new_screen(title, record->state == CITY_DISCOVERY_CAPTURED ? LV_SYMBOL_UP " Make buddy  " LV_SYMBOL_DOWN " Back\nPress OK for choices" : "Press OK to go back");
     s_field = create_field(s_screen);
     lv_obj_set_height(s_field, 82);
@@ -851,28 +881,29 @@ static void build_bestiary_detail(void)
         tag, record->evolution_obtained ? "Evolved" : record->state == CITY_DISCOVERY_CAPTURED ? "Caught" : "Found",
         &city_font_14, 0xFFFFFF, 3, 5, 72);
 
-    char count[32];
+    char count[96];
     snprintf(
-        count, sizeof(count), "Have %lu",
+        count, sizeof(count), tr("Have %lu"),
         (unsigned long)record->capture_count);
     lv_obj_t *count_label = label_at(
         s_field, count, &city_font_14, COLOR_INK, 118, 34, 96);
     lv_obj_set_style_text_align(count_label, LV_TEXT_ALIGN_LEFT, 0);
 
-    char place[40];
+    char place[96];
     if (record->last_place_id == UINT16_MAX) {
-        snprintf(place, sizeof(place), "Place --");
+        snprintf(place, sizeof(place), "%s", tr("Place --"));
     } else if (record->last_place_id == CITY_WILD_PLACE_ID) {
-        snprintf(place, sizeof(place), "Wild");
+        snprintf(place, sizeof(place), "%s", tr("Wild"));
     } else {
-        snprintf(place, sizeof(place), "Place %02u", record->last_place_id);
+        snprintf(place, sizeof(place), tr("Place %02u"), record->last_place_id);
     }
     lv_obj_t *place_label = label_at(
         s_field, place, &city_font_14, COLOR_MUTED, 118, 58, 96);
     lv_obj_set_style_text_align(place_label, LV_TEXT_ALIGN_LEFT, 0);
 
-    char type_text[40];
-    snprintf(type_text, sizeof(type_text), "Type: %s", definition->type_label);
+    char type_text[96];
+    snprintf(type_text, sizeof(type_text), tr("Type: %s"),
+             ui_species_type(visible_language(), definition->type_label));
     label_at(s_screen, type_text, &city_font_14,
              COLOR_GRASS_D, 10, 158, 220);
 
@@ -884,17 +915,19 @@ static void build_bestiary_detail(void)
     lv_obj_set_style_text_line_space(description, 0, 0);
     lv_obj_set_size(description, 220, 48);
     lv_label_set_long_mode(description, LV_LABEL_LONG_WRAP);
-    lv_label_set_text(description, definition->description);
+    lv_label_set_text(
+        description,
+        ui_species_description(visible_language(), definition->description));
     lv_obj_set_pos(description, 10, 178);
 
     if (record->state == CITY_DISCOVERY_CAPTURED) {
-        char latest[40];
-        char best[40];
+        char latest[96];
+        char best[96];
         snprintf(
-            latest, sizeof(latest), "Strongest: Health %u/%u",
+            latest, sizeof(latest), tr("Strongest: Health %u/%u"),
             record->current_hp, city_bestiary_max_hp(record));
         snprintf(
-            best, sizeof(best), "Attack %u   Defense %u",
+            best, sizeof(best), tr("Attack %u   Defense %u"),
             record->best_stats.attack,
             record->best_stats.defense);
         lv_obj_t *latest_label = label_at(
@@ -906,11 +939,11 @@ static void build_bestiary_detail(void)
             COLOR_MUTED, 10, 247, 220);
         lv_obj_set_style_text_align(best_label, LV_TEXT_ALIGN_LEFT, 0);
     }
-    char buddy_text[48];
+    char buddy_text[96];
     if (record->state == CITY_DISCOVERY_CAPTURED)
-        snprintf(buddy_text, sizeof(buddy_text), "Friendship %u/100%s", record->friendship,
-                 s_bestiary.buddy_species_id == species_id ? "  Buddy" : "");
-    else snprintf(buddy_text, sizeof(buddy_text), "Try to catch this Pokemon");
+        snprintf(buddy_text, sizeof(buddy_text), tr("Friendship %u/100%s"), record->friendship,
+                 s_bestiary.buddy_species_id == species_id ? tr("  Buddy") : "");
+    else snprintf(buddy_text, sizeof(buddy_text), "%s", tr("Try to catch this Pokemon"));
     label_at(s_screen, buddy_text, &city_font_14, COLOR_MUTED, 10, 265, 220);
 }
 
@@ -924,16 +957,16 @@ static void build_pokemon_actions(void)
     if (full && s_action_selection == 0U) s_action_selection = 1U;
     s_screen = new_screen("Buddy choices", LV_SYMBOL_UP " / " LV_SYMBOL_DOWN " Choose\nPress OK to pick");
     label_at(s_screen, "Your strongest one", &city_font_14, COLOR_MUTED, 10, 76, 220);
-    char health[32];
-    snprintf(health, sizeof(health), "Health %u/%u", record->current_hp, city_bestiary_max_hp(record));
+    char health[96];
+    snprintf(health, sizeof(health), tr("Health %u/%u"), record->current_hp, city_bestiary_max_hp(record));
     label_at(s_screen, health, &city_font_14, COLOR_INK, 10, 96, 220);
     label_at(s_screen, full ? "Health is full" : "Needs healing", &city_font_14,
              full ? COLOR_GRASS_D : COLOR_CORAL, 10, 116, 220);
     for (uint8_t i = 0; i < count; ++i) {
         const char *item = i == 0U ? "Heal" : i == 1U ? "My Pokemon" :
             has_evolution && i == 2U ? "Evolve" : i == count - 2U ? "Let go" : "Go back";
-        char text[32];
-        snprintf(text, sizeof(text), "%s%s", s_action_selection == i ? "> " : "", item);
+        char text[96];
+        snprintf(text, sizeof(text), "%s%s", s_action_selection == i ? "> " : "", tr(item));
         label_at(s_screen, text, &city_font_14,
                  full && i == 0U ? COLOR_MUTED : s_action_selection == i ? COLOR_GRASS_D : COLOR_INK,
                  12, 145 + i * 26, 216);
@@ -946,22 +979,22 @@ static void build_owned_detail(void)
     const uint16_t count = city_bestiary_owned_count(&s_bestiary, species_id);
     if (s_owned_selection >= count) s_owned_selection = 0U;
     const city_owned_pokemon_t *owned = city_bestiary_owned_at(&s_bestiary, species_id, s_owned_selection);
-    char text[48];
-    snprintf(text, sizeof(text), "My %s", city_species_definition(species_id)->name);
+    char text[96];
+    snprintf(text, sizeof(text), tr("My %s"), species_name(city_species_definition(species_id)));
     s_screen = new_screen(text, LV_SYMBOL_UP " / " LV_SYMBOL_DOWN " Pick Pokemon\nPress OK to go back");
     lv_obj_t *image = create_species(s_screen, species_id, true);
     lv_obj_set_pos(image, 79, 78);
     if (!owned) return;
-    snprintf(text, sizeof(text), "Pokemon %u of %u", s_owned_selection + 1U, count);
+    snprintf(text, sizeof(text), tr("Pokemon %u of %u"), s_owned_selection + 1U, count);
     label_at(s_screen, text, &city_font_14, COLOR_INK, 10, 166, 220);
-    snprintf(text, sizeof(text), "Health %u/%u", owned->current_hp, owned->stats.hp);
+    snprintf(text, sizeof(text), tr("Health %u/%u"), owned->current_hp, owned->stats.hp);
     label_at(s_screen, text, &city_font_14, COLOR_GRASS_D, 10, 188, 220);
-    snprintf(text, sizeof(text), "Attack %u   Defense %u", owned->stats.attack, owned->stats.defense);
+    snprintf(text, sizeof(text), tr("Attack %u   Defense %u"), owned->stats.attack, owned->stats.defense);
     label_at(s_screen, text, &city_font_14, COLOR_INK, 10, 210, 220);
-    if (owned->migrated) snprintf(text, sizeof(text), "From your old save");
-    else if (owned->evolved) snprintf(text, sizeof(text), "Grew through evolution");
-    else if (owned->place_id == CITY_WILD_PLACE_ID) snprintf(text, sizeof(text), "Caught in the wild");
-    else snprintf(text, sizeof(text), "Caught at Place %02u", owned->place_id);
+    if (owned->migrated) snprintf(text, sizeof(text), "%s", tr("From your old save"));
+    else if (owned->evolved) snprintf(text, sizeof(text), "%s", tr("Grew through evolution"));
+    else if (owned->place_id == CITY_WILD_PLACE_ID) snprintf(text, sizeof(text), "%s", tr("Caught in the wild"));
+    else snprintf(text, sizeof(text), tr("Caught at Place %02u"), owned->place_id);
     label_at(s_screen, text, &city_font_14, COLOR_MUTED, 10, 236, 220);
     label_at(s_screen, owned->migrated ? "Stats may be shared" : "These are this one's stats",
              &city_font_14, COLOR_MUTED, 10, 256, 220);
@@ -975,18 +1008,18 @@ static void build_release_confirm(void)
     s_screen = new_screen("Let this one go?", LV_SYMBOL_UP " / " LV_SYMBOL_DOWN " Choose\nPress OK to pick");
     lv_obj_t *image = create_species(s_screen, species_id, true);
     lv_obj_set_pos(image, 79, 66);
-    label_at(s_screen, city_species_definition(species_id)->name, &city_font_20, COLOR_INK, 10, 151, 220);
-    char message[48];
-    if (owned > 1U) snprintf(message, sizeof(message), "This is #%u. %u will stay.", s_release_copy_selection + 1U, owned - 1U);
-    else snprintf(message, sizeof(message), "This is your last one.");
+    label_at(s_screen, species_name(city_species_definition(species_id)), &city_font_20, COLOR_INK, 10, 151, 220);
+    char message[96];
+    if (owned > 1U) snprintf(message, sizeof(message), tr("This is #%u. %u will stay."), s_release_copy_selection + 1U, owned - 1U);
+    else snprintf(message, sizeof(message), "%s", tr("This is your last one."));
     label_at(s_screen, message, &city_font_14, COLOR_CORAL, 10, 180, 220);
     if (owned <= 1U) {
         label_at(s_screen, "Its friendship starts over.", &city_font_14, COLOR_INK, 10, 199, 220);
         label_at(s_screen, "Its visits start over too.", &city_font_14, COLOR_INK, 10, 216, 220);
     } else if (selected) {
-        snprintf(message, sizeof(message), "Health %u/%u", selected->current_hp, selected->stats.hp);
+        snprintf(message, sizeof(message), tr("Health %u/%u"), selected->current_hp, selected->stats.hp);
         label_at(s_screen, message, &city_font_14, COLOR_MUTED, 10, 199, 220);
-        snprintf(message, sizeof(message), "Attack %u   Defense %u", selected->stats.attack, selected->stats.defense);
+        snprintf(message, sizeof(message), tr("Attack %u   Defense %u"), selected->stats.attack, selected->stats.defense);
         label_at(s_screen, message, &city_font_14, COLOR_MUTED, 10, 216, 220);
     }
     label_at(s_screen, s_release_selection == 0 ? "> Let go <" : "Let go",
@@ -1003,20 +1036,20 @@ static void build_release_picker(void)
     s_screen = new_screen("Pick a Pokemon", LV_SYMBOL_UP " / " LV_SYMBOL_DOWN " Choose\nPress OK to pick");
     lv_obj_t *image = create_species(s_screen, species_id, true);
     lv_obj_set_pos(image, 79, 62);
-    label_at(s_screen, owned ? city_species_definition(species_id)->name : "Go back",
+    label_at(s_screen, owned ? species_name(city_species_definition(species_id)) : "Go back",
              &city_font_20, COLOR_INK, 5, 147, 230);
-    char text[48];
+    char text[96];
     if (owned) {
-        snprintf(text, sizeof(text), "Pokemon %u of %u", s_release_copy_selection + 1U, count);
+        snprintf(text, sizeof(text), tr("Pokemon %u of %u"), s_release_copy_selection + 1U, count);
         label_at(s_screen, text, &city_font_14, COLOR_INK, 10, 173, 220);
-        snprintf(text, sizeof(text), "Health %u/%u", owned->current_hp, owned->stats.hp);
+        snprintf(text, sizeof(text), tr("Health %u/%u"), owned->current_hp, owned->stats.hp);
         label_at(s_screen, text, &city_font_14, COLOR_GRASS_D, 10, 192, 220);
-        snprintf(text, sizeof(text), "Attack %u   Defense %u", owned->stats.attack, owned->stats.defense);
+        snprintf(text, sizeof(text), tr("Attack %u   Defense %u"), owned->stats.attack, owned->stats.defense);
         label_at(s_screen, text, &city_font_14, COLOR_MUTED, 10, 211, 220);
-        if (owned->evolved) snprintf(text, sizeof(text), "Grew by evolving");
-        else if (owned->migrated) snprintf(text, sizeof(text), "Old save: shared stats");
-        else if (owned->place_id == CITY_WILD_PLACE_ID) snprintf(text, sizeof(text), "Caught in the wild");
-        else snprintf(text, sizeof(text), "Caught at Place %02u", owned->place_id);
+        if (owned->evolved) snprintf(text, sizeof(text), "%s", tr("Grew by evolving"));
+        else if (owned->migrated) snprintf(text, sizeof(text), "%s", tr("Old save: shared stats"));
+        else if (owned->place_id == CITY_WILD_PLACE_ID) snprintf(text, sizeof(text), "%s", tr("Caught in the wild"));
+        else snprintf(text, sizeof(text), tr("Caught at Place %02u"), owned->place_id);
         label_at(s_screen, text, &city_font_14, COLOR_MUTED, 10, 230, 220);
     } else label_at(s_screen, "Keep all your Pokemon", &city_font_14, COLOR_INK, 10, 187, 220);
     label_at(s_screen, owned ? "Hold OK to go back" : "> Go back <",
@@ -1031,10 +1064,11 @@ static void build_released(void)
     s_screen = new_screen("You let it go", "Press OK for Pokédex");
     lv_obj_t *image = create_species(s_screen, species_id, true);
     lv_obj_set_pos(image, 79, 84);
-    char text[48];
-    if (remaining > 0U) snprintf(text, sizeof(text), "%s left. You have %lu.",
-        city_species_definition(species_id)->name, (unsigned long)remaining);
-    else snprintf(text, sizeof(text), "%s is free now.", city_species_definition(species_id)->name);
+    char text[96];
+    if (remaining > 0U) snprintf(text, sizeof(text), tr("%s left. You have %lu."),
+        species_name(city_species_definition(species_id)), (unsigned long)remaining);
+    else snprintf(text, sizeof(text), tr("%s is free now."),
+                  species_name(city_species_definition(species_id)));
     label_at(s_screen, text, &city_font_14, COLOR_GRASS_D, 5, META_Y, 230);
 }
 
@@ -1047,13 +1081,13 @@ static void build_evolution(void)
     s_screen = new_screen("Time to evolve?", LV_SYMBOL_UP " / " LV_SYMBOL_DOWN " Choose\nPress OK to pick");
     lv_obj_t *image = create_species(s_screen, s_evolution_source_id, true);
     lv_obj_set_pos(image, 79, 67);
-    char text[48];
-    snprintf(text, sizeof(text), "Grow into %s", city_species_definition(target_id)->name);
+    char text[96];
+    snprintf(text, sizeof(text), tr("Grow into %s"), species_name(city_species_definition(target_id)));
     label_at(s_screen, text, &city_font_14, COLOR_INK, 10, 154, 220);
-    snprintf(text, sizeof(text), "Friendship %u/30", source->friendship < 30 ? source->friendship : 30);
+    snprintf(text, sizeof(text), tr("Friendship %u/30"), source->friendship < 30 ? source->friendship : 30);
     label_at(s_screen, text, &city_font_14, COLOR_GRASS_D, 10, 177, 220);
     const unsigned places = city_buddy_place_count(source);
-    snprintf(text, sizeof(text), "Places visited %u/3", places < 3 ? places : 3);
+    snprintf(text, sizeof(text), tr("Places visited %u/3"), places < 3 ? places : 3);
     label_at(s_screen, text, &city_font_14, COLOR_GRASS_D, 10, 195, 220);
     const char *hint = target->evolution_obtained ? "Already evolved" :
         s_bestiary.buddy_species_id != s_evolution_source_id ? "Pick this buddy first" : ready ? "Your buddy is ready!" : "Catch Pokemon together";
@@ -1080,7 +1114,7 @@ static void build_evolved(void)
     lv_anim_set_duration(&animation, 600);
     lv_anim_set_exec_cb(&animation, evolution_reveal_y);
     lv_anim_start(&animation);
-    label_at(s_field, city_species_definition(target)->name, &city_font_20, COLOR_INK, 10, 141, 200);
+    label_at(s_field, species_name(city_species_definition(target)), &city_font_20, COLOR_INK, 10, 141, 200);
     label_at(s_screen, "Saved! Meet your new buddy.", &city_font_14, COLOR_GRASS_D, 10, META_Y, 220);
 }
 
@@ -1279,21 +1313,24 @@ static void handle_settings_button(bsp_btn_t button, bool cancel)
     if (s_settings_editing) {
         if (button == BSP_BTN_UP || button == BSP_BTN_DOWN) {
             s_settings_draft = city_settings_adjust(s_settings_draft,
-                s_settings_selection == 2, button == BSP_BTN_UP ? 10 : -10);
+                s_settings_selection == 3, button == BSP_BTN_UP ? 10 : -10);
             apply_settings_preview();
         } else if (button == BSP_BTN_OK) {
             s_settings_editing = false;
-            if (s_settings_selection == 0)
+            if (s_settings_selection == 1)
                 pokemon_audio_play(s_bestiary.buddy_species_id ? s_bestiary.buddy_species_id : CITY_SPECIES_PIKACHU);
         }
     } else if (button == BSP_BTN_UP || button == BSP_BTN_DOWN) {
-        s_settings_selection = city_passport_turn_page(s_settings_selection, 5, button == BSP_BTN_DOWN);
+        s_settings_selection = city_passport_turn_page(s_settings_selection, 6, button == BSP_BTN_DOWN);
     } else if (button == BSP_BTN_OK) {
-        if (s_settings_selection == 0 || s_settings_selection == 2) s_settings_editing = true;
-        else if (s_settings_selection == 1) {
+        if (s_settings_selection == 0) {
+            s_settings_draft = city_settings_toggle_language(s_settings_draft);
+        } else if (s_settings_selection == 1 || s_settings_selection == 3) {
+            s_settings_editing = true;
+        } else if (s_settings_selection == 2) {
             s_settings_draft = city_settings_toggle_mute(s_settings_draft);
             apply_settings_preview();
-        } else if (s_settings_selection == 4) { close_settings(); return; }
+        } else if (s_settings_selection == 5) { close_settings(); return; }
         else {
             if (city_settings_equal(&s_settings, &s_settings_draft) && !s_settings_load_error && !s_settings_error) {
                 close_settings(); return;
@@ -1316,7 +1353,10 @@ static void finish_settings_save(const settings_result_t *result)
         s_settings = result->settings;
         s_settings_load_error = false;
         close_settings();
-        ESP_LOGI(TAG, "SETTINGS_SAVED volume=%u muted=%u brightness=%u", s_settings.volume, s_settings.muted, s_settings.brightness);
+        ESP_LOGI(
+            TAG, "SETTINGS_SAVED volume=%u muted=%u brightness=%u language=%u",
+            s_settings.volume, s_settings.muted, s_settings.brightness,
+            (unsigned)s_settings.language);
     } else set_state(UI_SETTINGS);
 }
 
@@ -1703,10 +1743,18 @@ static void update_aim(uint64_t now)
     uint32_t start = s_round.target_center_ms - s_round.target_half_width_ms;
     uint32_t end = s_round.target_center_ms + s_round.target_half_width_ms;
     bool target = elapsed >= start && elapsed <= end;
-    lv_label_set_text(s_aim_cue, target ? "NOW" : "WAIT");
+    lv_label_set_text(s_aim_cue, tr(target ? "NOW" : "WAIT"));
     const unsigned seconds = (unsigned)((s_capture_deadline_ms - now + 999U) / 1000U);
-    lv_label_set_text_fmt(s_aim_status, "%u %s  %u sec  %s", s_attempts, s_attempts == 1 ? "try" : "tries", seconds,
-                          target ? "Press OK!" : s_capture_feedback);
+    if (visible_language() == CITY_LANGUAGE_SIMPLIFIED_CHINESE) {
+        lv_label_set_text_fmt(
+            s_aim_status, "%u 次  %u 秒  %s", s_attempts, seconds,
+            tr(target ? "Press OK!" : s_capture_feedback));
+    } else {
+        lv_label_set_text_fmt(
+            s_aim_status, "%u %s  %u sec  %s", s_attempts,
+            s_attempts == 1 ? "try" : "tries", seconds,
+            target ? "Press OK!" : s_capture_feedback);
+    }
     lv_obj_set_style_border_color(
         s_ring, lv_color_hex(target ? COLOR_GREEN : COLOR_CORAL), 0);
 
@@ -1786,8 +1834,13 @@ static void tick(lv_timer_t *timer)
     if (s_save_in_progress) return;
     if (s_state == UI_PLACE_WILD && s_wild_countdown) {
         const unsigned seconds = (unsigned)((city_wild_reward_remaining_ms(&s_wild_guard, now) + 999U) / 1000U);
-        lv_label_set_text_fmt(s_wild_countdown, seconds ? "Wait %02u:%02u" : "Ready!", seconds / 60U, seconds % 60U);
-        lv_label_set_text(s_status, seconds ? LV_SYMBOL_UP " Go home" : "Press OK to look around\n" LV_SYMBOL_UP " Go home");
+        lv_label_set_text_fmt(
+            s_wild_countdown, tr(seconds ? "Wait %02u:%02u" : "Ready!"),
+            seconds / 60U, seconds % 60U);
+        lv_label_set_text(
+            s_status,
+            tr(seconds ? LV_SYMBOL_UP " Go home"
+                       : "Press OK to look around\n" LV_SYMBOL_UP " Go home"));
     }
     if (s_state == UI_PLACE_PENDING && s_place_countdown) {
         const uint32_t seconds =
@@ -1795,10 +1848,10 @@ static void tick(lv_timer_t *timer)
                 s_state_started_ms, now);
         if (seconds > 0U) {
             lv_label_set_text_fmt(
-                s_place_countdown, "Again in %lus",
+                s_place_countdown, tr("Again in %lus"),
                 (unsigned long)seconds);
         } else {
-            lv_label_set_text(s_place_countdown, "Checking now...");
+            lv_label_set_text(s_place_countdown, tr("Checking now..."));
         }
     }
     if (!busy && s_bestiary_ready && s_bestiary.wild_cooldown_active &&
@@ -2201,8 +2254,11 @@ void app_main(void)
         s_settings_requests = NULL; s_settings_results = NULL;
         ESP_LOGW(TAG, "Settings worker unavailable");
     }
-    ESP_LOGI(TAG, "SETTINGS_READY volume=%u muted=%u brightness=%u defaults_on_error=%u",
-             s_settings.volume, s_settings.muted, s_settings.brightness, s_settings_load_error);
+    ESP_LOGI(
+        TAG,
+        "SETTINGS_READY volume=%u muted=%u brightness=%u language=%u defaults_on_error=%u",
+        s_settings.volume, s_settings.muted, s_settings.brightness,
+        (unsigned)s_settings.language, s_settings_load_error);
     ESP_ERROR_CHECK(bsp_i2c_init());
     if (!pokemon_audio_init()) ESP_LOGW(TAG, "Audio worker unavailable");
     s_battery_queue = xQueueCreate(1, sizeof(int));
