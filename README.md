@@ -68,6 +68,8 @@ that copy's health as well as its stats. See
 
 ## Install on another Passport
 
+Download the [tested firmware package](https://github.com/chenjie1129/city-spirits-passport/releases/download/v0.1.0-pokedex-preview.1/pokedex-tested-20260912.zip) or the [standalone .bin](https://github.com/chenjie1129/city-spirits-passport/releases/download/v0.1.0-pokedex-preview.1/Pokedex-AI-Passport.bin) from the [playtest release](https://github.com/chenjie1129/city-spirits-passport/releases/tag/v0.1.0-pokedex-preview.1). The package includes instructions and checksums, and contains no player saves or device identity data.
+
 Use a **compatible AI Passport with ESP32-C3, 8 MB flash, and the partition
 layout in [partitions.csv](partitions.csv)**. An arbitrary ESP32 board or a
 Passport with a different layout needs separate setup.
