@@ -2,6 +2,12 @@
 
 An offline-first city exploration game for AI Passport.
 
+> **Community release status:** The current revision contains restricted
+> Pokemon prototype names and artwork and is not ready for redistribution.
+> The MIT License covers original project code only. Complete the
+> [Community Release Checklist](docs/community-release-checklist.md) before
+> publishing source archives, firmware, demos, screenshots, or videos.
+
 > **Project goal:** Build a playable device prototype in four weeks. A player
 > visits a place, encounters an original spirit, completes a 10-20 second
 > capture interaction, and stores the result in a local bestiary.
@@ -187,8 +193,10 @@ flowchart TB
 ## 6. Bestiary Capability Mapping
 
 The project borrows the product loop of a monster encyclopedia:
-**scan -> identify -> record -> query**. It does not copy Pokemon names,
-creature designs, visual assets, interface layouts, or fictional settings.
+**scan -> identify -> record -> query**. The intended community edition uses
+only original names, creature designs, visual assets, interface layouts, and
+fictional settings. The current controlled prototype has not completed that
+replacement and must not be redistributed as the community edition.
 
 The bestiary is not a secondary menu. It is the asset system that turns a
 short capture interaction into long-term collection value and another reason
@@ -484,6 +492,19 @@ python3 -m http.server 4173 --directory demo
 Then open `http://127.0.0.1:4173`. See
 [Charmander Capture MVP](docs/architecture/charmander-capture-mvp.md) for the
 domain state machine and firmware integration boundary.
+
+## License and third-party content
+
+Original project code and documentation are available under the
+[MIT License](LICENSE).
+
+That license does not cover Pokemon names, character artwork, generated sprite
+arrays derived from official artwork, or media and firmware containing those
+materials. See [Third-Party Notices](THIRD_PARTY_NOTICES.md) for the precise
+scope, upstream attribution, and trademark disclaimer.
+
+The current prototype is not affiliated with, authorized, sponsored, or
+endorsed by Nintendo, The Pokemon Company, Game Freak, or Creatures.
 
 ## References
 
