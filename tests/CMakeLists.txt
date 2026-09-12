@@ -94,3 +94,9 @@ add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/audio_transitions.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/../main/main.c" "${CMAKE_CURRENT_BINARY_DIR}/audio_transitions.c"
     DEPENDS ../main/main.c audio_stubs/generate_transitions.py)
 add_city_test(test_audio_transitions "${CMAKE_CURRENT_BINARY_DIR}/audio_transitions.c")
+
+add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/navigation_ui.c"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/generate_navigation_ui.py"
+        "${CMAKE_CURRENT_SOURCE_DIR}/../main/main.c" "${CMAKE_CURRENT_BINARY_DIR}/navigation_ui.c"
+    DEPENDS ../main/main.c generate_navigation_ui.py navigation_ui_fixture.c)
+add_city_test(test_navigation_ui "${CMAKE_CURRENT_BINARY_DIR}/navigation_ui.c")

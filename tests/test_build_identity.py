@@ -56,6 +56,7 @@ class IdentityTests(unittest.TestCase):
             (repo/'.gitignore').write_text('build/\nsdkconfig\n')
             (repo/'main.c').write_text('v1')
             (repo/'docs').mkdir();(repo/'docs/device-installation-guide.md').write_text('fixture')
+            (repo/'tools').mkdir();(repo/'tools/check_passport_backup.py').write_text('fixture')
             git('add','.');git('commit','-m','fixture')
             clean=identity(repo)
             self.assertFalse(clean['dirty'])

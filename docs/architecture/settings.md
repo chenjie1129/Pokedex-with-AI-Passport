@@ -1,7 +1,7 @@
 # Device settings
 
-Home has four destinations: Explore, Bestiary, Passport and Settings.
-Settings exposes Cry Volume, Mute, Brightness, Save & Back, and Cancel.
+Home has four destinations: Look around, Pokédex, My stamps and Sound & screen.
+Settings exposes Sound volume, Quiet mode, Screen light, Save and go back, and Undo and go back.
 
 - Defaults: volume 60%, brightness 60%, mute off.
 - Volume ranges from 0–100%, brightness from 10–100%, in 10% steps. Screen-off
@@ -9,8 +9,8 @@ Settings exposes Cry Volume, Mute, Brightness, Save & Back, and Cancel.
 - UP/DOWN selects a row. OK enters level editing; UP raises and DOWN lowers
   the value. OK finishes editing and previews the buddy's cry (Pikachu if no
   buddy) for volume. Mute toggles with OK and retains the selected volume.
-- Changes preview in RAM. Save & Back commits one small settings blob in a
-  worker and returns Home only after successful write/readback. Cancel or
+- Changes preview in RAM. Save and go back commits one small settings blob in a
+  worker and returns Home only after successful write/readback. Undo and go back or
   hold OK restores the saved preferences. Inputs are locked during the save.
 - An unchanged save does not write to flash. A failed save stays on Settings
   with a retry message; unavailable workers are treated as save failures.

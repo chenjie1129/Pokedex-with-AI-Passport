@@ -1,6 +1,8 @@
 idf_component_register(
     SRCS
         "main.c"
+        "assets/city_font_14.c"
+        "assets/city_font_20.c"
         "place_scan_coordinator.c"
         "pokemon_audio.c"
         "assets/pokemon_cries.c"

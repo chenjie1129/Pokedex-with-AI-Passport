@@ -418,11 +418,13 @@ city_bestiary_result_t city_bestiary_capture_with_stats(
     ++next_record->capture_count;
     next_record->last_place_id = place_id;
     next_record->latest_stats = *stats;
-    if (next_record->capture_count == 1U ||
-        stats_total(stats) > stats_total(&next_record->best_stats)) {
+    const bool new_best = record->state != CITY_DISCOVERY_CAPTURED ||
+        stats_total(stats) > stats_total(&next_record->best_stats);
+    if (new_best) {
         next_record->best_stats = *stats;
     }
-    if (record->state != CITY_DISCOVERY_CAPTURED) {
+    /* Health must belong to the same individual as the displayed best stats. */
+    if (new_best) {
         next_record->current_hp = stats->hp;
     } else if (next_record->current_hp > next_record->best_stats.hp) {
         next_record->current_hp = next_record->best_stats.hp;

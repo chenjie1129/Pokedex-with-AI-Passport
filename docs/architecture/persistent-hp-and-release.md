@@ -9,3 +9,9 @@ The detail screen exposes an action menu with recovery, evolution, release and b
 Older saves contain counts and only latest/best representative stats, so migration cannot recover attributes that were never stored. It creates stable `LEGACY COPY` entries, preserving every count; the known latest and best stats are retained and the remaining legacy copies use the best known stats. Every new capture after migration records its actual individual attributes.
 
 Host coverage includes individual IDs and selection, damage boundaries, recovery, save failure rollback, schema migration, encode/decode persistence, selected-copy release, summary promotion, unrelated-species preservation, final-release cleanup, buddy clearing, evolution-only release and recapture. Production render coverage includes the individual picker, HP, actions, both confirmation choices and the released state. Physical button and NVS testing remain separate device acceptance steps.
+
+## Health status and individual browsing
+
+The action screen shows the strongest owned representative's health and a separate status (Health is full / Needs healing). Heal retains its action label, is muted at full health, and is skipped by navigation. Full-health activation cannot queue a write. My Pokemon opens a read-only copy browser; Up/Down changes the owned ordinal and OK returns to the action menu. This browser displays the selected entry's HP, Attack, and Defense, rather than the aggregate best values. Legacy entries visibly explain that their stats may be shared. No historical stats are rerolled.
+
+When a capture becomes the strongest representative, the summary now takes that new individual's current HP along with its stats. Damage to the previous individual remains on that individual, and persistence failure leaves both unchanged. Schema and existing saved values are unchanged by installation.

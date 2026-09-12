@@ -40,6 +40,7 @@ def package(repo, build, output, allow_dirty=False):
     output.mkdir(parents=True, exist_ok=True)
     shutil.copy2(binary, output / binary.name)
     shutil.copy2(config, output / 'sdkconfig')
+    shutil.copy2(repo / 'tools/check_passport_backup.py', output / 'check_passport_backup.py')
     shutil.copy2(repo / 'docs/device-installation-guide.md', output / 'device-installation-guide.md')
     (output / 'manifest.json').write_text(json.dumps(manifest, indent=2, sort_keys=True)+'\n')
     sums = ''.join(f'{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}\n'

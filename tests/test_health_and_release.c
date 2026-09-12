@@ -129,6 +129,38 @@ int main(void)
     assert(copy_two && memcmp(&copy_two->stats, &second_copy, sizeof(second_copy)) == 0);
     assert(city_bestiary_record_const(&individuals, 25)->best_stats.attack == 70U);
 
+    /* A new strongest copy owns its own full HP, not the old copy's damage. */
+    city_bestiary_t promoted;
+    city_bestiary_init(&promoted);
+    const city_creature_stats_t original_stats = {35, 55, 40};
+    const city_creature_stats_t stronger_stats = {49, 66, 51};
+    assert(city_bestiary_capture_with_stats(&promoted, 1, 25, 1,
+        &original_stats, persist, NULL) == CITY_BESTIARY_APPLIED);
+    assert(city_bestiary_apply_damage(&promoted, 25, 9, persist, NULL) == CITY_BESTIARY_APPLIED);
+    before = promoted; save_ok = false;
+    assert(city_bestiary_capture_with_stats(&promoted, 2, 25, 2,
+        &stronger_stats, persist, NULL) == CITY_BESTIARY_STORAGE_FAILED);
+    assert(memcmp(&before, &promoted, sizeof(before)) == 0);
+    save_ok = true;
+    assert(city_bestiary_capture_with_stats(&promoted, 2, 25, 2,
+        &stronger_stats, persist, NULL) == CITY_BESTIARY_APPLIED);
+    assert(city_bestiary_record_const(&promoted, 25)->current_hp == 49U);
+    assert(city_bestiary_owned_at(&promoted, 25, 0)->current_hp == 26U);
+    assert(city_bestiary_owned_at(&promoted, 25, 1)->current_hp == 49U);
+    assert(city_bestiary_encode(&promoted, encoded));
+    assert(city_bestiary_decode(encoded, sizeof(encoded), &restored));
+    for (unsigned i = 0; i < 2; ++i) {
+        const city_owned_pokemon_t *saved = city_bestiary_owned_at(&restored, 25, i);
+        const city_owned_pokemon_t *expected = city_bestiary_owned_at(&promoted, 25, i);
+        assert(saved->instance_id == expected->instance_id && !saved->migrated);
+        assert(memcmp(&saved->stats, &expected->stats, sizeof(saved->stats)) == 0);
+        assert(saved->current_hp == expected->current_hp);
+    }
+    assert(city_bestiary_apply_damage(&restored, 25, 5, persist, NULL) == CITY_BESTIARY_APPLIED);
+    assert(city_bestiary_recover(&restored, 25, persist, NULL) == CITY_BESTIARY_APPLIED);
+    assert(city_bestiary_owned_at(&restored, 25, 0)->current_hp == 26U);
+    assert(city_bestiary_owned_at(&restored, 25, 1)->current_hp == 49U);
+
     assert(writes > 0);
     return 0;
 }
