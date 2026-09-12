@@ -77,6 +77,9 @@ add_city_test(test_health_and_release test_health_and_release.c)
 add_city_test(test_user_settings test_user_settings.c)
 target_sources(test_user_settings PRIVATE ../components/bsp/src/bsp_settings_store.c)
 target_include_directories(test_user_settings PRIVATE battery_stubs ../components/bsp/include)
+add_city_test(test_ui_strings test_ui_strings.c)
+target_sources(test_ui_strings PRIVATE ../main/ui_strings.c)
+target_include_directories(test_ui_strings PRIVATE ui_stubs ../main)
 add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/settings_ui.c"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/generate_settings_ui.py"
         "${CMAKE_CURRENT_SOURCE_DIR}/../main/main.c" "${CMAKE_CURRENT_BINARY_DIR}/settings_ui.c"

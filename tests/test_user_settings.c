@@ -40,13 +40,16 @@ esp_err_t nvs_commit(nvs_handle_t handle)
 int main(void)
 {
     city_settings_t s, defaults = city_settings_defaults();
-    assert(defaults.volume == 60 && defaults.brightness == 60 && !defaults.muted);
+    assert(defaults.volume == 60 && defaults.brightness == 60 &&
+           !defaults.muted && defaults.language == CITY_LANGUAGE_ENGLISH);
     assert(bsp_settings_load(&s) == ESP_OK && city_settings_equal(&s, &defaults) && !commits);
     s = city_settings_adjust(s, false, INT_MIN); assert(s.volume == 0);
     s = city_settings_adjust(s, false, INT_MAX); assert(s.volume == 100);
     s = city_settings_adjust(s, true, INT_MIN); assert(s.brightness == 10);
     s = city_settings_adjust(s, true, INT_MAX); assert(s.brightness == 100);
     s = city_settings_toggle_mute(s); assert(s.muted && s.volume == 100);
+    s = city_settings_toggle_language(s);
+    assert(s.language == CITY_LANGUAGE_SIMPLIFIED_CHINESE);
     assert(city_settings_backlight(&s, false, false) == 100);
     assert(city_settings_backlight(&s, false, true) == 30);
     assert(city_settings_backlight(&s, true, false) == 0);
@@ -55,10 +58,22 @@ int main(void)
     city_settings_t loaded; assert(bsp_settings_load(&loaded) == ESP_OK && city_settings_equal(&s, &loaded));
     uint8_t bytes[CITY_SETTINGS_BYTES]; assert(city_settings_encode(&s, bytes));
     for (unsigned i = 0; i < sizeof(bytes); ++i) {
-        bytes[i] ^= 1; loaded = defaults;
+        bytes[i] ^= i == 7 ? 0x80 : 1; loaded = defaults;
         assert(!city_settings_decode(bytes, sizeof(bytes), &loaded) && city_settings_equal(&loaded, &defaults));
-        bytes[i] ^= 1;
+        bytes[i] ^= i == 7 ? 0x80 : 1;
     }
+    bytes[7] = 1; /* Existing version-one blobs encode mute only. */
+    uint32_t crc = UINT32_MAX;
+    for (unsigned i = 0; i < 8; ++i) {
+        crc ^= bytes[i];
+        for (unsigned bit = 0; bit < 8; ++bit)
+            crc = (crc >> 1) ^ (UINT32_C(0xedb88320) & (uint32_t)-(int32_t)(crc & 1));
+    }
+    crc = ~crc;
+    for (unsigned i = 0; i < 4; ++i) bytes[8 + i] = (uint8_t)(crc >> (8 * i));
+    assert(city_settings_decode(bytes, sizeof(bytes), &loaded));
+    assert(loaded.muted && loaded.language == CITY_LANGUAGE_ENGLISH);
+    assert(city_settings_encode(&s, bytes));
     assert(!city_settings_decode(bytes, sizeof(bytes)-1, &loaded));
     s.brightness = 0; assert(!city_settings_encode(&s, bytes));
     assert(bsp_settings_save(&s) == ESP_ERR_INVALID_ARG);

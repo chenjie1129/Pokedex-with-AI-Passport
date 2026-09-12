@@ -1,6 +1,7 @@
 idf_component_register(
     SRCS
         "main.c"
+        "ui_strings.c"
         "assets/city_font_14.c"
         "assets/city_font_20.c"
         "place_scan_coordinator.c"
