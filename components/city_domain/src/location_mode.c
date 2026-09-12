@@ -50,6 +50,22 @@ void city_location_mode_init(city_location_state_t *state)
     state->region_id = CITY_PLACE_INVALID_ID;
 }
 
+uint32_t city_location_confirmation_remaining_seconds(
+    uint64_t started_ms,
+    uint64_t now_ms)
+{
+    if (now_ms <= started_ms) {
+        return (uint32_t)(CITY_LOCATION_CONFIRM_DELAY_MS / 1000U);
+    }
+    const uint64_t elapsed_ms = now_ms - started_ms;
+    if (elapsed_ms >= CITY_LOCATION_CONFIRM_DELAY_MS) {
+        return 0U;
+    }
+    const uint64_t remaining_ms =
+        CITY_LOCATION_CONFIRM_DELAY_MS - elapsed_ms;
+    return (uint32_t)((remaining_ms + 999U) / 1000U);
+}
+
 city_location_output_t city_location_mode_step(
     city_location_state_t *state,
     const city_location_input_t *input)
@@ -151,13 +167,21 @@ city_location_output_t city_location_mode_step(
 
     const uint16_t candidate_score = city_place_similarity_permille(
         &state->candidate, input->fingerprint);
-    if (city_place_classify(candidate_score) != CITY_PLACE_RELATION_KNOWN ||
-        input->now_ms < state->candidate_started_ms) {
+    if (input->now_ms < state->candidate_started_ms) {
         state->candidate_ready = false;
         state->candidate_started_ms = input->now_ms;
         state->candidate = *input->fingerprint;
         state->confidence_permille = candidate_score;
         return output_from_state(state, CITY_LOCATION_EVENT_NEW_PENDING);
+    }
+    if (city_place_classify(candidate_score) != CITY_PLACE_RELATION_KNOWN) {
+        state->mode = CITY_LOCATION_SCANNING;
+        state->region_id = CITY_PLACE_INVALID_ID;
+        state->confidence_permille = candidate_score;
+        state->locked_until_ms = 0U;
+        clear_candidate(state);
+        return output_from_state(
+            state, CITY_LOCATION_EVENT_NEW_UNSTABLE);
     }
 
     state->confidence_permille = candidate_score;

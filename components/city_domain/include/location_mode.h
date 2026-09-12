@@ -25,6 +25,7 @@ typedef enum {
     CITY_LOCATION_EVENT_GRAY_ZONE,
     CITY_LOCATION_EVENT_WILD,
     CITY_LOCATION_EVENT_NEW_PENDING,
+    CITY_LOCATION_EVENT_NEW_UNSTABLE,
     CITY_LOCATION_EVENT_NEW_PLACE_READY,
     CITY_LOCATION_EVENT_INVALID_INPUT,
 } city_location_event_t;
@@ -57,6 +58,10 @@ typedef struct {
 } city_location_output_t;
 
 void city_location_mode_init(city_location_state_t *state);
+
+uint32_t city_location_confirmation_remaining_seconds(
+    uint64_t started_ms,
+    uint64_t now_ms);
 
 city_location_output_t city_location_mode_step(
     city_location_state_t *state,

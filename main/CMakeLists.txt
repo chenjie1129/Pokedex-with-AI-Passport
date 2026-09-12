@@ -34,3 +34,8 @@ option(CITY_SETTINGS_SMOKE "Exercise settings on device and restore preferences"
 if(CITY_SETTINGS_SMOKE)
     target_compile_definitions(${COMPONENT_LIB} PRIVATE CITY_SETTINGS_SMOKE=1)
 endif()
+
+option(CITY_PLACE_PENDING_SMOKE "Exercise the new-place countdown without scanning or saves" OFF)
+if(CITY_PLACE_PENDING_SMOKE)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE CITY_PLACE_PENDING_SMOKE=1)
+endif()

@@ -27,6 +27,9 @@ city_place_scan_decision_t city_place_scan_decide(
     case CITY_LOCATION_EVENT_NEW_PENDING:
         result.kind = PLACE_RESULT_CANDIDATE_WAIT;
         break;
+    case CITY_LOCATION_EVENT_NEW_UNSTABLE:
+        result.kind = PLACE_RESULT_UNSTABLE;
+        break;
     case CITY_LOCATION_EVENT_GRAY_ZONE:
         result.kind = PLACE_RESULT_GRAY;
         break;

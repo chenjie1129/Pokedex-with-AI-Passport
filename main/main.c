@@ -33,6 +33,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
 #define COLOR_INK       0x183238
 #define COLOR_MUTED     0x60777A
@@ -163,6 +164,7 @@ static int s_battery_soc = -1;
 static QueueHandle_t s_battery_queue;
 static lv_obj_t *s_battery_label;
 static lv_obj_t *s_wild_countdown;
+static lv_obj_t *s_place_countdown;
 static lv_obj_t *s_screen;
 static lv_obj_t *s_field;
 static lv_obj_t *s_ring;
@@ -555,6 +557,18 @@ static void build_place_status(
     label_at(
         s_screen, message, &city_font_14,
         COLOR_MUTED, 10, META_Y, 220);
+}
+
+static void build_place_pending(void)
+{
+    s_screen = new_screen("Is this a new place?", "Please wait");
+    s_field = create_field(s_screen);
+    s_place_countdown = label_at(
+        s_field, "Again in 20s", &city_font_20,
+        COLOR_INK, 10, 61, 200);
+    label_at(
+        s_screen, "Checking this place once more",
+        &city_font_14, COLOR_MUTED, 10, META_Y, 220);
 }
 
 static void build_encounter(void)
@@ -1114,6 +1128,7 @@ static void build_state(void)
     s_ball_button_inner = NULL;
     s_status = NULL;
     s_wild_countdown = NULL;
+    s_place_countdown = NULL;
     s_aim_cue = NULL;
     s_aim_status = NULL;
 
@@ -1145,8 +1160,7 @@ static void build_state(void)
         build_scanning();
         break;
     case UI_PLACE_PENDING:
-        build_place_status(
-            "Is this a new place?", "Please wait", "Looking around once more");
+        build_place_pending();
         break;
     case UI_PLACE_GRAY:
         build_place_status(
@@ -1775,6 +1789,18 @@ static void tick(lv_timer_t *timer)
         lv_label_set_text_fmt(s_wild_countdown, seconds ? "Wait %02u:%02u" : "Ready!", seconds / 60U, seconds % 60U);
         lv_label_set_text(s_status, seconds ? LV_SYMBOL_UP " Go home" : "Press OK to look around\n" LV_SYMBOL_UP " Go home");
     }
+    if (s_state == UI_PLACE_PENDING && s_place_countdown) {
+        const uint32_t seconds =
+            city_location_confirmation_remaining_seconds(
+                s_state_started_ms, now);
+        if (seconds > 0U) {
+            lv_label_set_text_fmt(
+                s_place_countdown, "Again in %lus",
+                (unsigned long)seconds);
+        } else {
+            lv_label_set_text(s_place_countdown, "Checking now...");
+        }
+    }
     if (!busy && s_bestiary_ready && s_bestiary.wild_cooldown_active &&
         now >= s_wild_clear_retry_ms && city_wild_reward_remaining_ms(&s_wild_guard, now) == 0U) {
         s_wild_clear_retry_ms = now + 30000U;
@@ -2205,6 +2231,35 @@ void app_main(void)
 #endif
         bsp_lvgl_unlock();
     }
+
+#ifdef CITY_PLACE_PENDING_SMOKE
+    if (!bsp_lvgl_lock(2000)) {
+        ESP_LOGE(TAG, "PLACE_PENDING_SMOKE_FAIL initial_lock");
+        return;
+    }
+    set_state(UI_PLACE_PENDING);
+    const uint64_t pending_started_ms = s_state_started_ms;
+    bsp_lvgl_unlock();
+    vTaskDelay(pdMS_TO_TICKS(CITY_LOCATION_CONFIRM_DELAY_MS + 1000U));
+    if (!bsp_lvgl_lock(2000)) {
+        ESP_LOGE(TAG, "PLACE_PENDING_SMOKE_FAIL final_lock");
+        return;
+    }
+    const char *countdown_text =
+        s_place_countdown != NULL ? lv_label_get_text(s_place_countdown) : "";
+    const bool pending_passed =
+        city_location_confirmation_remaining_seconds(
+            pending_started_ms, now_ms()) == 0U &&
+        strcmp(countdown_text, "Checking now...") == 0;
+    ESP_LOGI(
+        TAG, "PLACE_PENDING_SMOKE_%s elapsed_ms=%llu text=%s",
+        pending_passed ? "PASS" : "FAIL",
+        (unsigned long long)(now_ms() - pending_started_ms),
+        countdown_text);
+    set_state(UI_HOME);
+    bsp_lvgl_unlock();
+    return;
+#endif
 
 #ifdef CITY_SETTINGS_SMOKE
 #include "settings_smoke.inc"

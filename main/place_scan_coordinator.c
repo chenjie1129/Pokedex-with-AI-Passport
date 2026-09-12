@@ -16,7 +16,7 @@
 #include <stdint.h>
 #include <string.h>
 
-#define PLACE_SCAN_MAX_PASSES 3U
+#define PLACE_SCAN_MAX_PASSES 2U
 #define PLACE_SCAN_TASK_STACK_BYTES 6144U
 
 typedef enum {

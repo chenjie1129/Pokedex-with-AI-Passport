@@ -294,7 +294,19 @@ static void test_missing_catalog_is_not_treated_as_empty(void)
     CHECK(memcmp(&state, &before, sizeof(state)) == 0);
 }
 
-static void test_inconsistent_candidate_restarts_confirmation(void)
+static void test_confirmation_countdown(void)
+{
+    CHECK(city_location_confirmation_remaining_seconds(1000U, 999U) == 20U);
+    CHECK(city_location_confirmation_remaining_seconds(1000U, 1000U) == 20U);
+    CHECK(city_location_confirmation_remaining_seconds(1000U, 1001U) == 20U);
+    CHECK(city_location_confirmation_remaining_seconds(1000U, 2000U) == 19U);
+    CHECK(city_location_confirmation_remaining_seconds(
+              1000U, 1000U + CITY_LOCATION_CONFIRM_DELAY_MS - 1U) == 1U);
+    CHECK(city_location_confirmation_remaining_seconds(
+              1000U, 1000U + CITY_LOCATION_CONFIRM_DELAY_MS) == 0U);
+}
+
+static void test_inconsistent_candidate_stops_confirmation(void)
 {
     const uint64_t first_tokens[4] = {1U, 2U, 3U, 4U};
     const uint64_t second_tokens[4] = {10U, 11U, 12U, 13U};
@@ -316,22 +328,10 @@ static void test_inconsistent_candidate_restarts_confirmation(void)
               CITY_LOCATION_CONFIRM_DELAY_MS,
               &second,
               &empty_catalog)
-              .event == CITY_LOCATION_EVENT_NEW_PENDING);
-    CHECK(state.candidate_started_ms == CITY_LOCATION_CONFIRM_DELAY_MS);
-    CHECK(step(
-              &state,
-              CITY_SCAN_EVIDENCE,
-              (2U * CITY_LOCATION_CONFIRM_DELAY_MS) - 1U,
-              &second,
-              &empty_catalog)
-              .event == CITY_LOCATION_EVENT_NEW_PENDING);
-    CHECK(step(
-              &state,
-              CITY_SCAN_EVIDENCE,
-              2U * CITY_LOCATION_CONFIRM_DELAY_MS,
-              &second,
-              &empty_catalog)
-              .event == CITY_LOCATION_EVENT_NEW_PLACE_READY);
+              .event == CITY_LOCATION_EVENT_NEW_UNSTABLE);
+    CHECK(state.mode == CITY_LOCATION_SCANNING);
+    CHECK(!state.candidate_valid);
+    CHECK(state.candidate_started_ms == 0U);
 }
 
 static void test_commit_is_explicit_and_starts_lock(void)
@@ -376,7 +376,8 @@ int main(void)
     test_gray_zone_never_creates_candidate();
     test_consistent_candidate_requires_twenty_seconds();
     test_missing_catalog_is_not_treated_as_empty();
-    test_inconsistent_candidate_restarts_confirmation();
+    test_confirmation_countdown();
+    test_inconsistent_candidate_stops_confirmation();
     test_commit_is_explicit_and_starts_lock();
 
     if (failures == 0) {

@@ -26,6 +26,7 @@ int main(void)
     const city_place_fingerprint_t gray = {.tokens={1,2,5,6}, .count=4};
     const city_place_fingerprint_t sparse = {.tokens={1,2,3}, .count=3};
     const city_place_fingerprint_t other = {.tokens={11,12,13,14}, .count=4};
+    const city_place_fingerprint_t changed = {.tokens={21,22,23,24}, .count=4};
     city_place_catalog_t catalog = {.count=1};
     catalog.places[0].place_id=1;
     catalog.places[0].fingerprint=known;
@@ -72,6 +73,13 @@ int main(void)
     city_location_mode_init(&state);
     output=observe(&state,&catalog,CITY_SCAN_EVIDENCE,&gray,400000);
     assert(!city_place_scan_decide(&output,true).encounter_eligible);
+    city_location_mode_init(&state);
+    output=observe(&state,&catalog,CITY_SCAN_EVIDENCE,&other,500000);
+    assert(output.event==CITY_LOCATION_EVENT_NEW_PENDING);
+    output=observe(&state,&catalog,CITY_SCAN_EVIDENCE,&changed,520000);
+    assert(output.event==CITY_LOCATION_EVENT_NEW_UNSTABLE);
+    assert(city_place_scan_decide(&output,false).kind==PLACE_RESULT_UNSTABLE);
+    assert(!city_place_scan_decide(&output,false).encounter_eligible);
     puts("encounter eligibility: gray/empty/sparse/error denied, fresh evidence and durable new places allowed");
     return 0;
 }
