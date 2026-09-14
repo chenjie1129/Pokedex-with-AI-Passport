@@ -10,5 +10,5 @@ def function(name):
 enums = source[source.index('typedef enum {'):source.index('static const char *TAG')]
 fixture = Path(__file__).with_name('navigation_ui_fixture.c').read_text()
 names = ('total_capture_count', 'start_capture_round', 'start_capture_session',
-         'persist_capture', 'update_aim', 'finish_throw', 'abandon_encounter', 'throw_ball', 'on_button')
+         'persist_capture', 'persist_discovery', 'update_aim', 'finish_throw', 'abandon_encounter', 'throw_ball', 'on_button')
 Path(sys.argv[2]).write_text(fixture.replace('/* ENUMS */', enums).replace('/* PRODUCTION */', '\n'.join(map(function,names))))

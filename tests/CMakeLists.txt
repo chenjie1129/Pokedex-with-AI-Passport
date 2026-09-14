@@ -71,6 +71,7 @@ target_sources(test_bestiary_adapter PRIVATE ../components/bsp/src/bsp_bestiary_
 target_include_directories(test_bestiary_adapter PRIVATE battery_stubs ../components/bsp/include)
 
 add_city_test(test_buddy test_buddy.c)
+add_city_test(test_personality test_personality.c)
 
 add_city_test(test_evolution test_evolution.c)
 add_city_test(test_health_and_release test_health_and_release.c)

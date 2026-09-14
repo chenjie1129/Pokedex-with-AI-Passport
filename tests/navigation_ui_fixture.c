@@ -26,6 +26,10 @@ static city_creature_stats_t s_current_stats = {39, 52, 43};
 static uint16_t s_current_species_id = CITY_SPECIES_CHARMANDER, s_current_place_id = 2;
 static uint16_t s_evolution_source_id, s_release_copy_selection, s_owned_selection, s_capture_bond_gain;
 static uint32_t s_release_instance_id;
+static uint32_t s_companion_instance_id, s_visit_buddy_id;
+static uint8_t s_visit_context, s_visit_gain;
+static uint8_t s_companion_selection, s_personality_draw;
+static bool s_companion_recovered;
 static uint8_t s_attempts, s_home_selection, s_bestiary_selection, s_passport_page,
     s_settings_selection, s_encounter_selection, s_evolution_selection, s_action_selection, s_release_selection;
 static bool s_settings_editing, s_settings_error, s_settings_saving, s_save_in_progress,
@@ -96,27 +100,23 @@ int main(void) {
     s_state=UI_BESTIARY_DETAIL;click(BSP_BTN_DOWN);assert(s_state==UI_BESTIARY_LIST);
     click(BSP_BTN_DOWN);click(BSP_BTN_UP);click(BSP_BTN_OK);assert(s_state==UI_BESTIARY_DETAIL);
     click(BSP_BTN_OK);assert(s_state==UI_POKEMON_ACTIONS);
-    click(BSP_BTN_UP);click(BSP_BTN_OK);assert(s_state==UI_BESTIARY_DETAIL);
+    s_action_selection=4;click(BSP_BTN_OK);assert(s_state==UI_BESTIARY_DETAIL);
     click(BSP_BTN_DOWN);hold();assert(s_state==UI_HOME);no_mutation();
-    /* Full-health Heal is skipped, and copy browsing cannot write or release. */
+    /* Browse both copies, then choose an explicit individual; navigation never writes. */
     s_bestiary_selection=city_species_index(CITY_SPECIES_CHARMANDER);
-    s_state=UI_BESTIARY_DETAIL;click(BSP_BTN_OK);
-    assert(s_action_selection==1U && s_state==UI_POKEMON_ACTIONS);
-    click(BSP_BTN_OK);assert(s_state==UI_OWNED_DETAIL && s_owned_selection==0U);
+    s_state=UI_BESTIARY_DETAIL;click(BSP_BTN_UP);assert(s_state==UI_OWNED_DETAIL);
     click(BSP_BTN_DOWN);assert(s_owned_selection==1U);
     click(BSP_BTN_DOWN);assert(s_owned_selection==0U);
     click(BSP_BTN_UP);assert(s_owned_selection==1U);
-    click(BSP_BTN_OK);assert(s_state==UI_POKEMON_ACTIONS);no_mutation();
-    click(BSP_BTN_UP);assert(s_action_selection==4U);
-    click(BSP_BTN_DOWN);assert(s_action_selection==1U);no_mutation();
-    /* Even a stale selection on disabled Heal cannot queue a save. */
-    s_action_selection=0U;click(BSP_BTN_OK);no_mutation();
-    assert(city_bestiary_apply_damage(&s_bestiary,CITY_SPECIES_CHARMANDER,3,
-        bsp_bestiary_store_persist,NULL)==CITY_BESTIARY_APPLIED);
-    s_state=UI_BESTIARY_DETAIL;click(BSP_BTN_OK);assert(s_action_selection==0U);
-    click(BSP_BTN_OK);assert(writes==1 && s_pending_write==WRITE_RECOVER);
-    assert(city_bestiary_recover(&s_bestiary,CITY_SPECIES_CHARMANDER,
-        bsp_bestiary_store_persist,NULL)==CITY_BESTIARY_APPLIED);
+    click(BSP_BTN_OK);assert(s_state==UI_COMPANION && s_companion_instance_id==3U);no_mutation();
+    click(BSP_BTN_DOWN);click(BSP_BTN_OK);no_mutation(); /* full HP Rest cannot write */
+    click(BSP_BTN_DOWN);click(BSP_BTN_OK);assert(s_state==UI_OWNED_DETAIL);no_mutation();
+    click(BSP_BTN_OK);click(BSP_BTN_OK);assert(writes==1 && s_pending_write==WRITE_BUDDY);
+    writes=0;hold();assert(s_state==UI_POKEMON_ACTIONS);no_mutation();
+    assert(city_bestiary_damage_instance(&s_bestiary,3,3,bsp_bestiary_store_persist,NULL)==CITY_BESTIARY_APPLIED);
+    before=s_bestiary;s_state=UI_OWNED_DETAIL;s_owned_selection=1;
+    click(BSP_BTN_OK);click(BSP_BTN_DOWN);click(BSP_BTN_OK);
+    assert(writes==1 && s_pending_write==WRITE_RECOVER && s_companion_instance_id==3);
     writes=0;before=s_bestiary;
     /* Release cancellation works for both single and multiple copies. */
     const uint16_t species[] = {CITY_SPECIES_PIKACHU,CITY_SPECIES_CHARMANDER};
@@ -149,6 +149,18 @@ int main(void) {
     assert(s_attempts==1 && strcmp(s_capture_feedback,"No throw")==0);
     clock_ms=s_capture_deadline_ms;update_aim(clock_ms);assert(s_state==UI_ESCAPED && s_attempts==0);
     s_state=UI_AIM;hold();assert(s_state==UI_ABANDONED && !s_round.active);no_mutation();
+    /* Production discovery settlement awards friendship even if capture is skipped. */
+    assert(city_bestiary_choose_buddy_instance(&s_bestiary,1,bsp_bestiary_store_persist,NULL)==CITY_BESTIARY_APPLIED);
+    s_visit_buddy_id=1;s_current_place_id=4;s_current_species_id=CITY_SPECIES_CHARMANDER;
+    assert(city_bestiary_next_encounter_sequence(&s_bestiary,&s_encounter_sequence));
+    before=s_bestiary;fail_store=true;assert(!persist_discovery());
+    assert(!memcmp(&before,&s_bestiary,sizeof(before)));fail_store=false;
+    assert(persist_discovery() && s_visit_gain==5 && s_visit_context==1);
+    before=s_bestiary;committed=saves;assert(persist_discovery());
+    assert(saves==committed && s_visit_gain==0 && !memcmp(&before,&s_bestiary,sizeof(before)));
+    s_state=UI_BUDDY_REACTION;click(BSP_BTN_OK);assert(s_state==UI_ENCOUNTER);
+    s_encounter_selection=1;click(BSP_BTN_OK);assert(s_state==UI_ABANDONED);
+    assert(city_bestiary_owned_by_id(&s_bestiary,1)->friendship==5);
     puts("Production navigation/capture replay passed; cancellations preserve assets and buddy");
     return 0;
 }

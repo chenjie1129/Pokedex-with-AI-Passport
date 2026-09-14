@@ -30,6 +30,29 @@ static const char *lookup(
 const char *ui_text(city_language_t language, const char *english)
 {
     static const translation_t translations[] = {
+        {LV_SYMBOL_UP " / " LV_SYMBOL_DOWN " Pick Pokemon\nPress OK for actions", LV_SYMBOL_UP " / " LV_SYMBOL_DOWN " 选择伙伴\n按确认查看操作"},
+        {"Meet your Pokemon", "认识伙伴"},
+        {"Set as buddy", "设为伙伴"},
+        {"Rest", "休息"},
+        {"About this copy", "查看这只"},
+        {"Your buddy", "当前伙伴"},
+        {"Choose a copy first", "先选择一只伙伴"},
+        {"Old bond is kept", "原有羁绊已保留"},
+        {"New individual friendship", "每只伙伴独立培养友情"},
+        {"Getting acquainted", "初次相识"},
+        {"Familiar", "渐渐熟悉"},
+        {"Close", "亲密伙伴"},
+        {"Friendship +%u", "友情 +%u"},
+        {"A shared discovery", "一起发现新地方"},
+        {"Back here together", "一起重访此地"},
+        {"Rest complete", "休息完成"},
+        {"Each copy is different", "每一只都与众不同"},
+        {"Choose a copy to heal", "选择需要休息的伙伴"},
+        {"Pick one in My Pokemon", "在我的伙伴中选择一只"},
+        {"Legacy bond %u/100%s", "原有羁绊 %u/100%s"},
+        {"Legacy bond +%u", "原有羁绊 +%u"},
+        {"Press OK for actions", "按确认查看操作"},
+        {"Press OK to continue", "按确认继续"},
         {"Let's play!", "一起玩吧！"},
         {"Look around", "四处看看"},
         {"Pokédex", "Pokédex"},
@@ -338,4 +361,109 @@ const char *ui_species_description(city_language_t language, const char *english
     return lookup(
         language, english, translations,
         sizeof(translations) / sizeof(translations[0]));
+}
+
+/* Offline individual personality content: [personality][context/band variant]. */
+static const translation_t personality_lines[6][12] = {
+    {
+        {"What is over there?", "那边有什么？"},
+        {"So much to discover!", "好多新发现！"},
+        {"Show me your way.", "带我一起探索吧。"},
+        {"What shall we find?", "我们会发现什么呢？"},
+        {"Our next adventure?", "下次一起去哪探险？"},
+        {"You know my curiosity!", "你最懂我的好奇心！"},
+        {"A new discovery!", "又有新发现！"},
+        {"Look at this place!", "快看看这个地方！"},
+        {"What has changed?", "这里有什么变化？"},
+        {"Another look around!", "再仔细看看吧！"},
+        {"Ready to look again!", "又能继续探索啦！"},
+        {"My curiosity is back!", "好奇心又回来啦！"},
+    },
+    {
+        {"Ready when you are.", "准备好就出发。"},
+        {"One step at a time.", "一步一步向前吧。"},
+        {"Let's try together!", "一起试试看！"},
+        {"We've got this.", "我们可以的。"},
+        {"With you, I feel brave.", "和你一起更勇敢。"},
+        {"Our adventure awaits!", "我们的冒险开始吧！"},
+        {"A bold new step!", "勇敢迈出新一步！"},
+        {"Let's explore ahead!", "一起向前探索！"},
+        {"Back with confidence.", "自信地回来啦。"},
+        {"Ready for this place.", "准备好探索这里了。"},
+        {"Ready for a fresh start.", "准备好重新出发。"},
+        {"Feeling strong again!", "又有精神啦！"},
+    },
+    {
+        {"A peaceful moment.", "安静休息一会儿。"},
+        {"No need to hurry.", "不用着急。"},
+        {"Good to walk with you.", "和你散步真好。"},
+        {"A comfortable pace.", "这个步调很舒服。"},
+        {"Our quiet little ritual.", "属于我们的安静时光。"},
+        {"At ease beside you.", "在你身边很安心。"},
+        {"A place to take in.", "慢慢感受这个地方。"},
+        {"Let's take a look.", "一起看看吧。"},
+        {"Nice to be back.", "回来真好。"},
+        {"A familiar view.", "熟悉的风景。"},
+        {"That was refreshing.", "休息后舒服多了。"},
+        {"A little rest helped.", "休息一下真不错。"},
+    },
+    {
+        {"Ready for some fun?", "一起找点乐趣吧？"},
+        {"What a lovely day!", "今天真不错！"},
+        {"You bring the fun!", "和你一起真有趣！"},
+        {"Shall we wander?", "一起转转吧？"},
+        {"Our best game yet!", "我们玩得真开心！"},
+        {"You know my rhythm!", "你最懂我的节奏！"},
+        {"A new place to play!", "新的探索乐园！"},
+        {"What a fun discovery!", "这个发现真有趣！"},
+        {"Here we are again!", "我们又来啦！"},
+        {"Round two of fun!", "再找点新乐趣！"},
+        {"My bounce is back!", "又活力满满啦！"},
+        {"Ready to play again!", "又能开心玩啦！"},
+    },
+    {
+        {"Glad to meet you.", "很高兴认识你。"},
+        {"A little walk together?", "一起走走好吗？"},
+        {"Happy to see you.", "见到你真开心。"},
+        {"I like our outings.", "喜欢和你一起出门。"},
+        {"Another shared memory.", "又多了一段共同回忆。"},
+        {"Our time feels special.", "和你一起的时光真好。"},
+        {"Glad we came together.", "很高兴一起到这里。"},
+        {"A place we can share.", "这是我们的共同发现。"},
+        {"Our familiar stop.", "又到熟悉的地方啦。"},
+        {"Back here together.", "我们一起回来啦。"},
+        {"Thanks for the rest.", "谢谢你让我休息。"},
+        {"That felt kind.", "这份关心很温暖。"},
+    },
+    {
+        {"I'll look ahead.", "我先看看前面。"},
+        {"My own steady pace.", "按自己的步调走。"},
+        {"Good to have company.", "有人同行也不错。"},
+        {"We make a good pair.", "我们配合得不错。"},
+        {"I trust your direction.", "我相信你的方向。"},
+        {"Side by side, our way.", "并肩走自己的路。"},
+        {"A new path to inspect.", "看看这条新路线。"},
+        {"I'll take a look.", "我来看看。"},
+        {"I know this place.", "我记得这里。"},
+        {"Checking our old route.", "再看看熟悉的路线。"},
+        {"Ready on my own feet.", "又能稳稳向前走了。"},
+        {"That rest was useful.", "这次休息很有用。"},
+    },
+};
+const char *ui_personality_name(city_language_t language, uint8_t personality)
+{
+    static const translation_t names[] = {
+        {"Curious", "好奇"}, {"Brave", "勇敢"}, {"Calm", "沉稳"},
+        {"Playful", "活泼"}, {"Affectionate", "亲切"}, {"Independent", "独立"}
+    };
+    if (personality >= 6U) return "?";
+    return language == CITY_LANGUAGE_SIMPLIFIED_CHINESE ? names[personality].chinese : names[personality].english;
+}
+const char *ui_personality_line(city_language_t language, uint8_t personality,
+    uint8_t band, uint8_t context, uint32_t variant)
+{
+    if (personality >= 6U || band > 2U || context > 3U) return "";
+    const unsigned index = (context == 0U ? band * 2U : 4U + context * 2U) + variant % 2U;
+    const translation_t *line = &personality_lines[personality][index];
+    return language == CITY_LANGUAGE_SIMPLIFIED_CHINESE ? line->chinese : line->english;
 }

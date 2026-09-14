@@ -40,3 +40,8 @@ option(CITY_PLACE_PENDING_SMOKE "Exercise the new-place countdown without scanni
 if(CITY_PLACE_PENDING_SMOKE)
     target_compile_definitions(${COMPONENT_LIB} PRIVATE CITY_PLACE_PENDING_SMOKE=1)
 endif()
+
+option(CITY_PERSONALITY_SMOKE "Exercise individual personality without player-save mutations" OFF)
+if(CITY_PERSONALITY_SMOKE)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE CITY_PERSONALITY_SMOKE=1)
+endif()

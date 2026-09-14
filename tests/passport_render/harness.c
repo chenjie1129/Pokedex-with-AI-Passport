@@ -24,6 +24,11 @@ static uint8_t s_evolution_selection;
 static uint8_t s_action_selection, s_release_selection;
 static uint16_t s_release_copy_selection, s_owned_selection;
 static uint32_t s_release_instance_id;
+static uint32_t s_companion_instance_id, s_visit_buddy_id;
+static uint8_t s_companion_selection;
+static uint64_t s_encounter_sequence;
+static uint8_t s_visit_gain, s_visit_context;
+static bool s_companion_recovered;
 static uint8_t s_encounter_selection, s_bestiary_selection;
 static uint16_t s_current_species_id;
 static city_creature_stats_t s_current_stats;
@@ -117,7 +122,9 @@ static void check_labels(lv_obj_t *o)
 static void snapshot(const char *name, unsigned mode)
 {
     lv_obj_t *old = s_screen;
-    if (mode == 14) build_capture_ready();
+    if (mode == 33) build_companion();
+    else if (mode == 34) build_buddy_reaction();
+    else if (mode == 14) build_capture_ready();
     else if (mode == 15 || mode == 22 || mode == 23) {
         build_aim();
         update_aim(mode == 22 ? 2100 : 1000);
@@ -311,6 +318,7 @@ int main(int argc, char **argv)
         }
         s_bestiary.records[target_index] = empty.records[target_index];
         s_bestiary.buddy_species_id = s_evolution_source_id;
+        s_bestiary.buddy_instance_id = 0;
         char name[80];
         for (unsigned ready = 0; ready < 2; ++ready) {
             s_bestiary.records[i].friendship = ready ? 30 : 29;
@@ -350,12 +358,38 @@ int main(int argc, char **argv)
     s_bestiary.owned[0].migrated=true;s_owned_selection=0;snapshot("own-legacy",32);
     assert(city_bestiary_recover(&s_bestiary,25,persist,NULL)==CITY_BESTIARY_APPLIED);
     snapshot("actions-full",9);
+    /* Exercise every authored line through its production layout in both languages. */
+    for(unsigned lang=0;lang<2;++lang) {
+        s_settings_draft.language=lang;
+        for(unsigned p=0;p<6;++p) {
+            s_bestiary.owned[0].personality=p;
+            s_bestiary.buddy_instance_id=s_bestiary.owned[0].instance_id;
+            s_bestiary.buddy_species_id=s_bestiary.owned[0].species_id;
+            s_companion_instance_id=s_visit_buddy_id=s_bestiary.owned[0].instance_id;
+            for(unsigned band=0;band<3;++band) for(unsigned variant=0;variant<2;++variant) {
+                s_bestiary.owned[0].friendship=band*30+variant;
+                s_companion_recovered=false;
+                char name[80];snprintf(name,sizeof(name),"personality-%u-%u-%u-%u",lang,p,band,variant);
+                snapshot(name,33);
+            }
+            for(unsigned context=1;context<=3;++context) for(unsigned variant=0;variant<2;++variant) {
+                char name[80];snprintf(name,sizeof(name),"reaction-%u-%u-%u-%u",lang,p,context,variant);
+                s_visit_context=context;s_encounter_sequence=variant;s_visit_gain=5;
+                s_bestiary.owned[0].friendship=variant;
+                s_companion_recovered=context==3;
+                snapshot(name,context==3?33:34);
+            }
+            char name[80];snprintf(name,sizeof(name),"personality-home-%u-%u",lang,p);snapshot(name,1);
+            snprintf(name,sizeof(name),"personality-copy-%u-%u",lang,p);snapshot(name,32);
+        }
+    }
+    s_settings_draft.language=CITY_LANGUAGE_ENGLISH;
     /* Optional local, already-decoded device save; no hardware or writes involved. */
     if (argc==2) {
         uint8_t encoded[CITY_BESTIARY_ENCODED_BYTES];
         FILE *save=fopen(argv[1],"rb");assert(save);
-        assert(fread(encoded,1,sizeof(encoded),save)==sizeof(encoded));fclose(save);
-        assert(city_bestiary_decode(encoded,sizeof(encoded),&s_bestiary));
+        size_t length=fread(encoded,1,sizeof(encoded),save);fclose(save);
+        assert(city_bestiary_decode(encoded,length,&s_bestiary));
         for (unsigned species=0;species<CITY_SPECIES_COUNT;++species) {
             s_bestiary_selection=species;
             const uint16_t id=city_species_id_at(species);

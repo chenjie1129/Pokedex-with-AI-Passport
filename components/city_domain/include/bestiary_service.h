@@ -6,13 +6,13 @@
 #include "wild_reward_guard.h"
 
 #include "species_catalog.h"
-#define CITY_BESTIARY_SCHEMA_VERSION 10U
+#define CITY_BESTIARY_SCHEMA_VERSION 11U
 #define CITY_BESTIARY_MAGIC UINT32_C(0x31545342)
 #define CITY_BESTIARY_LEGACY_BYTES 156U
 #define CITY_BESTIARY_RECORD_BYTES 22U
 #define CITY_MAX_OWNED_POKEMON 160U
-#define CITY_OWNED_POKEMON_BYTES 16U
-#define CITY_BESTIARY_HEADER_BYTES 40U
+#define CITY_OWNED_POKEMON_BYTES 20U
+#define CITY_BESTIARY_HEADER_BYTES 48U
 #define CITY_BESTIARY_ENCODED_BYTES (CITY_BESTIARY_HEADER_BYTES + \
     CITY_SPECIES_COUNT * CITY_BESTIARY_RECORD_BYTES + \
     CITY_MAX_OWNED_POKEMON * CITY_OWNED_POKEMON_BYTES + 4U)
@@ -58,6 +58,14 @@ typedef struct {
     uint8_t current_hp;
 } city_creature_record_t;
 
+/* Stable wire IDs: never reorder or use a content-table index as saved meaning. */
+typedef enum {
+    CITY_PERSONALITY_CURIOUS = 0, CITY_PERSONALITY_BRAVE = 1,
+    CITY_PERSONALITY_CALM = 2, CITY_PERSONALITY_PLAYFUL = 3,
+    CITY_PERSONALITY_AFFECTIONATE = 4, CITY_PERSONALITY_INDEPENDENT = 5,
+    CITY_PERSONALITY_COUNT = 6
+} city_personality_t;
+
 typedef struct {
     uint32_t instance_id;
     uint16_t species_id;
@@ -66,6 +74,10 @@ typedef struct {
     uint8_t current_hp;
     bool evolved;
     bool migrated;
+    uint8_t personality;
+    uint8_t friendship;
+    uint16_t friendship_places;
+    uint16_t last_friendship_place;
 } city_owned_pokemon_t;
 
 typedef struct {
@@ -74,6 +86,8 @@ typedef struct {
     uint64_t last_settled_sequence;
     bool wild_cooldown_active;
     uint16_t buddy_species_id; /* Zero means no buddy selected. */
+    uint32_t buddy_instance_id; /* Zero: old species buddy needs explicit copy selection. */
+    uint64_t last_visit_sequence;
     uint16_t owned_count;
     uint32_t next_instance_id;
     city_owned_pokemon_t owned[CITY_MAX_OWNED_POKEMON];
@@ -196,3 +210,22 @@ uint8_t city_buddy_place_count(const city_creature_record_t *record);
 bool city_evolution_ready(const city_bestiary_t *bestiary, uint16_t source_id);
 city_bestiary_result_t city_bestiary_evolve(city_bestiary_t *bestiary,
     uint16_t source_id, city_bestiary_persist_fn persist, void *context);
+
+/* All new companion mutations target a stable ID. Species APIs are legacy only. */
+const city_owned_pokemon_t *city_bestiary_owned_by_id(const city_bestiary_t *, uint32_t);
+city_bestiary_result_t city_bestiary_choose_buddy_instance(city_bestiary_t *, uint32_t,
+    city_bestiary_persist_fn, void *);
+city_bestiary_result_t city_bestiary_recover_instance(city_bestiary_t *, uint32_t,
+    city_bestiary_persist_fn, void *);
+city_bestiary_result_t city_bestiary_damage_instance(city_bestiary_t *, uint32_t, uint8_t,
+    city_bestiary_persist_fn, void *);
+/* An eligible confirmed scan, independent of whether the player catches anything.
+ * A revisit requires this individual to have visited another place in between.
+ * The caller binds recipient/sequence while input is locked and retries unchanged. */
+city_bestiary_result_t city_bestiary_visit(city_bestiary_t *, uint64_t, uint32_t,
+    uint16_t, uint16_t, city_bestiary_persist_fn, void *);
+/* Inject an already uniform [0,6) draw, generated before asynchronous settlement. */
+city_bestiary_result_t city_bestiary_capture_personality(city_bestiary_t *, uint64_t,
+    uint16_t, uint16_t, const city_creature_stats_t *, uint8_t,
+    city_bestiary_persist_fn, void *);
+uint8_t city_friendship_band(uint8_t points);
