@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "automated_source": {
+    "id": "pokeapi-v2",
+    "authority_tier": "structured-secondary",
+    "repository_url": "https://github.com/PokeAPI/pokeapi.git",
+    "repository_branch": "master",
+    "raw_base_url": "https://raw.githubusercontent.com/PokeAPI/pokeapi/{revision}/data/v2/csv/",
+    "allowed_host": "raw.githubusercontent.com",
+    "refresh_interval_seconds": 86400,
+    "fair_use": "Cache responses locally and avoid unnecessary requests.",
+    "license_url": "https://github.com/PokeAPI/pokeapi/blob/master/LICENSE.md",
+    "files": {
+      "species": "pokemon_species.csv",
+      "pokemon": "pokemon.csv",
+      "forms": "pokemon_forms.csv",
+      "pokedexes": "pokedexes.csv",
+      "pokedex_memberships": "pokemon_dex_numbers.csv"
+    }
+  },
+  "verification_sources": [
+    {
+      "id": "pokemon-official-national-tail",
+      "authority_tier": "official",
+      "url": "https://sg.portal-pokemon.com/play/pokedex/1025/",
+      "scope": [
+        "national_number",
+        "official_name",
+        "type",
+        "official_description"
+      ],
+      "collection_policy": "Manual single-record verification only; do not bulk-copy text or media.",
+      "verified_on": "2026-09-15",
+      "expected": {
+        "national_number": 1025,
+        "english_name": "Pecharunt"
+      }
+    },
+    {
+      "id": "pokemon-home-features",
+      "authority_tier": "official",
+      "url": "https://home.pokemon.com/en-us/features/",
+      "scope": [
+        "national_pokedex_semantics",
+        "game_specific_pokedex_semantics",
+        "form_registration_semantics"
+      ],
+      "collection_policy": "Reference classification semantics; do not mirror page content."
+    },
+    {
+      "id": "pokemon-go-pokedex-help",
+      "authority_tier": "official-product",
+      "url": "https://niantic.helpshift.com/hc/en/6-pokemon-go/faq/124-viewing-the-pokedex/",
+      "scope": [
+        "seen_caught_states",
+        "regional_views",
+        "orthogonal_category_views"
+      ],
+      "collection_policy": "Reference product behavior; do not ingest player or location data."
+    },
+    {
+      "id": "legends-arceus-gameplay",
+      "authority_tier": "official",
+      "url": "https://legends.arceus.pokemon.com/en-us/gameplay/",
+      "scope": [
+        "research_task_semantics",
+        "progressive_entry_completion"
+      ],
+      "collection_policy": "Reference product behavior; do not mirror page content."
+    }
+  ]
+}
