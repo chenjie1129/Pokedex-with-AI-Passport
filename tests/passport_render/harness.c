@@ -16,7 +16,8 @@
 #include <assert.h>
 #include <string.h>
 #define ESP_LOGI(...) ((void)0)
-#define CITY_BUILD_VERSION "123456789abc-1234567890-dirty"
+#define CITY_BUILD_VERSION "123456789.123456789.123456789"
+#define CITY_BUILD_ID "123456789abc-dirty"
 #define CITY_BUILD_DIRTY 1
 static lv_obj_t *s_screen, *s_status, *s_battery_label, *s_field;
 static lv_obj_t *s_wild_countdown, *s_place_countdown;

@@ -523,8 +523,7 @@ static void build_settings(void)
         s_settings_editing && s_settings_selection == 1 ? "Press OK to hear it" : "Save to keep your changes";
     label_at(s_screen, message, &city_font_14, COLOR_MUTED, 10, 242, 220);
     char version[40];
-    snprintf(version, sizeof(version), "v%.12s%s", CITY_BUILD_VERSION,
-             CITY_BUILD_DIRTY ? "-dirty" : "");
+    snprintf(version, sizeof(version), "v%s", CITY_BUILD_VERSION);
     lv_obj_t *version_label = label_at(
         s_screen, version, &city_font_14, COLOR_MUTED, 10, 264, 220);
     lv_obj_set_style_text_align(version_label, LV_TEXT_ALIGN_CENTER, 0);
@@ -2387,8 +2386,8 @@ static void battery_task(void *argument)
 void app_main(void)
 {
     ESP_LOGI(TAG, "Pokedex AI Passport boot");
-    ESP_LOGI(TAG, "BUILD_ID version=%s commit=%s source=%s dirty=%u",
-             CITY_BUILD_VERSION, CITY_BUILD_GIT_COMMIT,
+    ESP_LOGI(TAG, "BUILD_ID version=%s id=%s commit=%s source=%s dirty=%u",
+             CITY_BUILD_VERSION, CITY_BUILD_ID, CITY_BUILD_GIT_COMMIT,
              CITY_BUILD_SOURCE_SHA256, CITY_BUILD_DIRTY);
     ESP_LOGI(TAG, "wake_cause=%d", (int)esp_sleep_get_wakeup_cause());
 

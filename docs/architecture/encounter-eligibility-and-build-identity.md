@@ -25,18 +25,25 @@ cooldown integration remain the separate T10 task.
 
 ## Build identity
 
-CMake generates an application version of the form:
+The repository root `VERSION` file is the single source of truth for the
+human-facing semantic version, for example:
 
 ```text
-<12-character-commit>-<10-character-source-hash>[-dirty]
+0.1.0-dev
 ```
 
-The full Git commit and SHA-256 of the non-ignored source snapshot are in
+CMake uses that value as the ESP-IDF application version. The full Git commit
+and SHA-256 of the non-ignored source snapshot remain in
 `build/firmware/identity/build-identity.json` and in the `BUILD_ID` boot log.
+The log also includes a short `build_id` (`<12-character-commit>[-dirty]`) for
+quick support references. The UI shows only the semantic version; it does not
+expose the source fingerprint or dirty marker.
 The fingerprint includes tracked content, deletions, executable modes, symlink
 targets and non-ignored untracked files. Ignored build outputs do not affect it.
 `dirty` means the checkout differs from the commit, including untracked files.
-It must not be interpreted as a released commit.
+It must not be interpreted as a released commit. A dirty build keeps the same
+human-facing version but is rejected by release packaging unless
+`--allow-dirty` is explicitly supplied.
 
 Incremental builds rerun identity generation after source or Git-state changes.
 Build from a Git checkout. Generated artifacts and package output belong in an
