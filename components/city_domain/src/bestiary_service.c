@@ -1137,7 +1137,9 @@ static city_bestiary_result_t instance_health(city_bestiary_t *b, uint32_t id, u
     if (!city_bestiary_is_valid(b) || !persist) return CITY_BESTIARY_INVALID;
     const city_owned_pokemon_t *owned = city_bestiary_owned_by_id(b, id);
     if (!owned) return CITY_BESTIARY_INVALID;
-    const uint8_t hp = recover ? owned->stats.hp : damage >= owned->current_hp ? 0U : owned->current_hp - damage;
+    uint8_t hp = owned->stats.hp;
+    if (!recover)
+        hp = damage >= owned->current_hp ? 0U : (uint8_t)(owned->current_hp - damage);
     if (hp == owned->current_hp) return CITY_BESTIARY_UNCHANGED;
     city_bestiary_t next = *b;
     next.owned[owned - b->owned].current_hp = hp;

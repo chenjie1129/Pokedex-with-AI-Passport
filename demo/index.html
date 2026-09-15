@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pokédex</title>
-  <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./styles.css?v=ui-20260915">
 </head>
 <body>
 <main class="workspace">
@@ -21,15 +21,21 @@
         </header>
 
         <div class="screen-content">
-          <p class="eyebrow" id="eyebrow">PLACE 01</p>
-          <h1 id="title" aria-live="polite">发现新的地点信号</h1>
-          <canvas id="scene" width="240" height="166" aria-label="Game scene"></canvas>
-          <div class="capture-meter" id="captureMeter" hidden>
-            <div class="target-zone"></div>
-            <div class="capture-marker" id="captureMarker"></div>
+          <div class="screen-intro">
+            <p class="eyebrow" id="eyebrow">PLACE 01</p>
+            <h1 id="title" aria-live="polite">发现新的地点信号</h1>
           </div>
-          <p class="message" id="message" aria-live="polite">准备扫描周围环境</p>
-          <p class="meta" id="meta">按 OK 开始</p>
+          <div class="scene-frame">
+            <canvas id="scene" width="240" height="166" aria-label="Game scene"></canvas>
+            <div class="capture-meter" id="captureMeter" hidden>
+              <div class="target-zone"></div>
+              <div class="capture-marker" id="captureMarker"></div>
+            </div>
+          </div>
+          <div class="screen-copy">
+            <p class="message" id="message" aria-live="polite">准备扫描周围环境</p>
+            <p class="meta" id="meta">按 OK 开始</p>
+          </div>
         </div>
 
         <footer class="screen-footer">
@@ -75,6 +81,6 @@
   </aside>
 </main>
 
-<script type="module" src="./app.js"></script>
+<script type="module" src="./app.js?v=ui-20260915"></script>
 </body>
 </html>
