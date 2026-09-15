@@ -26,6 +26,9 @@ static city_creature_stats_t s_current_stats = {39, 52, 43};
 static uint16_t s_current_species_id = CITY_SPECIES_CHARMANDER, s_current_place_id = 2;
 static uint16_t s_evolution_source_id, s_release_copy_selection, s_owned_selection, s_capture_bond_gain;
 static uint32_t s_release_instance_id;
+static uint8_t s_memory_page;
+static bool s_memory_from_home;
+static bool s_visit_remembered;
 static uint32_t s_companion_instance_id, s_visit_buddy_id;
 static uint8_t s_visit_context, s_visit_gain;
 static uint8_t s_companion_selection, s_personality_draw;
@@ -118,6 +121,14 @@ int main(void) {
     click(BSP_BTN_OK);click(BSP_BTN_DOWN);click(BSP_BTN_OK);
     assert(writes==1 && s_pending_write==WRITE_RECOVER && s_companion_instance_id==3);
     writes=0;before=s_bestiary;
+    /* Memories are reachable from Home and individual actions, with explicit return. */
+    s_state=UI_HOME;s_home_selection=4;click(BSP_BTN_OK);
+    assert(s_state==UI_MEMORIES && s_memory_from_home && s_companion_instance_id==s_bestiary.buddy_instance_id);
+    click(BSP_BTN_DOWN);click(BSP_BTN_OK);assert(s_state==UI_HOME);no_mutation();
+    s_state=UI_COMPANION;s_companion_instance_id=3;s_companion_selection=3;
+    click(BSP_BTN_OK);assert(s_state==UI_MEMORIES && !s_memory_from_home);
+    click(BSP_BTN_OK);assert(s_state==UI_COMPANION && s_companion_selection==3);no_mutation();
+    click(BSP_BTN_DOWN);click(BSP_BTN_OK);assert(s_state==UI_POKEMON_ACTIONS);no_mutation();
     /* Release cancellation works for both single and multiple copies. */
     const uint16_t species[] = {CITY_SPECIES_PIKACHU,CITY_SPECIES_CHARMANDER};
     for(unsigned i=0;i<2;++i) {

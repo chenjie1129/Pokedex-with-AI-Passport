@@ -287,6 +287,19 @@ bool city_bestiary_is_valid(const city_bestiary_t *bestiary)
             owned->last_friendship_place > 16U ||
             (owned->last_friendship_place && !(owned->friendship_places & (1U << (owned->last_friendship_place - 1U)))) ||
             owned->current_hp > owned->stats.hp || (owned->evolved && evolved[index])) return false;
+        if (owned->memory_count > CITY_MEMORY_CAPACITY) return false;
+        for (unsigned m = 0; m < CITY_MEMORY_CAPACITY; ++m) {
+            const city_memory_t event = owned->memories[m];
+            if (m >= owned->memory_count) {
+                if (event.kind || event.place) return false;
+            } else {
+                if (event.kind < CITY_MEMORY_FIRST_OUTING || event.kind > CITY_MEMORY_CLOSE) return false;
+                if (event.kind <= CITY_MEMORY_REVISIT) {
+                    if (!event.place || event.place > 16U ||
+                        !(owned->friendship_places & (1U << (event.place - 1U)))) return false;
+                } else if (event.place) return false;
+            }
+        }
         for (uint16_t j = 0U; j < i; ++j)
             if (bestiary->owned[j].instance_id == owned->instance_id) return false;
         if (owned->evolved) evolved[index] = true;
@@ -542,10 +555,16 @@ static void encode_owned(uint8_t *output, const city_owned_pokemon_t *owned)
     output[14] = owned->friendship;
     write_u16_le(output + 16U, owned->friendship_places);
     write_u16_le(output + 18U, owned->last_friendship_place);
+    output[20] = owned->memory_count;
+    for (unsigned i = 0; i < CITY_MEMORY_CAPACITY; ++i) {
+        output[21 + i * 2] = owned->memories[i].kind;
+        output[22 + i * 2] = owned->memories[i].place;
+    }
 }
 
-static bool decode_owned(const uint8_t *data, city_owned_pokemon_t *owned, bool legacy)
+static bool decode_owned(const uint8_t *data, city_owned_pokemon_t *owned, uint16_t version)
 {
+    const bool legacy = version == 10U;
     if ((data[12] & ~3U) != 0U || data[15] != 0U || (legacy && (data[13] != 0U || data[14] != 0U)))
         return false;
     memset(owned, 0, sizeof(*owned));
@@ -563,6 +582,14 @@ static bool decode_owned(const uint8_t *data, city_owned_pokemon_t *owned, bool 
         owned->friendship = data[14];
         owned->friendship_places = read_u16_le(data + 16U);
         owned->last_friendship_place = read_u16_le(data + 18U);
+    }
+    if (version >= 12U) {
+        if (data[31]) return false;
+        owned->memory_count = data[20];
+        for (unsigned i = 0; i < CITY_MEMORY_CAPACITY; ++i) {
+            owned->memories[i].kind = data[21 + i * 2];
+            owned->memories[i].place = data[22 + i * 2];
+        }
     }
     return true;
 }
@@ -690,9 +717,9 @@ static bool decode_into(
     const uint16_t version = read_u16_le(data + 4);
     city_bestiary_t *decoded = bestiary;
     city_bestiary_init(decoded);
-    if (version == 10U || version == CITY_BESTIARY_SCHEMA_VERSION) {
+    if (version == 10U || version == 11U || version == CITY_BESTIARY_SCHEMA_VERSION) {
         const size_t header_bytes = version == 10U ? 40U : CITY_BESTIARY_HEADER_BYTES;
-        const size_t owned_bytes = version == 10U ? 16U : CITY_OWNED_POKEMON_BYTES;
+        const size_t owned_bytes = version == 10U ? 16U : version == 11U ? 20U : CITY_OWNED_POKEMON_BYTES;
         const size_t expected_length = header_bytes + CITY_SPECIES_COUNT * CITY_BESTIARY_RECORD_BYTES +
             CITY_MAX_OWNED_POKEMON * owned_bytes + 4U;
         const uint16_t count = read_u16_le(data + 6U);
@@ -730,7 +757,7 @@ static bool decode_into(
             CITY_SPECIES_COUNT * CITY_BESTIARY_RECORD_BYTES;
         for (uint16_t i = 0U; i < decoded->owned_count; ++i)
             if (!decode_owned(data + owned_offset + i * owned_bytes,
-                              &decoded->owned[i], version == 10U)) return false;
+                              &decoded->owned[i], version)) return false;
         for (size_t i = owned_offset + decoded->owned_count * owned_bytes;
              i < length - 4U; ++i)
             if (data[i] != 0U) return false;
@@ -1080,6 +1107,30 @@ city_bestiary_result_t city_bestiary_choose_buddy_instance(city_bestiary_t *b, u
     return CITY_BESTIARY_APPLIED;
 }
 
+static void remember(city_owned_pokemon_t *owned, uint8_t kind, uint8_t place)
+{
+    if (owned->memory_count == CITY_MEMORY_CAPACITY) {
+        memmove(owned->memories, owned->memories + 1,
+                (CITY_MEMORY_CAPACITY - 1U) * sizeof(owned->memories[0]));
+        --owned->memory_count;
+    }
+    owned->memories[owned->memory_count++] = (city_memory_t){kind, place};
+}
+
+uint8_t city_companion_place_count(const city_owned_pokemon_t *owned)
+{
+    uint8_t count = 0;
+    if (owned) for (unsigned i = 0; i < 16; ++i) count += (owned->friendship_places >> i) & 1U;
+    return count;
+}
+
+city_companion_invitation_t city_companion_invitation(const city_owned_pokemon_t *owned)
+{
+    if (owned && owned->current_hp < owned->stats.hp) return CITY_INVITE_REST;
+    const uint8_t places = city_companion_place_count(owned);
+    return !places ? CITY_INVITE_FIRST_OUTING : places < 16U ? CITY_INVITE_NEW_PLACE : CITY_INVITE_REVISIT;
+}
+
 static city_bestiary_result_t instance_health(city_bestiary_t *b, uint32_t id, uint8_t damage,
     bool recover, city_bestiary_persist_fn persist, void *context)
 {
@@ -1090,6 +1141,7 @@ static city_bestiary_result_t instance_health(city_bestiary_t *b, uint32_t id, u
     if (hp == owned->current_hp) return CITY_BESTIARY_UNCHANGED;
     city_bestiary_t next = *b;
     next.owned[owned - b->owned].current_hp = hp;
+    if (recover) remember(&next.owned[owned - b->owned], CITY_MEMORY_REST, 0);
     const city_creature_record_t previous = *city_bestiary_record_const(b, owned->species_id);
     rebuild_species_after_release(&next, owned->species_id, &previous);
     if (!persist(&next, context)) return CITY_BESTIARY_STORAGE_FAILED;
@@ -1121,11 +1173,19 @@ city_bestiary_result_t city_bestiary_visit(city_bestiary_t *b, uint64_t sequence
         city_owned_pokemon_t *owned = &next.owned[selected - b->owned];
         if (owned->last_friendship_place != place) {
             const uint16_t bit = (uint16_t)(1U << (place - 1U));
-            const unsigned gain = (owned->friendship_places & bit) ? 2U : 5U;
+            const bool revisit = (owned->friendship_places & bit) != 0;
+            const uint8_t previous_band = city_friendship_band(owned->friendship);
+            const uint8_t event = !owned->friendship_places ? CITY_MEMORY_FIRST_OUTING :
+                revisit ? CITY_MEMORY_REVISIT : CITY_MEMORY_NEW_PLACE;
+            const unsigned gain = revisit ? 2U : 5U;
             const unsigned points = owned->friendship + gain;
             owned->friendship = points > 100U ? 100U : points;
             owned->friendship_places |= bit;
             owned->last_friendship_place = place;
+            remember(owned, event, (uint8_t)place);
+            if (city_friendship_band(owned->friendship) > previous_band)
+                remember(owned, city_friendship_band(owned->friendship) == 1U ?
+                         CITY_MEMORY_FAMILIAR : CITY_MEMORY_CLOSE, 0);
         }
     }
     if (seen->state == city_bestiary_record_const(b, seen_species)->state &&
