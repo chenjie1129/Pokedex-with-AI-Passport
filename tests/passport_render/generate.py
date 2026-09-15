@@ -4,7 +4,7 @@ import re
 import sys
 source = Path(sys.argv[1]).read_text()
 functions = []
-for name in ('style_plain', 'label_at', 'new_screen', 'create_field', 'create_species', 'build_home', 'build_settings', 'build_passport', 'ball_geometry', 'create_ball', 'build_catching', 'position_capture_target', 'build_capture_ready', 'build_aim', 'update_aim', 'build_captured', 'build_escaped', 'build_bestiary_hint', 'build_scanning', 'build_place_status', 'build_place_pending', 'build_storage_error', 'build_throwing', 'build_evolution', 'evolution_reveal_y', 'build_evolved', 'build_encounter', 'build_bestiary_list', 'build_bestiary_detail', 'build_pokemon_actions', 'build_owned_detail', 'build_companion', 'build_buddy_reaction', 'build_release_picker', 'build_release_confirm', 'build_released'):
+for name in ('style_plain', 'label_at', 'new_screen', 'create_field', 'create_species', 'build_home', 'build_settings', 'build_passport', 'ball_geometry', 'create_ball', 'build_catching', 'position_capture_target', 'build_capture_ready', 'build_aim', 'update_aim', 'build_captured', 'build_escaped', 'build_bestiary_hint', 'build_scanning', 'build_place_status', 'build_place_pending', 'build_storage_error', 'build_throwing', 'build_evolution', 'evolution_reveal_y', 'build_evolved', 'build_encounter', 'build_bestiary_list', 'build_bestiary_detail', 'build_pokemon_actions', 'build_owned_detail', 'build_companion', 'build_memories', 'build_buddy_reaction', 'build_release_picker', 'build_release_confirm', 'build_released'):
     match = re.search(r'^static [^\n]*\b' + name + r'\(', source, re.M)
     assert match, name
     end = source.index('\n}\n', match.start()) + 3

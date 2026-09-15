@@ -24,6 +24,8 @@ static uint8_t s_evolution_selection;
 static uint8_t s_action_selection, s_release_selection;
 static uint16_t s_release_copy_selection, s_owned_selection;
 static uint32_t s_release_instance_id;
+static uint8_t s_memory_page;
+static bool s_memory_from_home;
 static uint32_t s_companion_instance_id, s_visit_buddy_id;
 static uint8_t s_companion_selection;
 static uint64_t s_encounter_sequence;
@@ -122,7 +124,8 @@ static void check_labels(lv_obj_t *o)
 static void snapshot(const char *name, unsigned mode)
 {
     lv_obj_t *old = s_screen;
-    if (mode == 33) build_companion();
+    if (mode == 35) build_memories();
+    else if (mode == 33) build_companion();
     else if (mode == 34) build_buddy_reaction();
     else if (mode == 14) build_capture_ready();
     else if (mode == 15 || mode == 22 || mode == 23) {
@@ -400,6 +403,29 @@ int main(int argc, char **argv)
                 s_owned_selection=copy;snprintf(name,sizeof(name),"device-copy-%03u-%u",id,copy+1);snapshot(name,32);
             }
         }
+    }
+    /* All memory kinds, empty state, paging, progress and contextual invitations. */
+    for (unsigned lang=0;lang<2;++lang) {
+        s_settings_draft.language=lang;
+        s_companion_instance_id=s_bestiary.owned[0].instance_id;
+        s_bestiary.buddy_instance_id=s_companion_instance_id;
+        city_owned_pokemon_t *o=&s_bestiary.owned[0];
+        for(unsigned kind=0;kind<=6;++kind) {
+            memset(o->memories,0,sizeof(o->memories));o->memory_count=kind?1:0;
+            o->memories[0]=(city_memory_t){kind,kind && kind<=3?16:0};
+            s_memory_page=0;o->friendship_places=0xffff;o->current_hp=o->stats.hp;
+            char name[80];snprintf(name,sizeof(name),"memory-%u-%u",lang,kind);snapshot(name,35);
+            snprintf(name,sizeof(name),"home-memory-%u-%u",lang,kind);snapshot(name,1);
+        }
+        for(unsigned invitation=0;invitation<4;++invitation) {
+            o->friendship_places=invitation==0?0:invitation==2?0xffff:1;
+            o->current_hp=invitation==3?0:o->stats.hp;
+            char name[80];snprintf(name,sizeof(name),"invitation-%u-%u",lang,invitation);snapshot(name,35);
+        }
+        o->memory_count=5;s_memory_page=4;
+        for(unsigned i=0;i<5;++i)o->memories[i]=(city_memory_t){CITY_MEMORY_NEW_PLACE,1};
+        char name[80];snprintf(name,sizeof(name),"memory-last-page-%u",lang);snapshot(name,35);
+        s_companion_instance_id=0;snprintf(name,sizeof(name),"memory-no-buddy-%u",lang);snapshot(name,35);
     }
     have_places = false; s_bestiary_ready = false;
     snapshot("passport-unavailable", false);

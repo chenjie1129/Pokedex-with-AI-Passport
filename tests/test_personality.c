@@ -85,7 +85,7 @@ int main(void)
     uint8_t old[OLD_SIZE];memset(old,0,sizeof(old));
     memcpy(old,saved,32);old[4]=10;old[5]=0;
     memcpy(old+40,saved+48,CITY_SPECIES_COUNT*22);
-    for(unsigned i=0;i<160;++i)memcpy(old+40+CITY_SPECIES_COUNT*22+i*16,saved+48+CITY_SPECIES_COUNT*22+i*20,13);
+    for(unsigned i=0;i<160;++i)memcpy(old+40+CITY_SPECIES_COUNT*22+i*16,saved+48+CITY_SPECIES_COUNT*22+i*CITY_OWNED_POKEMON_BYTES,13);
     checksum(old,sizeof(old));
     before=b;assert(city_bestiary_decode(old,sizeof(old),&b));
     assert(b.owned_count==160 && b.buddy_instance_id==0 && b.buddy_species_id==25);
@@ -97,7 +97,7 @@ int main(void)
         assert(b.owned[i].personality==i%6 && b.owned[i].friendship==0);
     }
     assert(city_bestiary_encode(&b,saved));reload(&b);
-    before=b;saved[4]=12;checksum(saved,sizeof(saved));
+    before=b;saved[4]=13;checksum(saved,sizeof(saved));
     assert(!city_bestiary_decode(saved,sizeof(saved),&b) && !memcmp(&b,&before,sizeof(b)));
     assert(city_bestiary_encode(&b,saved));saved[48+CITY_SPECIES_COUNT*22+13]=6;checksum(saved,sizeof(saved));
     assert(!city_bestiary_decode(saved,sizeof(saved),&b));

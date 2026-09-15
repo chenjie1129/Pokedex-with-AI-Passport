@@ -34,6 +34,11 @@ static void personality_smoke_task(void *argument)
     ok &= city_bestiary_visit(&s_bestiary,3,2,1,4,personality_smoke_persist,NULL)==CITY_BESTIARY_DUPLICATE;
     ok &= city_bestiary_visit(&s_bestiary,4,2,1,4,personality_smoke_persist,NULL)==CITY_BESTIARY_UNCHANGED;
     ok &= s_bestiary.owned[1].friendship==5 && s_bestiary.owned[0].friendship==0;
+    ok &= s_bestiary.owned[1].memory_count==2;
+    ok &= s_bestiary.owned[1].memories[1].kind==CITY_MEMORY_FIRST_OUTING;
+    ok &= s_bestiary.owned[0].memory_count==0;
+    ok &= city_companion_place_count(&s_bestiary.owned[1])==1;
+    ok &= city_companion_invitation(&s_bestiary.owned[1])==CITY_INVITE_NEW_PLACE;
     s_companion_instance_id=s_visit_buddy_id=2;
     s_bestiary_selection=city_species_index(25);s_owned_selection=1;
     bsp_lvgl_unlock();
@@ -43,6 +48,16 @@ static void personality_smoke_task(void *argument)
         s_settings.language=lang;
         s_bestiary.owned[1].personality=p;
         s_bestiary.owned[1].friendship=(p%3)*30;
+        s_home_selection=4;set_state(UI_HOME);
+        bsp_lvgl_unlock();
+        on_button(BSP_BTN_OK,BSP_BTN_CLICK,NULL);
+        ok &= s_state==UI_MEMORIES && s_companion_instance_id==2;
+        on_button(BSP_BTN_DOWN,BSP_BTN_CLICK,NULL);
+        ok &= s_memory_page==1;
+        vTaskDelay(pdMS_TO_TICKS(100));
+        on_button(BSP_BTN_OK,BSP_BTN_CLICK,NULL);
+        ok &= s_state==UI_HOME;
+        if(!bsp_lvgl_lock(2000)) { ok=false; goto finish; }
         set_state(UI_OWNED_DETAIL);
         bsp_lvgl_unlock();vTaskDelay(pdMS_TO_TICKS(100));
         /* Exercise real button navigation; no write-producing action is selected. */
