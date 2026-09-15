@@ -617,8 +617,8 @@ function drawCaptured(now = performance.now()) {
 function drawHome() {
   clearScene("#fffdf7");
   const rows = [
-    ["探索", "寻找附近的精灵"],
-    ["图鉴", `${discoveredCount()} 已发现 · ${capturedCount()} 已捕获`],
+    ["四处看看", "扫描当前地点"],
+    ["我的图鉴", `${discoveredCount()}/${species.length} 已发现`],
   ];
   rows.forEach(([label, detail], index) => {
     const y = 10 + index * 76;
@@ -790,11 +790,11 @@ function render() {
   downButton.disabled = !navigable;
 
   if (state === "home") {
-    eyebrow.textContent = "离线图鉴";
-    title.textContent = "城市精灵";
-    message.textContent = homeSelection === 0 ? "探索附近地点" : "查看收藏记录";
-    meta.textContent = "使用上下键选择";
-    screenAction.textContent = "上下选择 · OK 打开";
+    eyebrow.textContent = "离线探索";
+    title.textContent = "今天去哪里看看？";
+    message.textContent = homeSelection === 0 ? "寻找附近的宝可梦" : "回看你的发现";
+    meta.textContent = `已发现 ${discoveredCount()}/${species.length} · 已捕获 ${capturedCount()}/${species.length}`;
+    screenAction.textContent = "选择 · OK 打开";
     drawHome();
   } else if (state === "scanning" || state === "place") {
     eyebrow.textContent = "城市绿地";
