@@ -101,6 +101,7 @@ typedef enum {
     UI_OWNED_DETAIL,
     UI_COMPANION,
     UI_BUDDY_REACTION,
+    UI_MEMORIES,
 } ui_state_t;
 
 typedef enum {
@@ -131,6 +132,9 @@ static uint32_t s_release_instance_id;
 static uint16_t s_owned_selection;
 static uint32_t s_companion_instance_id, s_visit_buddy_id;
 static uint8_t s_companion_selection, s_personality_draw;
+static uint8_t s_memory_page;
+static bool s_memory_from_home;
+static bool s_visit_remembered;
 static uint8_t s_visit_gain, s_visit_context;
 static bool s_companion_recovered;
 static uint8_t s_release_selection = 1;
@@ -242,7 +246,7 @@ static const char *state_name(ui_state_t state)
         "captured", "escaped", "abandoned", "bestiary_list", "bestiary_detail",
         "storage_error", "low_battery", "passport", "evolution", "evolved",
         "pokemon_actions", "release_picker", "release_confirm", "released", "settings",
-        "capture_ready", "bestiary_hint", "owned_detail", "companion", "buddy_reaction",
+        "capture_ready", "bestiary_hint", "owned_detail", "companion", "buddy_reaction", "memories",
     };
     return names[state];
 }
@@ -431,7 +435,7 @@ static void build_home(void)
     const city_owned_pokemon_t *buddy = city_bestiary_owned_by_id(&s_bestiary, s_bestiary.buddy_instance_id);
     if (buddy) {
         lv_obj_t *image = create_species(s_screen, buddy->species_id, true);
-        lv_obj_set_pos(image, 12, 72);
+        lv_obj_set_pos(image, 12, 60);
         const city_species_definition_t *definition = city_species_definition(buddy->species_id);
         label_at(s_screen, species_name(definition), &city_font_14, COLOR_INK, 99, 77, 131);
         char text[96];
@@ -439,8 +443,9 @@ static void build_home(void)
         label_at(s_screen, text, &city_font_14, COLOR_GRASS_D, 94, 98, 146);
         snprintf(text, sizeof(text), tr("Friendship %u"), buddy->friendship);
         label_at(s_screen, text, &city_font_14, COLOR_GRASS_D, 94, 116, 146);
-        label_at(s_screen, ui_personality_name(visible_language(), buddy->personality),
-                 &city_font_14, COLOR_MUTED, 94, 135, 140);
+        label_at(s_screen, ui_memory_line(visible_language(), buddy->memory_count ?
+            buddy->memories[buddy->memory_count - 1U].kind : 0U),
+            &city_font_14, COLOR_MUTED, 10, 145, 220);
     } else {
         const bool has_captures = city_bestiary_captured_count(&s_bestiary) > 0;
         label_at(s_screen, has_captures ? "Pick your buddy" : "Find a Pokemon!",
@@ -448,19 +453,19 @@ static void build_home(void)
         label_at(s_screen, s_bestiary.buddy_species_id ? "Choose a copy first" : has_captures ? "Pick one in My Pokemon" : "Choose Look around to start",
                  &city_font_14, COLOR_MUTED, 10, 116, 220);
     }
-    const char *titles[] = {"Look around", "Pokédex", "My stamps", "Sound & screen"};
-    for (unsigned i = 0; i < 4; ++i) {
+    const char *titles[] = {"Look around", "Pokédex", "My stamps", "Sound & screen", "Our memories"};
+    for (unsigned i = 0; i < 5; ++i) {
         lv_obj_t *row = lv_obj_create(s_screen);
         style_plain(row, s_home_selection == i ? 0xE4F4E8 : 0xF7FBF8);
         lv_obj_set_style_radius(row, 8, 0);
         lv_obj_set_style_border_width(row, 1, 0);
         lv_obj_set_style_border_color(row, lv_color_hex(s_home_selection == i ? COLOR_GREEN : 0xD5E0DD), 0);
-        lv_obj_set_pos(row, 10, 158 + i * 26);
-        lv_obj_set_size(row, 220, 24);
+        lv_obj_set_pos(row, 10, 166 + i * 22);
+        lv_obj_set_size(row, 220, 21);
         label_at(row, titles[i], &city_font_14, COLOR_INK, 10, 3, 174);
         label_at(row, s_home_selection == i ? ">" : "", &city_font_14, COLOR_CORAL, 190, 3, 20);
     }
-    label_at(s_screen, "Hold " LV_SYMBOL_UP " to turn screen off", &city_font_14, COLOR_MUTED, 10, 265, 220);
+
 }
 
 static void build_settings(void)
@@ -1023,14 +1028,47 @@ static void build_companion(void)
     label_at(s_screen, text, &city_font_14, COLOR_INK, 10, 130, 220);
     const char *bands[] = {"Getting acquainted", "Familiar", "Close"};
     label_at(s_screen, bands[city_friendship_band(owned->friendship)], &city_font_14, COLOR_MUTED, 10, 150, 220);
-    const char *choices[] = {"Set as buddy", owned->current_hp == owned->stats.hp ? "Health is full" : "Rest", "About this copy", "Go back"};
-    for (unsigned i = 0; i < 4; ++i) {
+    const char *choices[] = {"Set as buddy", owned->current_hp == owned->stats.hp ? "Health is full" : "Rest", "About this copy", "Our memories", "Go back"};
+    for (unsigned i = 0; i < 5; ++i) {
         snprintf(text, sizeof(text), "%s%s", i == s_companion_selection ? "> " : "", tr(choices[i]));
         label_at(s_screen, text, &city_font_14, i == s_companion_selection ? COLOR_GRASS_D : COLOR_INK,
-                 10, 173 + i * 21, 220);
+                 10, 171 + i * 19, 220);
     }
-    label_at(s_screen, s_companion_recovered ? "Rest complete" : "New individual friendship",
-             &city_font_14, COLOR_MUTED, 10, 258, 220);
+
+}
+
+static void build_memories(void)
+{
+    s_screen = new_screen("Our memories", LV_SYMBOL_UP " / " LV_SYMBOL_DOWN " Choose\nPress OK to go back");
+    const city_owned_pokemon_t *owned = city_bestiary_owned_by_id(&s_bestiary, s_companion_instance_id);
+    if (!owned) {
+        label_at(s_screen, "Choose a buddy first", &city_font_14, COLOR_INK, 10, 85, 220);
+        label_at(s_screen, "Pick one in My Pokemon", &city_font_14, COLOR_MUTED, 10, 115, 220);
+        return;
+    }
+    char text[96];
+    label_at(s_screen, species_name(city_species_definition(owned->species_id)), &city_font_20, COLOR_INK, 10, 75, 220);
+    snprintf(text, sizeof(text), tr("Places together: %u"), city_companion_place_count(owned));
+    label_at(s_screen, text, &city_font_14, COLOR_GRASS_D, 10, 103, 220);
+    if (owned->memory_count) {
+        const unsigned page = s_memory_page < owned->memory_count ? s_memory_page : 0U;
+        const city_memory_t event = owned->memories[owned->memory_count - 1U - page];
+        snprintf(text, sizeof(text), tr("Memory %u/%u"), page + 1U, owned->memory_count);
+        label_at(s_screen, text, &city_font_14, COLOR_MUTED, 10, 133, 220);
+        label_at(s_screen, ui_memory_line(visible_language(), event.kind), &city_font_14, COLOR_INK, 10, 155, 220);
+        if (event.place) {
+            snprintf(text, sizeof(text), tr("Place %02u"), event.place);
+            label_at(s_screen, text, &city_font_14, COLOR_MUTED, 10, 177, 220);
+        }
+    } else {
+        label_at(s_screen, "No memories yet", &city_font_14, COLOR_INK, 10, 133, 220);
+        label_at(s_screen, "New memories start here", &city_font_14, COLOR_MUTED, 10, 155, 220);
+    }
+    const city_companion_invitation_t invitation = city_companion_invitation(owned);
+    label_at(s_screen, "What shall we do next?", &city_font_14, COLOR_MUTED, 10, 209, 220);
+    label_at(s_screen, ui_invitation_line(visible_language(), invitation), &city_font_14, COLOR_GRASS_D, 10, 231, 220);
+    label_at(s_screen, invitation == CITY_INVITE_REST ? "Rest in buddy actions" : owned->instance_id != s_bestiary.buddy_instance_id ? "Set as buddy to explore" : "Open Look around",
+             &city_font_14, COLOR_MUTED, 10, 253, 220);
 }
 
 static void build_buddy_reaction(void)
@@ -1047,6 +1085,9 @@ static void build_buddy_reaction(void)
     char text[96];
     snprintf(text, sizeof(text), tr("Friendship +%u"), s_visit_gain);
     label_at(s_screen, text, &city_font_14, COLOR_INK, 10, 224, 220);
+    label_at(s_screen, owned->memory_count && owned->memories[owned->memory_count - 1U].kind >= CITY_MEMORY_FAMILIAR ?
+        ui_memory_line(visible_language(), owned->memories[owned->memory_count - 1U].kind) : "Saved in our memories",
+        &city_font_14, COLOR_GRASS_D, 10, 249, 220);
 }
 
 static void build_release_confirm(void)
@@ -1222,6 +1263,8 @@ static void build_state(void)
         build_evolved(); break;
     case UI_POKEMON_ACTIONS:
         build_pokemon_actions(); break;
+    case UI_MEMORIES:
+        build_memories(); break;
     case UI_COMPANION:
         build_companion(); break;
     case UI_BUDDY_REACTION:
@@ -1444,12 +1487,15 @@ static bool persist_discovery(void)
 
     const city_owned_pokemon_t *buddy = city_bestiary_owned_by_id(&s_bestiary, s_visit_buddy_id);
     const uint8_t before = buddy ? buddy->friendship : 0U;
+    const bool changed_place = buddy && buddy->last_friendship_place != s_current_place_id;
+    s_visit_remembered = false;
     if (buddy) s_visit_context = (buddy->friendship_places & (1U << (s_current_place_id - 1U))) ? 2U : 1U;
     const city_bestiary_result_t result = city_bestiary_visit(&s_bestiary, s_encounter_sequence,
         s_visit_buddy_id, s_current_place_id, s_current_species_id,
         bsp_bestiary_store_persist, (void *)&BSP_BESTIARY_STORE_DEFAULT);
     if (result != CITY_BESTIARY_APPLIED && result != CITY_BESTIARY_DUPLICATE && result != CITY_BESTIARY_UNCHANGED) return false;
     buddy = city_bestiary_owned_by_id(&s_bestiary, s_visit_buddy_id);
+    s_visit_remembered = result == CITY_BESTIARY_APPLIED && changed_place;
     s_visit_gain = result == CITY_BESTIARY_APPLIED && buddy ? buddy->friendship - before : 0U;
     ESP_LOGI(
         TAG, "DISCOVERY_COMMITTED species=%03u result=%s",
@@ -1562,7 +1608,7 @@ static void bestiary_write_task(void *argument)
         s_pending_write = WRITE_NONE;
         if (operation == WRITE_RECOVER) s_companion_recovered = true;
         set_state(operation == WRITE_RELEASE ? UI_RELEASED : operation == WRITE_RECOVER ? UI_COMPANION :
-                  operation == WRITE_EVOLUTION ? UI_EVOLVED : operation == WRITE_BUDDY ? UI_HOME : operation == WRITE_DISCOVERY && s_visit_gain ? UI_BUDDY_REACTION : (operation == WRITE_DISCOVERY || operation == WRITE_WILD)
+                  operation == WRITE_EVOLUTION ? UI_EVOLVED : operation == WRITE_BUDDY ? UI_HOME : operation == WRITE_DISCOVERY && s_visit_remembered ? UI_BUDDY_REACTION : (operation == WRITE_DISCOVERY || operation == WRITE_WILD)
                       ? UI_ENCOUNTER
                       : UI_CAPTURED);
     } else {
@@ -1591,7 +1637,7 @@ static bool request_bestiary_write(write_operation_t operation)
     if (xTaskCreate(
             bestiary_write_task,
             "bestiary_write",
-            12288,
+            16384,
             NULL,
             4,
             NULL) != pdPASS) {
@@ -2023,7 +2069,7 @@ static void on_button(bsp_btn_t button, bsp_btn_ev_t event, void *user)
 
     if (s_state == UI_HOME) {
         if (button == BSP_BTN_UP || button == BSP_BTN_DOWN) {
-            s_home_selection = city_passport_turn_page(s_home_selection, 4U, button == BSP_BTN_DOWN);
+            s_home_selection = city_passport_turn_page(s_home_selection, 5U, button == BSP_BTN_DOWN);
             set_state(UI_HOME);
         } else if (button == BSP_BTN_OK) {
             if (s_home_selection == 0U) {
@@ -2035,6 +2081,12 @@ static void on_button(bsp_btn_t button, bsp_btn_ev_t event, void *user)
                 s_passport_page = 0U;
                 set_state(UI_PASSPORT);
             } else {
+                if (s_home_selection == 4U) {
+                    s_companion_instance_id = s_bestiary.buddy_instance_id;
+                    s_memory_page = 0; s_memory_from_home = true;
+                    set_state(UI_MEMORIES);
+                    bsp_lvgl_unlock(); return;
+                }
                 s_settings_draft = s_settings;
                 s_settings_selection = 0;
                 s_settings_editing = false;
@@ -2160,7 +2212,7 @@ static void on_button(bsp_btn_t button, bsp_btn_ev_t event, void *user)
 
     if (s_state == UI_COMPANION) {
         if (button == BSP_BTN_UP || button == BSP_BTN_DOWN) {
-            s_companion_selection = (uint8_t)((s_companion_selection + (button == BSP_BTN_DOWN ? 1U : 3U)) % 4U);
+            s_companion_selection = (uint8_t)((s_companion_selection + (button == BSP_BTN_DOWN ? 1U : 4U)) % 5U);
             set_state(UI_COMPANION);
         } else if (button == BSP_BTN_OK) {
             if (s_companion_selection == 0U) {
@@ -2171,8 +2223,19 @@ static void on_button(bsp_btn_t button, bsp_btn_ev_t event, void *user)
                     if (!request_bestiary_write(WRITE_RECOVER)) set_state(UI_STORAGE_ERROR);
                 } else { s_companion_recovered = false; set_state(UI_COMPANION); }
             } else if (s_companion_selection == 2U) set_state(UI_OWNED_DETAIL);
+            else if (s_companion_selection == 3U) {
+                s_memory_page = 0; s_memory_from_home = false; set_state(UI_MEMORIES);
+            }
             else set_state(UI_POKEMON_ACTIONS);
         }
+        bsp_lvgl_unlock(); return;
+    }
+    if (s_state == UI_MEMORIES) {
+        const city_owned_pokemon_t *owned = city_bestiary_owned_by_id(&s_bestiary, s_companion_instance_id);
+        if ((button == BSP_BTN_UP || button == BSP_BTN_DOWN) && owned && owned->memory_count) {
+            s_memory_page = city_passport_turn_page(s_memory_page, owned->memory_count, button == BSP_BTN_DOWN);
+            set_state(UI_MEMORIES);
+        } else if (button == BSP_BTN_OK) set_state(s_memory_from_home ? UI_HOME : UI_COMPANION);
         bsp_lvgl_unlock(); return;
     }
     if (s_state == UI_BUDDY_REACTION) {

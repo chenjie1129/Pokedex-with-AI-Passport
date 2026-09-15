@@ -6,12 +6,12 @@
 #include "wild_reward_guard.h"
 
 #include "species_catalog.h"
-#define CITY_BESTIARY_SCHEMA_VERSION 11U
+#define CITY_BESTIARY_SCHEMA_VERSION 12U
 #define CITY_BESTIARY_MAGIC UINT32_C(0x31545342)
 #define CITY_BESTIARY_LEGACY_BYTES 156U
 #define CITY_BESTIARY_RECORD_BYTES 22U
 #define CITY_MAX_OWNED_POKEMON 160U
-#define CITY_OWNED_POKEMON_BYTES 20U
+#define CITY_OWNED_POKEMON_BYTES 32U
 #define CITY_BESTIARY_HEADER_BYTES 48U
 #define CITY_BESTIARY_ENCODED_BYTES (CITY_BESTIARY_HEADER_BYTES + \
     CITY_SPECIES_COUNT * CITY_BESTIARY_RECORD_BYTES + \
@@ -66,6 +66,17 @@ typedef enum {
     CITY_PERSONALITY_COUNT = 6
 } city_personality_t;
 
+#define CITY_MEMORY_CAPACITY 5U
+/* Stable compact facts, oldest first. No timestamps or raw place identifiers. */
+typedef enum {
+    CITY_MEMORY_FIRST_OUTING = 1, CITY_MEMORY_NEW_PLACE, CITY_MEMORY_REVISIT,
+    CITY_MEMORY_REST, CITY_MEMORY_FAMILIAR, CITY_MEMORY_CLOSE
+} city_memory_kind_t;
+typedef struct { uint8_t kind; uint8_t place; } city_memory_t;
+typedef enum {
+    CITY_INVITE_FIRST_OUTING, CITY_INVITE_NEW_PLACE, CITY_INVITE_REVISIT, CITY_INVITE_REST
+} city_companion_invitation_t;
+
 typedef struct {
     uint32_t instance_id;
     uint16_t species_id;
@@ -78,6 +89,8 @@ typedef struct {
     uint8_t friendship;
     uint16_t friendship_places;
     uint16_t last_friendship_place;
+    uint8_t memory_count;
+    city_memory_t memories[CITY_MEMORY_CAPACITY];
 } city_owned_pokemon_t;
 
 typedef struct {
@@ -229,3 +242,6 @@ city_bestiary_result_t city_bestiary_capture_personality(city_bestiary_t *, uint
     uint16_t, uint16_t, const city_creature_stats_t *, uint8_t,
     city_bestiary_persist_fn, void *);
 uint8_t city_friendship_band(uint8_t points);
+
+uint8_t city_companion_place_count(const city_owned_pokemon_t *);
+city_companion_invitation_t city_companion_invitation(const city_owned_pokemon_t *);

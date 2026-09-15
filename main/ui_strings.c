@@ -30,6 +30,22 @@ static const char *lookup(
 const char *ui_text(city_language_t language, const char *english)
 {
     static const translation_t translations[] = {
+        {"Set as buddy to explore", "设为伙伴后一起探索"},
+        {LV_SYMBOL_UP " / " LV_SYMBOL_DOWN " Choose\nPress OK to go back", LV_SYMBOL_UP " / " LV_SYMBOL_DOWN " 翻页\n按确认返回"},
+        {"Our memories", "我们的回忆"},
+        {"Last time together", "上次一起"},
+        {"No memories yet", "还没有回忆"},
+        {"New memories start here", "从这里留下新回忆"},
+        {"Choose a buddy first", "先选择一只伙伴"},
+        {"Places together: %u", "一起去过 %u 个地点"},
+        {"Memory %u/%u", "回忆 %u/%u"},
+        {"Place %02u", "地点 %02u"},
+        {"Saved in our memories", "已存入我们的回忆"},
+        {"What shall we do next?", "接下来做什么？"},
+        {"Open Look around", "打开四处看看"},
+        {"Rest in buddy actions", "在伙伴操作中选择休息"},
+        {"Remembering together", "一起回想"},
+        {"A friendship milestone", "友情的新一步"},
         {LV_SYMBOL_UP " / " LV_SYMBOL_DOWN " Pick Pokemon\nPress OK for actions", LV_SYMBOL_UP " / " LV_SYMBOL_DOWN " 选择伙伴\n按确认查看操作"},
         {"Meet your Pokemon", "认识伙伴"},
         {"Set as buddy", "设为伙伴"},
@@ -466,4 +482,23 @@ const char *ui_personality_line(city_language_t language, uint8_t personality,
     const unsigned index = (context == 0U ? band * 2U : 4U + context * 2U) + variant % 2U;
     const translation_t *line = &personality_lines[personality][index];
     return language == CITY_LANGUAGE_SIMPLIFIED_CHINESE ? line->chinese : line->english;
+}
+
+const char *ui_memory_line(city_language_t language, uint8_t kind)
+{
+    static const char *en[] = {"New memories start here", "Our first outing!", "We found a new place!",
+        "We came back together.", "We rested together.", "We became familiar!", "We became close!"};
+    static const char *zh[] = {"从这里留下新回忆", "第一次一起出门！", "一起发现了新地点！",
+        "一起回到了这里。", "一起休息过了。", "我们渐渐熟悉了！", "我们成为亲密伙伴了！"};
+    if (kind > 6U) kind = 0U;
+    return language == CITY_LANGUAGE_SIMPLIFIED_CHINESE ? zh[kind] : en[kind];
+}
+
+const char *ui_invitation_line(city_language_t language, uint8_t invitation)
+{
+    static const char *en[] = {"Let's explore together.", "Let's find a new place.",
+        "Let's revisit a place.", "A little rest together?"};
+    static const char *zh[] = {"一起出门看看吧。", "一起找个新地点吧。", "一起回老地方看看吧。", "一起休息一会儿？"};
+    if (invitation > 3U) invitation = 0U;
+    return language == CITY_LANGUAGE_SIMPLIFIED_CHINESE ? zh[invitation] : en[invitation];
 }
