@@ -18,6 +18,10 @@ Settings exposes Sound volume, Quiet mode, Screen light, Save and go back, and U
   consumed wake press remain unchanged. Wake and battery updates use the
   active preference instead of returning to 100%. Low battery caps it at 30%
   and never raises a lower user brightness or changes the saved preference.
+- The bottom of Settings shows the 12-character Git commit from the generated
+  build identity, plus `-dirty` when applicable, so trial feedback identifies
+  the firmware source. The complete identity remains in boot logs and release
+  manifests.
 
 `user_settings` owns defaults, bounded adjustments, brightness policy and a
 versioned 12-byte CRC-protected codec. `bsp_settings_store` uses the independent
@@ -38,7 +42,7 @@ Host tests cover the domain and actual NVS adapter with injected failures,
 production Settings button/completion handlers with hardware stubs, and the
 audio worker's volume/mute handling. Production LVGL fixtures exercise Home's
 fourth destination and all settings rows, editing, extremes, mute, defaults,
-save/read errors, saving and low battery.
+save/read errors, saving, low battery and the maximum-length version marker.
 
 For an opt-in device check, build with `CITY_SETTINGS_SMOKE=ON` (other smoke
 options off). It pauses gameplay timers and skips input registration, exercises

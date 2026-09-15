@@ -516,8 +516,11 @@ static void build_settings(void)
         s_settings_editing && s_settings_selection == 1 ? "Press OK to hear it" : "Save to keep your changes";
     label_at(s_screen, message, &city_font_14, COLOR_MUTED, 10, 242, 220);
     char version[40];
-    snprintf(version, sizeof(version), "v%s", CITY_BUILD_VERSION);
-    label_at(s_screen, version, &city_font_14, COLOR_MUTED, 10, 264, 220);
+    snprintf(version, sizeof(version), "v%.12s%s", CITY_BUILD_VERSION,
+             CITY_BUILD_DIRTY ? "-dirty" : "");
+    lv_obj_t *version_label = label_at(
+        s_screen, version, &city_font_14, COLOR_MUTED, 10, 264, 220);
+    lv_obj_set_style_text_align(version_label, LV_TEXT_ALIGN_CENTER, 0);
 }
 
 static void build_passport(void)
