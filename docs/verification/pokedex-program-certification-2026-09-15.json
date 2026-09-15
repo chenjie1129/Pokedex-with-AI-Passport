@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "state": "certified",
+  "certified_scope": "Six-stage program startup, stage 1 host/governance baseline, and the first stage 2 stable-ID catalog migration increment",
+  "contract_digest": "sha256:b0d8e0feae221e43e35fcd784a05797e114b0605c260241321abe2a92a3e9871",
+  "artifact_digests": [
+    "sha256:bc350bd10280b8c01cc7bdc5d2794e753b2f49eb4dfa70a2a0dcb661f718f09c",
+    "sha256:29bb80aa8a020974b62454ad7e957073ab5479c62af3a0b7ddc887b8c07b4704",
+    "sha256:31dfa18d85ef2918d94d99be2677a073f486065baa26ac0574a23273c8456bed",
+    "sha256:37d21a581f77853c60143b824ccb66714d49911c4a4aa17ffa7466980d973c2d",
+    "sha256:65cac8f80d629e3578e7e634ef16e1863580af0933881785bcfb6c903612de7c"
+  ],
+  "checks": [
+    {
+      "id": "check-1",
+      "status": "passed",
+      "evidence": "tools/check_pokedex_program.py validated ordered stages 1-6, current stage 2, and blocked stages 4-6"
+    },
+    {
+      "id": "check-2",
+      "status": "passed",
+      "evidence": "tools/check_pokedex_program.py validated 8 actionable risk records"
+    },
+    {
+      "id": "check-3",
+      "status": "passed",
+      "evidence": "./tools/test-host.sh passed 32 of 32 Host tests"
+    },
+    {
+      "id": "check-4",
+      "status": "passed",
+      "evidence": "Certification explicitly excludes firmware builds and physical-device validation"
+    },
+    {
+      "id": "check-5",
+      "status": "passed",
+      "evidence": "test_bestiary_service passed stable-ID mapping, UNKNOWN initialization, duplicate/unknown/future record rejection, and CRC rejection"
+    },
+    {
+      "id": "check-6",
+      "status": "passed",
+      "evidence": "test_bestiary_adapter passed commit, read-back, full-blob upgrade, and no-repeat migration assertions"
+    },
+    {
+      "id": "check-7",
+      "status": "passed",
+      "evidence": "Final change set adds no backend, account, GPS, cloud runtime, or LLM dependency"
+    }
+  ],
+  "attempts_used": 2,
+  "limitations": [
+    "Stage 2 is in progress and is not certified complete",
+    "No sixteenth production entry or unlicensed media was added",
+    "No firmware build was performed",
+    "No physical-device, NVS power-loss, heap, DMA, or LVGL hardware validation was performed",
+    "Stages 4-6 remain blocked pending product and capacity gates"
+  ]
+}

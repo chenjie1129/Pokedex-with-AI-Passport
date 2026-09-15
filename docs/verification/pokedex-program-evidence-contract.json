@@ -1,0 +1,111 @@
+{
+  "schema_version": 1,
+  "state": "active",
+  "intent": {
+    "objective": "Start the six-stage Pokédex implementation program, complete the host-verifiable stage 1 baseline, and deliver the first tested stage 2 migration increment without bypassing later gates.",
+    "constraints": [
+      "The core loop remains offline",
+      "No phone, account, GPS, cloud service, or LLM is added to P0",
+      "Raw wireless identifiers and precise location never enter persistence or evidence",
+      "Stages execute serially",
+      "A reward is visible only after durable storage",
+      "Host, firmware, and physical-device evidence are reported separately",
+      "Unrelated user files are preserved"
+    ],
+    "assumptions": [
+      "@chenjie1129 is the interim accountable DRI until responsibilities are delegated",
+      "Conditional deadlines freeze while their entry gate is blocked",
+      "Stage 1 may pass for host scope with hardware measurements carried as a stage 2 release blocker"
+    ],
+    "non_goals": [
+      "Implement stages 3-6 before their gates",
+      "Merge the feature branch into main",
+      "Add a cloud backend during P0",
+      "Add an unlicensed sixteenth production entry"
+    ],
+    "ambiguities": [
+      "Named Backend, Database, SRE, QA, and privacy DRIs do not yet exist",
+      "P0 repeat-carry success threshold requires human product approval"
+    ],
+    "risk_tier": "L2"
+  },
+  "claims": [
+    {
+      "id": "claim-1",
+      "statement": "The six stages have goals, owners, deadlines, acceptance criteria, transitions, and risk controls.",
+      "evidence": [
+        "check-1",
+        "check-2"
+      ]
+    },
+    {
+      "id": "claim-2",
+      "statement": "Stage 1 is complete for host scope and does not claim hardware validation.",
+      "evidence": [
+        "check-3",
+        "check-4"
+      ]
+    },
+    {
+      "id": "claim-3",
+      "statement": "Stage 2 can migrate a smaller same-schema catalog by stable species ID and durably upgrade it.",
+      "evidence": [
+        "check-5",
+        "check-6"
+      ]
+    },
+    {
+      "id": "claim-4",
+      "statement": "Stages 4-6 remain blocked and no cloud runtime is introduced.",
+      "evidence": [
+        "check-1",
+        "check-7"
+      ]
+    }
+  ],
+  "checks": [
+    {
+      "id": "check-1",
+      "type": "schema",
+      "target": "docs/verification/pokedex-program-status.json",
+      "expected": "Stages 1-6 are ordered, only stage 2 is in progress, and stages 4-6 are blocked"
+    },
+    {
+      "id": "check-2",
+      "type": "schema",
+      "target": "docs/verification/pokedex-program-risk-register.json",
+      "expected": "Every risk has severity, owner, trigger, mitigation, affected stages, and status"
+    },
+    {
+      "id": "check-3",
+      "type": "test",
+      "target": "./tools/test-host.sh",
+      "expected": "All Host tests pass"
+    },
+    {
+      "id": "check-4",
+      "type": "source",
+      "target": "Final delivery statement",
+      "expected": "Host results are not described as firmware or physical-device validation"
+    },
+    {
+      "id": "check-5",
+      "type": "test",
+      "target": "test_bestiary_service",
+      "expected": "Smaller current-schema catalog records map by stable ID and omitted records remain UNKNOWN"
+    },
+    {
+      "id": "check-6",
+      "type": "test",
+      "target": "test_bestiary_adapter",
+      "expected": "Catalog-count migration is committed, read back, and not repeatedly migrated"
+    },
+    {
+      "id": "check-7",
+      "type": "file",
+      "target": "Final change set",
+      "expected": "No backend, account, GPS, cloud runtime, or LLM dependency is added"
+    }
+  ],
+  "max_attempts": 2
+}

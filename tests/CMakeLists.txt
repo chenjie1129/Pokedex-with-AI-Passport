@@ -70,6 +70,8 @@ add_test(NAME test_pokedex_research_sync
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_pokedex_research_sync.py")
 add_test(NAME test_pokedex_research_snapshot
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/../tools/sync_pokedex_research.py" --check)
+add_test(NAME test_pokedex_program
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/../tools/check_pokedex_program.py")
 add_city_test(test_bestiary_adapter test_bestiary_adapter.c)
 target_sources(test_bestiary_adapter PRIVATE ../components/bsp/src/bsp_bestiary_store.c)
 target_include_directories(test_bestiary_adapter PRIVATE battery_stubs ../components/bsp/include)

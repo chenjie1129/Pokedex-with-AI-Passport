@@ -1,0 +1,125 @@
+{
+  "schema_version": 1,
+  "program_id": "pokedex-six-stage-evolution",
+  "updated_at": "2026-09-15",
+  "review_cadence": "weekly Monday and every stage gate",
+  "risks": [
+    {
+      "id": "R-001",
+      "title": "P0 carrying value is not yet proven",
+      "severity": "critical",
+      "probability": "medium",
+      "owner": "@chenjie1129",
+      "affected_stages": [
+        4,
+        5,
+        6
+      ],
+      "trigger": "No measured repeat-carry or repeat-exploration improvement",
+      "mitigation": "Keep stages 4-6 blocked and run the P0 product experiment before cloud investment",
+      "status": "open"
+    },
+    {
+      "id": "R-002",
+      "title": "Catalog growth can overflow the factory partition",
+      "severity": "high",
+      "probability": "high",
+      "owner": "@chenjie1129",
+      "affected_stages": [
+        2,
+        3
+      ],
+      "trigger": "Factory headroom falls below 256 KiB",
+      "mitigation": "Stop adding compiled assets and require signed content packages or approved compression",
+      "status": "open"
+    },
+    {
+      "id": "R-003",
+      "title": "Catalog expansion can lose or hide old player progress",
+      "severity": "critical",
+      "probability": "medium",
+      "owner": "FxxW",
+      "affected_stages": [
+        2
+      ],
+      "trigger": "Old catalog count differs from the current compiled catalog",
+      "mitigation": "Decode by stable species ID, initialize missing records, commit and read back before UI publication",
+      "status": "mitigating"
+    },
+    {
+      "id": "R-004",
+      "title": "Official text and media may lack redistribution rights",
+      "severity": "high",
+      "probability": "high",
+      "owner": "@chenjie1129",
+      "affected_stages": [
+        2,
+        3,
+        4
+      ],
+      "trigger": "A candidate entry has missing or ambiguous license evidence",
+      "mitigation": "Quarantine the entry and ship only approved original or licensed content",
+      "status": "open"
+    },
+    {
+      "id": "R-005",
+      "title": "Hardware resource baseline is incomplete",
+      "severity": "high",
+      "probability": "medium",
+      "owner": "@chenjie1129",
+      "affected_stages": [
+        2,
+        3
+      ],
+      "trigger": "No current firmware size, minimum heap, DMA block, or physical-device trace",
+      "mitigation": "Block stage 2 release until firmware and device measurements are attached",
+      "status": "open"
+    },
+    {
+      "id": "R-006",
+      "title": "Premature microservices increase cost without user value",
+      "severity": "high",
+      "probability": "high",
+      "owner": "@chenjie1129",
+      "affected_stages": [
+        4,
+        5,
+        6
+      ],
+      "trigger": "Backend work starts before product and load gates pass",
+      "mitigation": "Enforce serial stage checker and require an explicit gate decision",
+      "status": "open"
+    },
+    {
+      "id": "R-007",
+      "title": "Backend, database, and SRE owners are not delegated",
+      "severity": "medium",
+      "probability": "high",
+      "owner": "@chenjie1129",
+      "affected_stages": [
+        4,
+        5,
+        6
+      ],
+      "trigger": "A blocked stage is proposed for activation without named specialist DRIs",
+      "mitigation": "Name Backend, Database, SRE, QA, and privacy DRIs before changing stage status",
+      "status": "open"
+    },
+    {
+      "id": "R-008",
+      "title": "External source changes can silently alter catalog semantics",
+      "severity": "medium",
+      "probability": "medium",
+      "owner": "FxxW",
+      "affected_stages": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "trigger": "Pinned source snapshot data hash changes",
+      "mitigation": "Require source diff, invariant checks, quarantine, and human review before production import",
+      "status": "monitoring"
+    }
+  ]
+}

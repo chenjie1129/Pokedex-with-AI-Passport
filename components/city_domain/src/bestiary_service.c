@@ -720,10 +720,11 @@ static bool decode_into(
     if (version == 10U || version == 11U || version == CITY_BESTIARY_SCHEMA_VERSION) {
         const size_t header_bytes = version == 10U ? 40U : CITY_BESTIARY_HEADER_BYTES;
         const size_t owned_bytes = version == 10U ? 16U : version == 11U ? 20U : CITY_OWNED_POKEMON_BYTES;
-        const size_t expected_length = header_bytes + CITY_SPECIES_COUNT * CITY_BESTIARY_RECORD_BYTES +
-            CITY_MAX_OWNED_POKEMON * owned_bytes + 4U;
         const uint16_t count = read_u16_le(data + 6U);
-        if (count != CITY_SPECIES_COUNT || length != expected_length ||
+        if (count == 0U || count > CITY_SPECIES_COUNT) return false;
+        const size_t expected_length = header_bytes + count * CITY_BESTIARY_RECORD_BYTES +
+            CITY_MAX_OWNED_POKEMON * owned_bytes + 4U;
+        if (length != expected_length ||
             data[16] > 1U || data[17] != 0U || data[18] != 0U || data[19] != 0U ||
             (version == 10U && read_u32_le(data + 32U) != 0U) ||
             data[36] != 0U || data[37] != 0U || data[38] != 0U || data[39] != 0U) return false;
@@ -754,7 +755,7 @@ static bool decode_into(
             decoded->records[index] = record;
         }
         const size_t owned_offset = header_bytes +
-            CITY_SPECIES_COUNT * CITY_BESTIARY_RECORD_BYTES;
+            count * CITY_BESTIARY_RECORD_BYTES;
         for (uint16_t i = 0U; i < decoded->owned_count; ++i)
             if (!decode_owned(data + owned_offset + i * owned_bytes,
                               &decoded->owned[i], version)) return false;

@@ -7,6 +7,57 @@ static uint8_t saved[CITY_BESTIARY_ENCODED_BYTES], staged[CITY_BESTIARY_ENCODED_
 static size_t saved_len, staged_len;
 static bool legacy_exists, fail_commit, fail_set, bad_readback;
 static unsigned commits;
+static uint32_t crc32(const uint8_t *data, size_t length)
+{
+    uint32_t crc = UINT32_MAX;
+    for (size_t i = 0; i < length; ++i) {
+        crc ^= data[i];
+        for (unsigned j = 0; j < 8U; ++j) {
+            crc = (crc >> 1U) ^
+                (UINT32_C(0xedb88320) &
+                 (uint32_t)-(int32_t)(crc & 1U));
+        }
+    }
+    return ~crc;
+}
+static void write_u16_le(uint8_t *data, uint16_t value)
+{
+    data[0] = (uint8_t)value;
+    data[1] = (uint8_t)(value >> 8U);
+}
+static void write_u32_le(uint8_t *data, uint32_t value)
+{
+    for (unsigned i = 0; i < 4U; ++i) {
+        data[i] = (uint8_t)(value >> (8U * i));
+    }
+}
+static void compact_saved_catalog(uint16_t count)
+{
+    assert(
+        count > 0U && count < CITY_SPECIES_COUNT &&
+        saved_len == sizeof(saved));
+    uint8_t full[CITY_BESTIARY_ENCODED_BYTES];
+    memcpy(full, saved, sizeof(full));
+    memset(saved, 0, sizeof(saved));
+    memcpy(saved, full, CITY_BESTIARY_HEADER_BYTES);
+    write_u16_le(saved + 6U, count);
+    memcpy(
+        saved + CITY_BESTIARY_HEADER_BYTES,
+        full + CITY_BESTIARY_HEADER_BYTES,
+        count * CITY_BESTIARY_RECORD_BYTES);
+    const size_t old_owned = CITY_BESTIARY_HEADER_BYTES +
+        CITY_SPECIES_COUNT * CITY_BESTIARY_RECORD_BYTES;
+    const size_t new_owned = CITY_BESTIARY_HEADER_BYTES +
+        count * CITY_BESTIARY_RECORD_BYTES;
+    memcpy(
+        saved + new_owned,
+        full + old_owned,
+        CITY_MAX_OWNED_POKEMON * CITY_OWNED_POKEMON_BYTES);
+    saved_len = new_owned +
+        CITY_MAX_OWNED_POKEMON * CITY_OWNED_POKEMON_BYTES + 4U;
+    write_u32_le(
+        saved + saved_len - 4U, crc32(saved, saved_len - 4U));
+}
 esp_err_t nvs_open(const char *name, int mode, nvs_handle_t *h)
 { (void)name; (void)mode; *h=1; staged_len=0; return ESP_OK; }
 void nvs_close(nvs_handle_t h) { (void)h; staged_len=0; }
@@ -95,6 +146,16 @@ int main(void)
     fail_commit=false;
     assert(bsp_bestiary_store_load(&BSP_BESTIARY_STORE_DEFAULT,&empty,&migrated)==ESP_OK);
     assert(migrated && saved[4]==CITY_BESTIARY_SCHEMA_VERSION && empty.records[1].capture_count==20 && empty.buddy_species_id==0);
+    /* A same-schema save from a smaller catalog upgrades by stable ID. */
+    compact_saved_catalog((uint16_t)(CITY_SPECIES_COUNT-1U));
+    count=commits;city_bestiary_init(&empty);
+    assert(bsp_bestiary_store_load(&BSP_BESTIARY_STORE_DEFAULT,&empty,&migrated)==ESP_OK);
+    assert(migrated && commits==count+1U && saved_len==sizeof(saved));
+    assert(((uint16_t)saved[6]|((uint16_t)saved[7]<<8U))==CITY_SPECIES_COUNT);
+    assert(empty.records[CITY_SPECIES_COUNT-1U].state==CITY_DISCOVERY_UNKNOWN);
+    count=commits;city_bestiary_init(&empty);
+    assert(bsp_bestiary_store_load(&BSP_BESTIARY_STORE_DEFAULT,&empty,&migrated)==ESP_OK);
+    assert(!migrated && commits==count);
     puts("Bestiary adapter: failed stages, readback, retry, retained legacy and corruption passed");
     return 0;
 }

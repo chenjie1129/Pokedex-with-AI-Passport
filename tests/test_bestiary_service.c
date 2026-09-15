@@ -63,6 +63,38 @@ static uint32_t crc32(const uint8_t *data, size_t length)
     return ~crc;
 }
 
+static size_t compact_current_snapshot(
+    const uint8_t full[CITY_BESTIARY_ENCODED_BYTES],
+    const uint8_t *record_indexes,
+    uint16_t count,
+    uint8_t compact[CITY_BESTIARY_ENCODED_BYTES])
+{
+    if (count == 0U || count >= CITY_SPECIES_COUNT) {
+        return 0U;
+    }
+    memset(compact, 0, CITY_BESTIARY_ENCODED_BYTES);
+    memcpy(compact, full, CITY_BESTIARY_HEADER_BYTES);
+    write_u16_le(compact + 6U, count);
+    for (uint16_t i = 0U; i < count; ++i) {
+        memcpy(
+            compact + CITY_BESTIARY_HEADER_BYTES +
+                i * CITY_BESTIARY_RECORD_BYTES,
+            full + CITY_BESTIARY_HEADER_BYTES +
+                record_indexes[i] * CITY_BESTIARY_RECORD_BYTES,
+            CITY_BESTIARY_RECORD_BYTES);
+    }
+    const size_t full_owned_offset = CITY_BESTIARY_HEADER_BYTES +
+        CITY_SPECIES_COUNT * CITY_BESTIARY_RECORD_BYTES;
+    const size_t compact_owned_offset = CITY_BESTIARY_HEADER_BYTES +
+        count * CITY_BESTIARY_RECORD_BYTES;
+    const size_t owned_bytes =
+        CITY_MAX_OWNED_POKEMON * CITY_OWNED_POKEMON_BYTES;
+    memcpy(compact + compact_owned_offset, full + full_owned_offset, owned_bytes);
+    const size_t length = compact_owned_offset + owned_bytes + 4U;
+    write_u32_le(compact + length - 4U, crc32(compact, length - 4U));
+    return length;
+}
+
 static void test_catalog_contains_three_species(void)
 {
     const city_species_definition_t *bulbasaur =
@@ -400,6 +432,99 @@ static void test_codec_round_trip_and_corruption(void)
     CHECK(!city_bestiary_decode(encoded, sizeof(encoded), &decoded));
 }
 
+static void test_smaller_catalog_migrates_by_stable_id(void)
+{
+    city_bestiary_t original;
+    city_bestiary_init(&original);
+    persist_probe_t probe = {.succeed = true};
+    CHECK(city_bestiary_mark_seen(
+              &original,
+              CITY_SPECIES_BULBASAUR,
+              persist_probe,
+              &probe) == CITY_BESTIARY_APPLIED);
+    CHECK(city_bestiary_capture(
+              &original,
+              1U,
+              CITY_SPECIES_CHARMANDER,
+              2U,
+              persist_probe,
+              &probe) == CITY_BESTIARY_APPLIED);
+
+    uint8_t full[CITY_BESTIARY_ENCODED_BYTES];
+    uint8_t compact[CITY_BESTIARY_ENCODED_BYTES];
+    CHECK(city_bestiary_encode(&original, full));
+    const uint8_t indexes[] = {
+        city_species_index(CITY_SPECIES_CHARMANDER),
+        city_species_index(CITY_SPECIES_BULBASAUR),
+    };
+    const size_t compact_length = compact_current_snapshot(
+        full, indexes, 2U, compact);
+    CHECK(compact_length > 0U);
+
+    city_bestiary_t migrated;
+    CHECK(city_bestiary_decode(compact, compact_length, &migrated));
+    const city_creature_record_t *charmander =
+        city_bestiary_record_const(&migrated, CITY_SPECIES_CHARMANDER);
+    const city_creature_record_t *bulbasaur =
+        city_bestiary_record_const(&migrated, CITY_SPECIES_BULBASAUR);
+    const city_creature_record_t *squirtle =
+        city_bestiary_record_const(&migrated, CITY_SPECIES_SQUIRTLE);
+    CHECK(charmander != NULL &&
+          charmander->state == CITY_DISCOVERY_CAPTURED &&
+          charmander->capture_count == 1U);
+    CHECK(bulbasaur != NULL && bulbasaur->state == CITY_DISCOVERY_SEEN);
+    CHECK(squirtle != NULL &&
+          squirtle->state == CITY_DISCOVERY_UNKNOWN &&
+          squirtle->capture_count == 0U);
+    CHECK(migrated.owned_count == 1U);
+    CHECK(migrated.owned[0].species_id == CITY_SPECIES_CHARMANDER);
+    CHECK(city_bestiary_is_valid(&migrated));
+
+    uint8_t upgraded[CITY_BESTIARY_ENCODED_BYTES];
+    CHECK(city_bestiary_encode(&migrated, upgraded));
+    CHECK(((uint16_t)upgraded[6] | ((uint16_t)upgraded[7] << 8U)) ==
+          CITY_SPECIES_COUNT);
+
+    const uint8_t duplicate_indexes[] = {
+        city_species_index(CITY_SPECIES_CHARMANDER),
+        city_species_index(CITY_SPECIES_CHARMANDER),
+    };
+    const size_t duplicate_length = compact_current_snapshot(
+        full, duplicate_indexes, 2U, compact);
+    CHECK(duplicate_length > 0U);
+    CHECK(!city_bestiary_decode(compact, duplicate_length, &migrated));
+
+    const size_t unknown_length = compact_current_snapshot(
+        full, indexes, 2U, compact);
+    CHECK(unknown_length > 0U);
+    write_u16_le(compact + CITY_BESTIARY_HEADER_BYTES, UINT16_MAX);
+    write_u32_le(
+        compact + unknown_length - 4U,
+        crc32(compact, unknown_length - 4U));
+    CHECK(!city_bestiary_decode(compact, unknown_length, &migrated));
+
+    const size_t corrupt_length = compact_current_snapshot(
+        full, indexes, 2U, compact);
+    CHECK(corrupt_length > 0U);
+    compact[CITY_BESTIARY_HEADER_BYTES + 2U] ^= 1U;
+    CHECK(!city_bestiary_decode(compact, corrupt_length, &migrated));
+}
+
+static void test_future_catalog_count_is_rejected(void)
+{
+    city_bestiary_t bestiary;
+    city_bestiary_init(&bestiary);
+    uint8_t encoded[CITY_BESTIARY_ENCODED_BYTES];
+    CHECK(city_bestiary_encode(&bestiary, encoded));
+    write_u16_le(encoded + 6U, (uint16_t)(CITY_SPECIES_COUNT + 1U));
+    write_u32_le(
+        encoded + CITY_BESTIARY_ENCODED_BYTES - 4U,
+        crc32(encoded, CITY_BESTIARY_ENCODED_BYTES - 4U));
+
+    city_bestiary_t decoded;
+    CHECK(!city_bestiary_decode(encoded, sizeof(encoded), &decoded));
+}
+
 static void test_v1_snapshot_migrates_to_high_water(void)
 {
     enum {
@@ -537,6 +662,8 @@ int main(void)
     test_ambiguous_commit_is_safe_after_reload();
     test_invalid_place_never_calls_storage();
     test_codec_round_trip_and_corruption();
+    test_smaller_catalog_migrates_by_stable_id();
+    test_future_catalog_count_is_rejected();
     test_v1_snapshot_migrates_to_high_water();
     test_v2_snapshot_migrates_to_high_water();
     test_inconsistent_high_water_is_rejected();
