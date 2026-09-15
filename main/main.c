@@ -1492,7 +1492,9 @@ static bool persist_discovery(void)
     if (result != CITY_BESTIARY_APPLIED && result != CITY_BESTIARY_DUPLICATE && result != CITY_BESTIARY_UNCHANGED) return false;
     buddy = city_bestiary_owned_by_id(&s_bestiary, s_visit_buddy_id);
     s_visit_remembered = result == CITY_BESTIARY_APPLIED && changed_place;
-    s_visit_gain = result == CITY_BESTIARY_APPLIED && buddy ? buddy->friendship - before : 0U;
+    s_visit_gain = 0U;
+    if (result == CITY_BESTIARY_APPLIED && buddy)
+        s_visit_gain = (uint8_t)(buddy->friendship - before);
     ESP_LOGI(
         TAG, "DISCOVERY_COMMITTED species=%03u result=%s",
         s_current_species_id,
