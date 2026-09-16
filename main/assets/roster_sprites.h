@@ -26,3 +26,5 @@ extern const lv_image_dsc_t charmeleon_large;
 extern const lv_image_dsc_t charmeleon_small;
 extern const lv_image_dsc_t wartortle_large;
 extern const lv_image_dsc_t wartortle_small;
+extern const lv_image_dsc_t mossbit_large;
+extern const lv_image_dsc_t mossbit_small;

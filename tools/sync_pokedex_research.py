@@ -487,8 +487,11 @@ def validate_snapshot(snapshot, config=None, local_catalog=None):
         rows = local_catalog.get("species")
         if not isinstance(rows, list) or not rows:
             raise ValueError("Local species catalog is empty")
-        ids = [row["id"] for row in rows]
-        if len(ids) != len(set(ids)):
+        original = [row for row in rows if row.get("origin") == "original"]
+        if any(not 60000 <= row["id"] < 65535 for row in original):
+            raise ValueError("Original species ID must use reserved range")
+        ids = [row["id"] for row in rows if row.get("origin") != "original"]
+        if len(rows) != len({row["id"] for row in rows}):
             raise ValueError("Local species IDs are not unique")
         maximum = snapshot["official_cross_check"]["national_number"]
         if any(

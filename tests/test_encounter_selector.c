@@ -26,6 +26,7 @@ static void test_places_have_distinct_weight_profiles(void)
     unsigned total = 0;
     for (uint8_t i = 0; i < CITY_SPECIES_COUNT; ++i) total += city_encounter_place_weight(1, city_species_id_at(i));
     CHECK(total == 32);
+    CHECK(city_encounter_place_weight(1, CITY_SPECIES_MOSSBIT) == 0);
     CHECK(city_encounter_place_weight(1, CITY_SPECIES_BULBASAUR) == 6);
     CHECK(city_encounter_place_weight(2, CITY_SPECIES_CHARMANDER) == 6);
     CHECK(city_encounter_place_weight(3, CITY_SPECIES_SQUIRTLE) == 6);

@@ -30,3 +30,12 @@ only the C table in flash, not the source Ogg/MP3 or PCM files at runtime.
 Audio and Pokémon characters remain the property of their respective rights
 holders. The community repository is a provenance source, not a grant of
 rights to Pokémon audio.
+
+## Stage 2 original candidate: Mossbit
+
+Mossbit (stable local ID 60000) is an original migration-test creature, not a
+National Pokédex entry. Its authored description, pixel artwork and synthesized
+cry are created for this project and provided under CC0-1.0. Reproduce assets
+with `tools/generate_mossbit.py`; no external image or recording is used.
+It is catalog-visible but excluded from both place and wild encounter pools.
+Existing third-party Pokémon asset rights are unchanged.

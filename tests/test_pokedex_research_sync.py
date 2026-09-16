@@ -138,6 +138,18 @@ class PokedexResearchSyncTests(unittest.TestCase):
             )
         )
 
+    def test_original_ids_are_separate_from_national_census(self):
+        config = fixture_config()
+        snapshot = build_snapshot(config, "a" * 40, fixture_files(),
+                                  datetime(2026, 9, 15, tzinfo=timezone.utc))
+        original = {"id": 60000, "origin": "original"}
+        self.assertTrue(validate_snapshot(snapshot, config,
+                        {"species": [{"id": 1}, original]}))
+        for rows in ([original, original], [{"id": 4}],
+                     [{"id": 1, "origin": "original"}]):
+            with self.assertRaises(ValueError):
+                validate_snapshot(snapshot, config, {"species": rows})
+
     def test_snapshot_hash_detects_tampering(self):
         config = fixture_config()
         snapshot = build_snapshot(

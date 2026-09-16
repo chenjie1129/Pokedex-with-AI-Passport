@@ -1,5 +1,5 @@
 {
-  "version": 5,
+  "version": 6,
   "species": [
     {
       "id": 1,
@@ -249,6 +249,25 @@
         "Water"
       ],
       "info_source": "https://sg.portal-pokemon.com/pokedex/0008/"
+    },
+    {
+      "id": 60000,
+      "name": "Mossbit",
+      "element": "Grass",
+      "hp": 45,
+      "attack": 40,
+      "defense": 50,
+      "pool": 0,
+      "wild": false,
+      "description": "A tiny moss spirit that rests beside quiet paths.",
+      "artwork": "project:tools/generate_mossbit.py",
+      "types": [
+        "Grass"
+      ],
+      "info_source": "project:content/SOURCES.md",
+      "origin": "original",
+      "asset_license": "CC0-1.0",
+      "place": false
     }
   ]
 }

@@ -137,6 +137,15 @@
       "source_sha256": "1685aaa5e05edf822b016f21f2334eb00ecf6f6e4a6858807846a91c96e4cdf3",
       "pcm_sha256": "da685c5cb02affc76978404b29c94ab4263052f711ea5ea68c2620cdecd07978",
       "samples": 16020
+    },
+    {
+      "id": 60000,
+      "name": "Mossbit",
+      "origin": "original",
+      "license": "CC0-1.0",
+      "source_url": "project:tools/generate_mossbit.py",
+      "pcm_sha256": "bcc1d6c77545c8748fc262b179415f83693666c11f967d8c9f9446728d1b5df2",
+      "samples": 4800
     }
   ],
   "format": {

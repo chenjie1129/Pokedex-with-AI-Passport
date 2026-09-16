@@ -15,7 +15,7 @@ static void crc(uint8_t *p, size_t len)
 }
 int main(void)
 {
-    assert(CITY_SPECIES_COUNT == 15);
+    assert(CITY_SPECIES_COUNT == 16);
     city_bestiary_t b; city_bestiary_init(&b);
     city_discovery_state_t before;
     assert(city_bestiary_encounter_status(&b, CITY_SPECIES_EEVEE, &before) && before == CITY_DISCOVERY_UNKNOWN);

@@ -11,6 +11,7 @@ enable_testing()
 
 add_library(city_domain STATIC
     ../components/city_domain/src/bestiary_service.c
+    ../components/city_domain/src/catalog_provider.c
     ../components/city_domain/src/capture_engine.c
     ../components/city_domain/src/encounter_selector.c
     ../components/city_domain/src/game_loop.c
@@ -111,3 +112,6 @@ add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/navigation_ui.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/../main/main.c" "${CMAKE_CURRENT_BINARY_DIR}/navigation_ui.c"
     DEPENDS ../main/main.c generate_navigation_ui.py navigation_ui_fixture.c)
 add_city_test(test_navigation_ui "${CMAKE_CURRENT_BINARY_DIR}/navigation_ui.c")
+
+add_test(NAME test_nvs_fault_log
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_nvs_fault_log.py")

@@ -17,6 +17,7 @@ add_executable(passport_render "${CMAKE_CURRENT_BINARY_DIR}/render.c"
     "${ROOT}/components/city_domain/src/capture_engine.c"
     "${ROOT}/components/city_domain/src/user_settings.c"
     "${ROOT}/components/city_domain/src/bestiary_service.c"
+    "${ROOT}/components/city_domain/src/catalog_provider.c"
     "${ROOT}/components/city_domain/src/wild_reward_guard.c"
     "${ROOT}/components/city_domain/src/pocket_policy.c")
 target_sources(passport_render PRIVATE "${ROOT}/main/assets/city_font_14.c" "${ROOT}/main/assets/city_font_20.c" "${ROOT}/main/assets/charmander_sprite.c" "${ROOT}/main/assets/starter_sprites.c" "${ROOT}/main/assets/roster_sprites.c")

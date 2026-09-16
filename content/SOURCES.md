@@ -19,3 +19,12 @@ the production LVGL render harness checks that wrapped facts fit their height
 as well as their width across seen, caught and evolved fixtures.
 
 Artwork provenance remains in `demo/assets/SOURCES.md`.
+
+## Stage 2 original candidate: Mossbit
+
+Mossbit (stable local ID 60000) is an original migration-test creature, not a
+National Pokédex entry. Its authored description, pixel artwork and synthesized
+cry are created for this project and provided under CC0-1.0. Reproduce assets
+with `tools/generate_mossbit.py`; no external image or recording is used.
+It is catalog-visible but excluded from both place and wild encounter pools.
+Existing third-party Pokémon asset rights are unchanged.

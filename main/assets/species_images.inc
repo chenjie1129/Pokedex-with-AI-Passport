@@ -14,3 +14,4 @@
     {2, &ivysaur_large, &ivysaur_small},
     {5, &charmeleon_large, &charmeleon_small},
     {8, &wartortle_large, &wartortle_small},
+    {60000, &mossbit_large, &mossbit_small},

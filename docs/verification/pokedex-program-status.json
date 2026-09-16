@@ -44,7 +44,7 @@
       "id": 2,
       "name": "Stable identity and save expansion migration",
       "status": "in_progress",
-      "progress_percent": 25,
+      "progress_percent": 60,
       "owner": "@chenjie1129",
       "target_date": "2026-09-30",
       "prerequisites": [
@@ -59,10 +59,13 @@
       ],
       "evidence": [
         "test_bestiary_service",
-        "test_bestiary_adapter"
+        "test_bestiary_adapter",
+        "docs/architecture/pokedex-save-compatibility.md",
+        "docs/verification/pokedex-stage2-candidate-2026-09-15.md",
+        "docs/verification/pokedex-nvs-fault-2026-09-15.md"
       ],
       "gate_decision": "pending",
-      "next_action": "Complete catalog-count migration and add a licensed sixteenth entry"
+      "next_action": "Complete physical power-cut testing on a spare device, UI storage-error acceptance, two-location checks and long soak; then clean-source release review"
     },
     {
       "id": 3,

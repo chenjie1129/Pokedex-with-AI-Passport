@@ -133,11 +133,11 @@ FxxW 可以实施和验证自动化工作，但不能代替人工完成产品门
 - [x] 启动：缺失当前条目初始化为 UNKNOWN；
 - [x] 启动：BSP 将目录数量变化识别为 migration；
 - [x] 启动：迁移后写入完整当前 blob 并读回比对；
-- [ ] 增加第 16 个真实候选条目及素材许可；
-- [ ] 提取 `city_catalog_provider_t`；
-- [ ] 记录 schema/catalog revision 兼容矩阵；
+- [x] 增加第 16 个原创候选 Mossbit（CC0 素材，不进入遭遇池）；
+- [x] 提取 `city_catalog_provider_t`；
+- [x] 记录 schema/catalog revision 兼容矩阵；
 - [ ] 完成真实 NVS 满、断电和重启测试；
-- [ ] 完成 16 条 firmware build 与 LVGL fixture。
+- [x] 完成 16 条 firmware build 与 LVGL fixture。
 
 ### 验收标准
 

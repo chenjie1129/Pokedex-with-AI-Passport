@@ -525,7 +525,9 @@ static void build_settings(void)
     char version[40];
     snprintf(version, sizeof(version), "v%s", CITY_BUILD_VERSION);
     lv_obj_t *version_label = label_at(
-        s_screen, version, &city_font_14, COLOR_MUTED, 10, 264, 220);
+        s_screen, "", &city_font_14, COLOR_MUTED, 10, 264, 220);
+    lv_obj_set_style_text_letter_space(version_label, -1, 0);
+    lv_label_set_text(version_label, version);
     lv_obj_set_style_text_align(version_label, LV_TEXT_ALIGN_CENTER, 0);
 }
 
@@ -1672,6 +1674,10 @@ static void load_bestiary(void)
         (unsigned long)total_capture_count(),
         (unsigned long long)s_bestiary.last_settled_sequence,
         migrated ? 1U : 0U);
+    ESP_LOGI(TAG, "CATALOG_READY revision=%u species=%u last_state=%u owned=%u heap_min=%lu",
+        CITY_CATALOG_VERSION, CITY_SPECIES_COUNT,
+        (unsigned)s_bestiary.records[CITY_SPECIES_COUNT-1U].state,
+        s_bestiary.owned_count, (unsigned long)esp_get_minimum_free_heap_size());
 }
 
 static void load_place_data(void)

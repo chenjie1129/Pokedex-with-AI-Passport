@@ -20,7 +20,7 @@
 #define CITY_BESTIARY_WILD_OFFSET 76U
 #define CITY_BESTIARY_V3_SEQUENCE_OFFSET 16U
 
-#include "species_catalog.inc"
+#include "catalog_provider.h"
 
 static void write_u16_le(uint8_t *output, uint16_t value)
 {
@@ -123,26 +123,6 @@ static city_creature_stats_t base_stats(uint16_t species_id)
     return stats;
 }
 
-const city_species_definition_t *city_species_definition(uint16_t species_id)
-{
-    for (size_t i = 0U; i < CITY_SPECIES_COUNT; ++i) {
-        if (species_definitions[i].species_id == species_id) {
-            return &species_definitions[i];
-        }
-    }
-    return NULL;
-}
-
-uint16_t city_species_id_at(uint8_t index)
-{
-    return index < CITY_SPECIES_COUNT ? species_definitions[index].species_id : UINT16_MAX;
-}
-uint8_t city_species_index(uint16_t species_id)
-{
-    for (uint8_t i = 0; i < CITY_SPECIES_COUNT; ++i)
-        if (species_definitions[i].species_id == species_id) return i;
-    return CITY_SPECIES_COUNT;
-}
 city_creature_record_t *city_bestiary_record(city_bestiary_t *bestiary, uint16_t species_id)
 {
     const uint8_t i = city_species_index(species_id);
@@ -884,8 +864,8 @@ city_bestiary_result_t city_bestiary_choose_buddy(
 uint16_t city_evolution_target(uint16_t source_id)
 {
     for (unsigned i = 0; i < CITY_SPECIES_COUNT; ++i)
-        if (species_definitions[i].evolves_from == source_id && source_id)
-            return species_definitions[i].species_id;
+        if (CITY_CATALOG_DEFAULT.at(i)->evolves_from == source_id && source_id)
+            return CITY_CATALOG_DEFAULT.at(i)->species_id;
     return 0;
 }
 uint8_t city_buddy_place_count(const city_creature_record_t *record)

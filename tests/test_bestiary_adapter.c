@@ -7,6 +7,7 @@ static uint8_t saved[CITY_BESTIARY_ENCODED_BYTES], staged[CITY_BESTIARY_ENCODED_
 static size_t saved_len, staged_len;
 static bool legacy_exists, fail_commit, fail_set, bad_readback;
 static unsigned commits;
+static bool fail_read_after_commit;
 static uint32_t crc32(const uint8_t *data, size_t length)
 {
     uint32_t crc = UINT32_MAX;
@@ -84,7 +85,9 @@ esp_err_t nvs_commit(nvs_handle_t h)
 {
     (void)h; ++commits;
     if (fail_commit) return ESP_FAIL;
-    memcpy(saved,staged,staged_len);saved_len=staged_len;return ESP_OK;
+    memcpy(saved,staged,staged_len);saved_len=staged_len;
+    if (fail_read_after_commit) bad_readback=true;
+    return ESP_OK;
 }
 static void make_legacy(void)
 {
@@ -147,6 +150,28 @@ int main(void)
     assert(bsp_bestiary_store_load(&BSP_BESTIARY_STORE_DEFAULT,&empty,&migrated)==ESP_OK);
     assert(migrated && saved[4]==CITY_BESTIARY_SCHEMA_VERSION && empty.records[1].capture_count==20 && empty.buddy_species_id==0);
     /* A same-schema save from a smaller catalog upgrades by stable ID. */
+    compact_saved_catalog((uint16_t)(CITY_SPECIES_COUNT-1U));
+    city_bestiary_init(&empty);
+    city_bestiary_t unchanged=empty;
+    size_t old_len=saved_len;
+    uint8_t old_catalog[CITY_BESTIARY_ENCODED_BYTES];
+    memcpy(old_catalog,saved,saved_len);
+    fail_set=true;
+    assert(bsp_bestiary_store_load(&BSP_BESTIARY_STORE_DEFAULT,&empty,&migrated)==ESP_FAIL);
+    assert(!migrated && memcmp(&empty,&unchanged,sizeof(empty))==0);
+    assert(saved_len==old_len && memcmp(saved,old_catalog,old_len)==0);
+    fail_set=false;fail_commit=true;
+    assert(bsp_bestiary_store_load(&BSP_BESTIARY_STORE_DEFAULT,&empty,&migrated)==ESP_FAIL);
+    assert(!migrated && memcmp(&empty,&unchanged,sizeof(empty))==0);
+    assert(saved_len==old_len && memcmp(saved,old_catalog,old_len)==0);
+    fail_commit=false;fail_read_after_commit=true;
+    assert(bsp_bestiary_store_load(&BSP_BESTIARY_STORE_DEFAULT,&empty,&migrated)==ESP_FAIL);
+    assert(!migrated && memcmp(&empty,&unchanged,sizeof(empty))==0);
+    assert(saved_len==sizeof(saved));
+    fail_read_after_commit=false;bad_readback=false;
+    count=commits;
+    assert(bsp_bestiary_store_load(&BSP_BESTIARY_STORE_DEFAULT,&empty,&migrated)==ESP_OK);
+    assert(!migrated && commits==count && empty.records[1].capture_count==20);
     compact_saved_catalog((uint16_t)(CITY_SPECIES_COUNT-1U));
     count=commits;city_bestiary_init(&empty);
     assert(bsp_bestiary_store_load(&BSP_BESTIARY_STORE_DEFAULT,&empty,&migrated)==ESP_OK);
