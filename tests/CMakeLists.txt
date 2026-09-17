@@ -121,3 +121,7 @@ add_test(NAME test_soak_evidence
 
 add_test(NAME test_program_status
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_program_status.py")
+
+find_program(CITY_OPENSSL openssl REQUIRED)
+add_test(NAME test_content_pack
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_content_pack.py")

@@ -177,12 +177,14 @@ FxxW 可以实施和验证自动化工作，但不能代替人工完成产品门
 
 ### 工作项
 
-- 定义 CBOR/compact binary manifest；
-- 使用 SHA-256 和签名验证内容包；
+- [x] 第一增量：Host compact binary container、Ed25519 签名和流式 SHA-256 校验；
+- [ ] 固定设备 metadata/asset schema、验证固件 crypto 和资源预算；
+- [ ] 将签名校验接入设备包验证与安装路径；
 - 实现 compiled provider 与 package provider；
 - 实现 active/rollback manifest 原子切换；
 - 实现 Flash 有界 LRU；
-- 用 100、1,000、10,000 条合成包做分页和淘汰测试；
+- [x] Host 100、1,000、10,000 条合成容器校验与有界 Python 分配测试；
+- [ ] 设备分页和缓存淘汰测试（Host 容器测试不能替代）；
 - 保持 recovery、cardid 和 NVS 分区合同。
 
 ### 验收标准
