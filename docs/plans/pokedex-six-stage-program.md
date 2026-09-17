@@ -184,7 +184,7 @@ FxxW 可以实施和验证自动化工作，但不能代替人工完成产品门
 - [ ] 将签名校验接入设备包验证与安装路径；
 - [x] compiled/package catalog copy API、四行分页与租约生命周期，Host 验证通过；
 - [x] schema-12 存档兼容性 gate 接入 install/boot/rollback；
-- [x] 稀疏 wire format 13 与 NVS 持久化迁移，Host 失败/回读测试通过；
+- [x] 稀疏 wire format 13 与 NVS 持久化迁移，41 项 Host 测试及真机 app-only 安装/全量回读通过；20 只持有副本完整保留，重启不重复迁移（[证据](../verification/pokedex-sparse-device-2026-09-18.md)）；
 - [ ] 目录驱动的有界稀疏运行时模型，再接入 UI/audio/encounter；
 - [x] Host 模拟验证 active/rollback journal 切换；真机断电验证未完成；
 - [x] 四条 metadata + 四块 512-byte asset LRU，Host 淘汰/失败测试通过；真机接入与 RAM 测量未完成；

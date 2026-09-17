@@ -109,10 +109,11 @@
         "docs/architecture/pokedex-catalog-view-v1.md",
         "test_content_compat",
         "docs/architecture/pokedex-sparse-storage-v13.md",
-        "test_sparse_bestiary"
+        "test_sparse_bestiary",
+        "docs/verification/pokedex-sparse-device-2026-09-18.md"
       ],
       "gate_decision": "development_authorized_with_stage2_verification_deferred",
-      "next_action": "Sparse storage format 13 and durable NVS migration implemented, with 41 host tests and ESP32-C3 build passing. Verify app-only installation and exact player-state preservation on the connected device. The in-memory model is still the compiled roster; next implement catalog-dependent sparse progress before enabling package-only captures and UI/audio/encounter integration. Trust provisioning and content-partition migration remain unfinished. Stage 2 acceptance stays deferred."
+      "next_action": "Sparse storage format 13 passed 41 host tests, a clean ESP32-C3 build, app-only device installation, full flash readback and exact preservation of all 20 owned copies. Repeat boot leaves NVS unchanged. The in-memory model is still the compiled roster; next implement catalog-dependent sparse progress before enabling package-only captures and UI/audio/encounter integration. Trust provisioning and content-partition migration remain unfinished. Stage 2 acceptance stays deferred."
     },
     {
       "id": 4,

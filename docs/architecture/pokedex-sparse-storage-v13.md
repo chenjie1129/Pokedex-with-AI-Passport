@@ -70,8 +70,9 @@ versioned save migration. Partition layout, card identity and recovery stay inta
   writes after migration.
 - Read-only `build/host/bestiary_migration_audit BEFORE [AFTER]` compares decoded
   saves using canonical bytes. Raw device saves/backups stay outside the repository.
-- ESP-IDF 5.5.3 / ESP32-C3 development build passes. Device installation and its
-  exact image/state evidence are recorded separately after verification.
+- ESP-IDF 5.5.3 / ESP32-C3 clean build and app-only installation pass. Full flash
+  readback, exact player-state preservation and repeat-boot checks are recorded
+  in [device evidence](../verification/pokedex-sparse-device-2026-09-18.md).
 
 Stage 2 physical tests remain deferred; this migration's device evidence does
 not substitute for the pending interactive soak, field and physical-failure tests.

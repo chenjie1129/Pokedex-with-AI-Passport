@@ -142,8 +142,13 @@ copies are labeled in the UI.
 
 ## Recovery
 
-If the app fails to start, retain the target device's backup and restore only
-its original app. First extract the app from its full backup:
+If the app fails to start, retain the target device's backup. Check the save
+format before choosing a recovery app: firmware predating sparse format 13
+cannot read a migrated format-13 save. Prefer a compatible corrected app; an
+older app alone will not recover that collection.
+
+For an app-only rollback that is compatible with the current save, extract the
+original app from this device's full backup:
 
 ```sh
 python -c 'from pathlib import Path; b=Path("passport-backup/full-flash.bin").read_bytes(); assert len(b)==0x800000; Path("passport-backup/factory.bin").write_bytes(b[0x10000:0x310000])'
