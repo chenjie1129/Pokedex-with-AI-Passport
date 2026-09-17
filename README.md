@@ -93,19 +93,21 @@ Pokédex firmware.
 As of 2026-09-17, Stage 2 implementation is on `main` with remaining physical
 verification explicitly **unfinished/deferred** by the owner. Stage 3 has begun
 with [signed host content containers](docs/architecture/pokedex-content-pack-v1.md).
-They do not yet load on the device or add playable species. See the
+The next increment adds a [typed bounded C reader](docs/architecture/pokedex-typed-content-v1.md)
+with host tests and an ESP32-C3 build. Packs do not yet load in gameplay or add playable species. See the
 [deferral decision](docs/verification/pokedex-stage2-deferral-2026-09-17.md) and
 [current program status](docs/verification/pokedex-program-status.json).
 
 ### Host tests
 
-Requires a C compiler, CMake, Python 3, and OpenSSL 3 with Ed25519 support:
+Requires a C compiler, CMake, Python 3, and OpenSSL 3 with Ed25519 support and
+development headers (`libssl-dev` on Ubuntu):
 
 ```sh
 ./tools/test-host.sh
 ```
 
-The suite currently contains 36 tests, covering encounters, persistence,
+The suite currently contains 37 tests, covering encounters, persistence,
 individual copies, healing, release, evolution, settings, navigation, audio,
 generated assets, verification deferrals, soak evidence and signed host packs.
 Sanitizers are enabled by default where supported.

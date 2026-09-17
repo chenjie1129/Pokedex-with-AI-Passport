@@ -123,3 +123,6 @@ Remaining Stage 3 work:
 
 No new collectible species, firmware changes, partition changes or cloud service
 are part of this increment.
+
+The next increment adds [typed object profiles and a portable C reader](pokedex-typed-content-v1.md).
+That reader is host-verified and cross-compiled; device activation remains unfinished.

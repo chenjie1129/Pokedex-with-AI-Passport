@@ -2,6 +2,7 @@ idf_component_register(
     SRCS
         "src/bestiary_service.c"
         "src/catalog_provider.c"
+        "src/content_pack.c"
         "src/capture_engine.c"
         "src/encounter_selector.c"
         "src/game_loop.c"

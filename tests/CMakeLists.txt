@@ -12,6 +12,7 @@ enable_testing()
 add_library(city_domain STATIC
     ../components/city_domain/src/bestiary_service.c
     ../components/city_domain/src/catalog_provider.c
+    ../components/city_domain/src/content_pack.c
     ../components/city_domain/src/capture_engine.c
     ../components/city_domain/src/encounter_selector.c
     ../components/city_domain/src/game_loop.c
@@ -125,3 +126,15 @@ add_test(NAME test_program_status
 find_program(CITY_OPENSSL openssl REQUIRED)
 add_test(NAME test_content_pack
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_content_pack.py")
+
+find_package(OpenSSL 3 REQUIRED COMPONENTS Crypto)
+add_executable(content_pack_reader_cli content_pack_reader_cli.c)
+target_link_libraries(content_pack_reader_cli PRIVATE city_domain OpenSSL::Crypto)
+target_compile_options(content_pack_reader_cli PRIVATE -Wall -Wextra -Werror -Wpedantic)
+if(CITY_ENABLE_SANITIZERS AND CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")
+    target_compile_options(content_pack_reader_cli PRIVATE -fsanitize=address,undefined)
+    target_link_options(content_pack_reader_cli PRIVATE -fsanitize=address,undefined)
+endif()
+add_test(NAME test_content_pack_reader
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_content_pack_reader.py"
+            "$<TARGET_FILE:content_pack_reader_cli>")

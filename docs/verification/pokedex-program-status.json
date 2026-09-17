@@ -86,7 +86,7 @@
       "id": 3,
       "name": "Signed content package and bounded cache",
       "status": "in_progress",
-      "progress_percent": 10,
+      "progress_percent": 20,
       "owner": "@chenjie1129",
       "target_date": "2026-10-21",
       "prerequisites": [
@@ -100,10 +100,12 @@
       ],
       "evidence": [
         "docs/architecture/pokedex-content-pack-v1.md",
-        "test_content_pack"
+        "test_content_pack",
+        "docs/architecture/pokedex-typed-content-v1.md",
+        "test_content_pack_reader"
       ],
       "gate_decision": "development_authorized_with_stage2_verification_deferred",
-      "next_action": "Host signed-container prototype implemented and tested. Next define typed game metadata/device asset formats and measure the device crypto/provider and storage design; activation/rollback, bounded cache and physical validation remain unfinished. Stage 2 device deferral remains open."
+      "next_action": "Typed metadata/assets and bounded C reader implemented: host signature/corruption/100-10000-entry tests and ESP32-C3 compilation passed. Next implement and measure device crypto/trusted keys and protected storage; activation/rollback, cache ownership and gameplay/save integration remain unfinished. Stage 2 device verification remains deferred."
     },
     {
       "id": 4,

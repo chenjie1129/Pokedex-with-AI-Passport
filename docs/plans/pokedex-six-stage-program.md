@@ -178,7 +178,8 @@ FxxW 可以实施和验证自动化工作，但不能代替人工完成产品门
 ### 工作项
 
 - [x] 第一增量：Host compact binary container、Ed25519 签名和流式 SHA-256 校验；
-- [ ] 固定设备 metadata/asset schema、验证固件 crypto 和资源预算；
+- [x] Typed metadata/asset profile 与有界 C reader，Host 真签名校验和 ESP32-C3 编译；
+- [ ] 设备 crypto/trusted key、实际存储/cache 与运行时资源验证；
 - [ ] 将签名校验接入设备包验证与安装路径；
 - 实现 compiled provider 与 package provider；
 - 实现 active/rollback manifest 原子切换；
