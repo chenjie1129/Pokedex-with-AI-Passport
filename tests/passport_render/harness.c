@@ -217,6 +217,12 @@ int main(int argc, char **argv)
         s_pending_write = op;
         char name[40]; snprintf(name,sizeof(name),"storage-error-%u",op); snapshot(name,21);
     }
+    s_settings_draft.language = CITY_LANGUAGE_SIMPLIFIED_CHINESE;
+    for (unsigned op = WRITE_DISCOVERY; op <= WRITE_RELEASE; ++op) {
+        s_pending_write = op;
+        char name[40]; snprintf(name,sizeof(name),"zh-storage-error-%u",op); snapshot(name,21);
+    }
+    s_settings_draft.language = CITY_LANGUAGE_ENGLISH;
     snapshot("ball-fixed", 5);
     snapshot("ball-launch", 6);
     snapshot("home-no-buddy", 1);

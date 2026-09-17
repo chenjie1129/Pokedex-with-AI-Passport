@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "program_id": "pokedex-six-stage-evolution",
-  "updated_at": "2026-09-15",
+  "updated_at": "2026-09-17",
   "review_cadence": "weekly Monday and every stage gate",
   "risks": [
     {
@@ -72,7 +72,7 @@
         3
       ],
       "trigger": "No current firmware size, minimum heap, DMA block, or physical-device trace",
-      "mitigation": "Block stage 2 release until firmware and device measurements are attached",
+      "mitigation": "Record existing clean build and idle/reset evidence; track unfinished interactive heap and physical checks under the explicit 2026-09-17 owner deferral. Development/main publication is authorized; full device acceptance remains unverified.",
       "status": "open"
     },
     {
@@ -120,6 +120,20 @@
       "trigger": "Pinned source snapshot data hash changes",
       "mitigation": "Require source diff, invariant checks, quarantine, and human review before production import",
       "status": "monitoring"
+    },
+    {
+      "id": "R-009",
+      "title": "Stage 3 proceeds with unfinished Stage 2 device acceptance",
+      "severity": "high",
+      "probability": "medium",
+      "owner": "@chenjie1129",
+      "affected_stages": [
+        2,
+        3
+      ],
+      "trigger": "Interactive soak, workload heap, physical storage-error controls or power-cut acceptance remain unfinished",
+      "mitigation": "Preserve the owner deferral and private backups; keep device acceptance unfinished, maintain host regression coverage, and resume deferred tests before claiming full device acceptance. Stages 4-6 remain blocked.",
+      "status": "accepted_for_development_only"
     }
   ]
 }

@@ -115,3 +115,9 @@ add_city_test(test_navigation_ui "${CMAKE_CURRENT_BINARY_DIR}/navigation_ui.c")
 
 add_test(NAME test_nvs_fault_log
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_nvs_fault_log.py")
+
+add_test(NAME test_soak_evidence
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_soak_evidence.py")
+
+add_test(NAME test_program_status
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_program_status.py")

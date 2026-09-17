@@ -25,21 +25,21 @@ def require(condition, message):
 def validate_status(status):
     require(status.get("schema_version") == 1, "Unsupported status schema")
     require(status.get("overall_status") == "active", "Program is not active")
-    require(status.get("branch") == "feat/pokemon-pokedex", "Wrong branch")
+    require(status.get("branch") in {"feat/pokemon-pokedex", "main"}, "Wrong publication branch")
     require(bool(status.get("accountable")), "Missing accountable owner")
     stages = status.get("stages")
     require(isinstance(stages, list), "Stages must be a list")
     require([stage.get("id") for stage in stages] == list(range(1, 7)),
             "Stages must be ordered 1 through 6")
     current = status.get("current_stage")
-    require(current == 2, "Stage 2 must be the active implementation stage")
+    require(current in {2, 3}, "Only stages 2 or 3 are authorized for implementation")
     in_progress = [
         stage["id"] for stage in stages if stage.get("status") == "in_progress"
     ]
     require(in_progress == [current], "Exactly the current stage must be active")
 
     previous_date = None
-    allowed_statuses = {"completed", "in_progress", "planned", "blocked"}
+    allowed_statuses = {"completed", "in_progress", "planned", "blocked", "verification_deferred"}
     for stage in stages:
         stage_id = stage["id"]
         require(stage.get("status") in allowed_statuses,
@@ -57,7 +57,24 @@ def validate_status(status):
         expected_prerequisites = [] if stage_id == 1 else [stage_id - 1]
         require(stage.get("prerequisites") == expected_prerequisites,
                 f"Stage {stage_id} prerequisites are not serial")
-        if stage_id < current:
+        if stage["status"] == "verification_deferred":
+            require(stage_id == 2 and current == 3 and progress < 100,
+                    "Only unfinished stage 2 verification may be deferred for stage 3")
+            require(stage.get("gate_decision") == "unfinished_owner_authorized_stage3",
+                    "Deferred verification must not be reported as passed")
+            waiver = stage.get("verification_deferral", {})
+            require(waiver.get("approved_by") == status["accountable"] and
+                    waiver.get("approved_at") == "2026-09-17" and
+                    waiver.get("permits_stage") == 3 and
+                    waiver.get("verification_status") == "unfinished" and
+                    bool(waiver.get("decision")) and bool(waiver.get("evidence")),
+                    "Missing explicit owner decision for the stage 2 exception")
+            require(set(waiver.get("unfinished_checks", [])) >= {
+                "interactive_two_hour_soak_and_workload_heap",
+                "physical_storage_error_retry_and_back", "physical_power_interruption",
+                "physical_buttons_audio_and_carry_acceptance"},
+                "Deferred physical checks must remain visible")
+        elif stage_id < current:
             require(stage["status"] == "completed" and progress == 100,
                     f"Stage {stage_id} must be complete")
         elif stage_id > current:

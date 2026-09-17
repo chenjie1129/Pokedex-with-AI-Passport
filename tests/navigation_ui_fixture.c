@@ -10,6 +10,8 @@
 #include <stdarg.h>
 #define ESP_LOGI(...) ((void)0)
 #define ESP_LOGE(...) ((void)0)
+#define ESP_LOGW(...) ((void)0)
+#define pdPASS 1
 #define COLOR_GREEN 0
 #define COLOR_CORAL 1
 static const int BSP_BESTIARY_STORE_DEFAULT = 0;
@@ -44,6 +46,21 @@ static void *s_aim_status = status_text, *s_aim_cue = cue_text;
 static const char *s_capture_feedback = "Wait";
 static write_operation_t s_pending_write;
 static unsigned writes, saves, scans;
+static bool exercise_worker, fail_task;
+static void (*queued_task)(void *);
+static uint64_t s_wild_clear_retry_ms;
+static city_wild_reward_guard_t s_wild_guard;
+static city_bestiary_t durable;
+static bool production_request_bestiary_write(write_operation_t op);
+static int xTaskCreate(void (*task)(void *), const char *name, unsigned stack,
+                       void *arg, unsigned priority, void *handle)
+{
+    (void)name;(void)stack;(void)arg;(void)priority;(void)handle;
+    if (fail_task) return 0;
+    assert(!queued_task); queued_task=task; return pdPASS;
+}
+static void vTaskDelete(void *task) { (void)task; }
+static void run_write(void) { assert(queued_task); void (*task)(void *)=queued_task; queued_task=NULL; task(NULL); }
 static uint64_t now_ms(void) { return clock_ms; }
 static unsigned esp_random(void) { return 1; }
 static void set_state(ui_state_t state) { s_state = state; }
@@ -67,13 +84,54 @@ static void handle_settings_button(bsp_btn_t button, bool cancel) { (void)button
 static void begin_place_scan(void) { ++scans; s_state = UI_SCANNING; }
 static void begin_wild_encounter(void) { s_state = UI_ENCOUNTER; }
 static bool place_scan_coordinator_passport(city_passport_stamps_t *stamps) { memset(stamps,0,sizeof(*stamps));return true; }
-static bool request_bestiary_write(write_operation_t op) { ++writes;s_pending_write=op;return true; }
+static bool request_bestiary_write(write_operation_t op) { ++writes; if(exercise_worker)return production_request_bestiary_write(op); s_pending_write=op;return true; }
 static uint8_t species_selection_index(uint16_t id) { return city_species_index(id); }
-static bool bsp_bestiary_store_persist(const city_bestiary_t *b, void *ctx) { (void)b;(void)ctx;++saves;return !fail_store; }
+static bool bsp_bestiary_store_persist(const city_bestiary_t *b, void *ctx) { (void)ctx;++saves;if(!fail_store)durable=*b;return !fail_store; }
 /* PRODUCTION */
 static void click(bsp_btn_t key) { on_button(key,BSP_BTN_CLICK,NULL); }
 static void hold(void) { on_button(BSP_BTN_OK,BSP_BTN_LONG,NULL); }
 static void no_mutation(void) { assert(writes == 0); assert(memcmp(&before,&s_bestiary,sizeof(before)) == 0); }
+static void setup_storage_case(write_operation_t op)
+{
+    fail_store=false;fail_task=false;queued_task=NULL;s_save_in_progress=false;
+    memset(&s_pocket,0,sizeof(s_pocket));s_settings_saving=false;
+    assert(city_bestiary_import_legacy_count(&s_bestiary,2));
+    s_bestiary.buddy_species_id=CITY_SPECIES_CHARMANDER;s_bestiary.buddy_instance_id=1;
+    s_bestiary.records[1].friendship=100;s_bestiary.records[1].buddy_places=7;
+    s_bestiary.owned[0].current_hp--;
+    assert(city_bestiary_is_valid(&s_bestiary));
+    s_current_species_id=CITY_SPECIES_BULBASAUR;s_current_place_id=op==WRITE_WILD?0:2;
+    s_current_stats=(city_creature_stats_t){45,49,49};s_encounter_sequence=3;
+    s_visit_buddy_id=1;s_companion_instance_id=op==WRITE_BUDDY?2:1;
+    s_release_instance_id=2;s_evolution_source_id=CITY_SPECIES_CHARMANDER;
+    city_wild_reward_guard_init(&s_wild_guard,NULL,clock_ms);
+    before=s_bestiary;durable=s_bestiary;s_state=UI_STORAGE_ERROR;s_pending_write=op;
+    exercise_worker=true;fail_store=true;writes=0;
+}
+static void storage_error_replay(void)
+{
+    const write_operation_t ops[]={WRITE_DISCOVERY,WRITE_CAPTURE,WRITE_WILD,WRITE_BUDDY,
+                                  WRITE_EVOLUTION,WRITE_RECOVER,WRITE_RELEASE};
+    const ui_state_t success[]={UI_BUDDY_REACTION,UI_CAPTURED,UI_ENCOUNTER,UI_HOME,
+                                UI_EVOLVED,UI_COMPANION,UI_RELEASED};
+    for(unsigned i=0;i<sizeof(ops)/sizeof(ops[0]);++i) {
+        setup_storage_case(ops[i]);
+        click(BSP_BTN_OK); assert(s_save_in_progress && queued_task);
+        unsigned dispatched=writes;click(BSP_BTN_OK);assert(writes==dispatched);
+        run_write();assert(s_state==UI_STORAGE_ERROR && s_pending_write==ops[i] && !s_save_in_progress);
+        assert(!memcmp(&before,&s_bestiary,sizeof(before)) && !memcmp(&before,&durable,sizeof(before)));
+        fail_store=false;click(BSP_BTN_OK);run_write();
+        assert(s_state==success[i] && s_pending_write==WRITE_NONE && !s_save_in_progress);
+        assert(!memcmp(&durable,&s_bestiary,sizeof(durable)));
+        setup_storage_case(ops[i]);click(BSP_BTN_OK);run_write();
+        unsigned saved=saves;click(BSP_BTN_UP);assert(s_state==UI_HOME && s_pending_write==WRITE_NONE);
+        assert(!queued_task && saves==saved && !memcmp(&before,&s_bestiary,sizeof(before)));
+        setup_storage_case(ops[i]);fail_task=true;click(BSP_BTN_OK);
+        assert(s_state==UI_STORAGE_ERROR && !s_save_in_progress && !queued_task);
+        fail_task=false;fail_store=false;click(BSP_BTN_OK);run_write();assert(s_state==success[i]);
+    }
+    puts("Storage UI: 7 production operations preserve state on failure, block double taps, retry, cancel and recover task creation");
+}
 int main(void) {
     city_bestiary_init(&s_bestiary);
     s_state=UI_ENCOUNTER; click(BSP_BTN_OK); assert(s_state==UI_CAPTURE_READY && s_capture_deadline_ms==0);
@@ -173,5 +231,6 @@ int main(void) {
     s_encounter_selection=1;click(BSP_BTN_OK);assert(s_state==UI_ABANDONED);
     assert(city_bestiary_owned_by_id(&s_bestiary,1)->friendship==5);
     puts("Production navigation/capture replay passed; cancellations preserve assets and buddy");
+    storage_error_replay();
     return 0;
 }

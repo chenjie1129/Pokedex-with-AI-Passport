@@ -2,12 +2,12 @@
   "schema_version": 1,
   "state": "active",
   "intent": {
-    "objective": "Start the six-stage Pokédex implementation program, complete the host-verifiable stage 1 baseline, and deliver the first tested stage 2 migration increment without bypassing later gates.",
+    "objective": "Publish the Stage 2 implementation and evidence to main with device verification explicitly unfinished, then start Stage 3 content-pack development under the owner decision of 2026-09-17.",
     "constraints": [
       "The core loop remains offline",
       "No phone, account, GPS, cloud service, or LLM is added to P0",
       "Raw wireless identifiers and precise location never enter persistence or evidence",
-      "Stages execute serially",
+      "Stages execute serially except the documented owner-authorized Stage 2 verification deferral permitting Stage 3 development",
       "A reward is visible only after durable storage",
       "Host, firmware, and physical-device evidence are reported separately",
       "Unrelated user files are preserved"
@@ -18,10 +18,10 @@
       "Stage 1 may pass for host scope with hardware measurements carried as a stage 2 release blocker"
     ],
     "non_goals": [
-      "Implement stages 3-6 before their gates",
-      "Merge the feature branch into main",
       "Add a cloud backend during P0",
-      "Add an unlicensed sixteenth production entry"
+      "Add an unlicensed sixteenth production entry",
+      "Claim deferred Stage 2 device checks passed",
+      "Start stages 4-6 before their product and capacity gates"
     ],
     "ambiguities": [
       "Named Backend, Database, SRE, QA, and privacy DRIs do not yet exist",
@@ -68,7 +68,7 @@
       "id": "check-1",
       "type": "schema",
       "target": "docs/verification/pokedex-program-status.json",
-      "expected": "Stages 1-6 are ordered, only stage 2 is in progress, and stages 4-6 are blocked"
+      "expected": "Stages 1-6 are ordered, only stage 3 is in progress, stage 2 has an explicit owner-approved unfinished-verification deferral, and stages 4-6 are blocked"
     },
     {
       "id": "check-2",

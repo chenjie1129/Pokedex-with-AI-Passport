@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
   "program_id": "pokedex-six-stage-evolution",
-  "updated_at": "2026-09-15",
-  "branch": "feat/pokemon-pokedex",
+  "updated_at": "2026-09-17",
+  "branch": "main",
   "overall_status": "active",
   "accountable": "@chenjie1129",
   "execution_owner": "FxxW",
-  "current_stage": 2,
+  "current_stage": 3,
   "cadence": {
     "engineering_update": "each change",
     "progress_update": "each working day",
@@ -43,7 +43,7 @@
     {
       "id": 2,
       "name": "Stable identity and save expansion migration",
-      "status": "in_progress",
+      "status": "verification_deferred",
       "progress_percent": 60,
       "owner": "@chenjie1129",
       "target_date": "2026-09-30",
@@ -62,15 +62,30 @@
         "test_bestiary_adapter",
         "docs/architecture/pokedex-save-compatibility.md",
         "docs/verification/pokedex-stage2-candidate-2026-09-15.md",
-        "docs/verification/pokedex-nvs-fault-2026-09-15.md"
+        "docs/verification/pokedex-nvs-fault-2026-09-15.md",
+        "docs/verification/pokedex-single-location-soak.md"
       ],
-      "gate_decision": "pending",
-      "next_action": "Complete physical power-cut testing on a spare device, UI storage-error acceptance, two-location checks and long soak; then clean-source release review"
+      "gate_decision": "unfinished_owner_authorized_stage3",
+      "next_action": "Deferred device checks remain unfinished; resume them before claiming full device acceptance. Stage 3 development is authorized by the owner decision dated 2026-09-17.",
+      "verification_deferral": {
+        "approved_by": "@chenjie1129",
+        "approved_at": "2026-09-17",
+        "decision": "Defer Stage 2 device tests, mark verification unfinished, publish to main and start Stage 3. This permits development, not a device acceptance pass.",
+        "permits_stage": 3,
+        "evidence": "docs/verification/pokedex-stage2-deferral-2026-09-17.md",
+        "unfinished_checks": [
+          "interactive_two_hour_soak_and_workload_heap",
+          "physical_storage_error_retry_and_back",
+          "physical_power_interruption",
+          "physical_buttons_audio_and_carry_acceptance"
+        ],
+        "verification_status": "unfinished"
+      }
     },
     {
       "id": 3,
       "name": "Signed content package and bounded cache",
-      "status": "planned",
+      "status": "in_progress",
       "progress_percent": 0,
       "owner": "@chenjie1129",
       "target_date": "2026-10-21",
@@ -84,7 +99,8 @@
         "Installed content remains fully offline"
       ],
       "evidence": [],
-      "gate_decision": "not_started"
+      "gate_decision": "development_authorized_with_stage2_verification_deferred",
+      "next_action": "Implement and test the host content-pack format, signing and streaming verification; device provider, storage allocation, atomic activation/rollback and cache remain unfinished."
     },
     {
       "id": 4,
