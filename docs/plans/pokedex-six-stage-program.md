@@ -179,10 +179,11 @@ FxxW 可以实施和验证自动化工作，但不能代替人工完成产品门
 
 - [x] 第一增量：Host compact binary container、Ed25519 签名和流式 SHA-256 校验；
 - [x] Typed metadata/asset profile 与有界 C reader，Host 真签名校验和 ESP32-C3 编译；
-- [ ] 设备 crypto/trusted key、实际存储/cache 与运行时资源验证；
+- [x] P-256 设备 crypto adapter、受保护分区 adapter 与双 slot activation/rollback；Host 故障注入和 ESP32-C3 编译通过；
+- [ ] production trusted key、分区迁移、实际 cache 与运行时资源验证；
 - [ ] 将签名校验接入设备包验证与安装路径；
 - 实现 compiled provider 与 package provider；
-- 实现 active/rollback manifest 原子切换；
+- [x] Host 模拟验证 active/rollback journal 切换；真机断电验证未完成；
 - 实现 Flash 有界 LRU；
 - [x] Host 100、1,000、10,000 条合成容器校验与有界 Python 分配测试；
 - [ ] 设备分页和缓存淘汰测试（Host 容器测试不能替代）；

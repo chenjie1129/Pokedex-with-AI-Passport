@@ -124,7 +124,7 @@ bool city_pack_open(city_pack_t *out, city_pack_read_fn read, void *context,
     city_pack_t p = {.read = read, .context = context, .bytes = bytes};
     uint8_t h[HEADER_BYTES], e[ENTRY_BYTES], digest[32], signature[SIGNATURE_BYTES];
     if (!rd(&p, 0, h, sizeof(h)) || memcmp(h, "CITYPK01", 8) || u16(h + 8) != 1 ||
-        u16(h + 10) != 1 || !u32(h + 12) || u32(h + 24)) return false;
+        (u16(h + 10) != CITY_PACK_ED25519 && u16(h + 10) != CITY_PACK_P256) || !u32(h + 12) || u32(h + 24)) return false;
     uint32_t objects = u32(h + 16), payload = u32(h + 20);
     if (!objects || objects > CITY_PACK_MAX_SPECIES * 3U || objects % 3U) return false;
     p.count = objects / 3U; p.revision = u32(h + 12);
@@ -142,7 +142,7 @@ bool city_pack_open(city_pack_t *out, city_pack_read_fn read, void *context,
     }
     if (offset != payload || !c->finish(c->context, digest) ||
         !rd(&p, p.payload - SIGNATURE_BYTES, signature, sizeof(signature)) ||
-        !c->verify(c->context, digest, signature)) return false;
+        !c->verify(c->context, u16(h + 10), digest, signature)) return false;
     for (uint32_t i = 0; i < objects; ++i) {
         if (!entry(&p, i, e) || u32(e + 4) > payload || u32(e + 8) > payload - u32(e + 4) ||
             !hash_object(&p, e, c)) return false;
@@ -156,6 +156,7 @@ bool city_pack_open(city_pack_t *out, city_pack_read_fn read, void *context,
             }
         } else if (!typed_asset(&p, e)) return false;
     }
+    memcpy(p.manifest, digest, sizeof(p.manifest));
     p.verified = true; *out = p; return true;
 }
 

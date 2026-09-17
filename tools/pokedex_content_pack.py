@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Host-only signed content container prototype; never activates device content.
 
-Requires OpenSSL 3 with Ed25519. A trusted public key is supplied out of band.
+Requires OpenSSL 3 with Ed25519 or ECDSA P-256. A trusted public key is supplied out of band.
 Objects are opaque in this increment; passing verification is not game-schema,
 asset-license, capacity, or firmware compatibility approval.
 """
@@ -25,6 +25,8 @@ CHUNK = 65536
 MAX_OBJECTS = 30000
 MAX_OBJECT_BYTES = 1024 * 1024
 MAX_PACK_BYTES = 8 * 1024 * 1024  # Host ceiling, NOT allocated device capacity.
+P256 = 2  # ECDSA P-256 over SHA256(DOMAIN || manifest digest), raw r || s.
+P256_DER_PREFIX = bytes.fromhex('3059301306072a8648ce3d020106082a8648ce3d030107034200')
 PUBLIC_DER_PREFIX = bytes.fromhex('302a300506032b6570032100')
 
 
@@ -42,34 +44,74 @@ def openssl(*args):
         result = subprocess.run(['openssl', *map(str, args)], capture_output=True,
                                 timeout=30, check=False, stdin=subprocess.DEVNULL)
     except (OSError, subprocess.TimeoutExpired) as error:
-        raise PackError('OpenSSL 3 with Ed25519 is required') from error
+        raise PackError('OpenSSL 3 is required') from error
     require(result.returncode == 0, 'Key/signature operation failed')
     return result.stdout
 
 
-def check_key(key, private=False):
+def check_key(key, private=False, algorithm=ALGORITHM):
+    require(algorithm in (ALGORITHM, P256), 'Unsupported signature algorithm')
     args = ['pkey', '-in', key, '-pubout', '-outform', 'DER']
     if not private:
         args.append('-pubin')
     der = openssl(*args)
-    require(len(der) == len(PUBLIC_DER_PREFIX) + 32 and
-            der.startswith(PUBLIC_DER_PREFIX), 'Only Ed25519 keys are accepted')
+    prefix, length = (PUBLIC_DER_PREFIX, 32) if algorithm == ALGORITHM else (P256_DER_PREFIX, 65)
+    require(len(der) == len(prefix) + length and der.startswith(prefix),
+            'Key does not match signature algorithm')
+    if algorithm == P256:
+        require(der[len(prefix)] == 4, 'Expected uncompressed P-256 public key')
+    return der[len(prefix):]
 
 
-def signature_operation(digest, key, signature=None):
-    check_key(key, private=signature is None)
+def p256_raw(der):
+    """Strict DER from OpenSSL -> fixed-width r || s."""
+    require(8 <= len(der) <= 72 and der[0] == 0x30 and der[1] == len(der) - 2,
+            'Invalid ECDSA sequence')
+    result, pos = bytearray(), 2
+    for _ in range(2):
+        require(pos + 2 <= len(der) and der[pos] == 2, 'Invalid ECDSA integer')
+        size = der[pos + 1]; pos += 2
+        value = der[pos:pos + size]; pos += size
+        require(1 <= size <= 33 and len(value) == size and not value[0] & 0x80,
+                'Invalid ECDSA integer size or sign')
+        require(size == 1 or value[0] != 0 or value[1] & 0x80, 'Noncanonical ECDSA integer')
+        number = int.from_bytes(value, 'big')
+        require(0 < number < 2**256, 'Invalid ECDSA scalar')
+        result.extend(number.to_bytes(32, 'big'))
+    require(pos == len(der), 'Trailing ECDSA signature bytes')
+    return bytes(result)
+
+
+def p256_der(raw):
+    require(len(raw) == 64, 'Invalid ECDSA signature size')
+    body = b''
+    for value in (raw[:32], raw[32:]):
+        value = value.lstrip(b'\0') or b'\0'
+        if value[0] & 0x80:
+            value = b'\0' + value
+        body += bytes((2, len(value))) + value
+    return bytes((0x30, len(body))) + body
+
+
+def signature_operation(digest, key, signature=None, algorithm=ALGORITHM):
+    check_key(key, private=signature is None, algorithm=algorithm)
     with tempfile.TemporaryDirectory(prefix='city-pack-sign-') as directory:
         root = Path(directory)
         message = root / 'message'
         message.write_bytes(DOMAIN + digest)
         if signature is None:
+            if algorithm == P256:
+                return p256_raw(openssl('dgst', '-sha256', '-sign', key, message))
             signed = openssl('pkeyutl', '-sign', '-rawin', '-inkey', key, '-in', message)
             require(len(signed) == SIGNATURE_BYTES, 'Invalid signature size')
             return signed
         sigfile = root / 'signature'
-        sigfile.write_bytes(signature)
-        openssl('pkeyutl', '-verify', '-rawin', '-pubin', '-inkey', key,
-                '-in', message, '-sigfile', sigfile)
+        sigfile.write_bytes(p256_der(signature) if algorithm == P256 else signature)
+        if algorithm == P256:
+            openssl('dgst', '-sha256', '-verify', key, '-signature', sigfile, message)
+        else:
+            openssl('pkeyutl', '-verify', '-rawin', '-pubin', '-inkey', key,
+                    '-in', message, '-sigfile', sigfile)
 
 
 def read_exact(stream, size):
@@ -119,7 +161,7 @@ def verify_pack(path, public_key, max_bytes=MAX_PACK_BYTES):
         require(HEADER.size + SIGNATURE_BYTES <= size <= max_bytes, 'Pack exceeds size budget or is truncated')
         header = read_exact(stream, HEADER.size)
         magic, version, algorithm, revision, count, payload_size = HEADER.unpack(header)
-        require(magic == MAGIC and version == VERSION and algorithm == ALGORITHM,
+        require(magic == MAGIC and version == VERSION and algorithm in (ALGORITHM, P256),
                 'Unsupported pack format or signature algorithm')
         require(revision > 0 and 0 < count <= MAX_OBJECTS and count % 3 == 0,
                 'Invalid revision or object count')
@@ -128,7 +170,7 @@ def verify_pack(path, public_key, max_bytes=MAX_PACK_BYTES):
         digest = hashlib.sha256(header)
         read_index(stream, count, payload_size, digest)
         signature = read_exact(stream, SIGNATURE_BYTES)
-        signature_operation(digest.digest(), public_key, signature)
+        signature_operation(digest.digest(), public_key, signature, algorithm)
         # Authentication precedes object reads. Check the index again while using
         # it, detecting concurrent index modification as well as payload damage.
         second_digest = hashlib.sha256(header)
@@ -147,7 +189,8 @@ def verify_pack(path, public_key, max_bytes=MAX_PACK_BYTES):
                 'manifest_sha256': digest.hexdigest(), 'device_compatible': False}
 
 
-def build_pack(recipe_path, private_key, output):
+def build_pack(recipe_path, private_key, output, algorithm=ALGORITHM):
+    require(algorithm in (ALGORITHM, P256), 'Unsupported signature algorithm')
     recipe_path, output = Path(recipe_path), Path(output)
     require(not output.exists(), 'Output already exists')
     recipe = json.loads(recipe_path.read_text())
@@ -170,12 +213,12 @@ def build_pack(recipe_path, private_key, output):
         payload_size += size
         require(HEADER.size + len(objects) * ENTRY.size + SIGNATURE_BYTES + payload_size
                 <= MAX_PACK_BYTES, 'Pack exceeds host size budget')
-    header = HEADER.pack(MAGIC, VERSION, ALGORITHM, revision, len(objects), payload_size)
+    header = HEADER.pack(MAGIC, VERSION, algorithm, revision, len(objects), payload_size)
     digest = hashlib.sha256(header)
     # Share the verifier's structural invariants with the publisher.
     import io
     read_index(io.BytesIO(b''.join(records)), len(records), payload_size, digest)
-    signature = signature_operation(digest.digest(), private_key)
+    signature = signature_operation(digest.digest(), private_key, algorithm=algorithm)
     temporary = None
     try:
         with tempfile.NamedTemporaryFile(dir=output.parent, prefix='.city-pack-', delete=False) as stream:
@@ -204,6 +247,7 @@ def main():
     build.add_argument('--recipe', required=True, type=Path)
     build.add_argument('--private-key', required=True, type=Path)
     build.add_argument('--output', required=True, type=Path)
+    build.add_argument('--algorithm', choices=['ed25519', 'p256'], default='ed25519')
     verify = commands.add_parser('verify')
     verify.add_argument('pack', type=Path)
     verify.add_argument('--public-key', required=True, type=Path)
@@ -211,7 +255,8 @@ def main():
     args = parser.parse_args()
     try:
         if args.command == 'build':
-            build_pack(args.recipe, args.private_key, args.output)
+            build_pack(args.recipe, args.private_key, args.output,
+                       P256 if args.algorithm == 'p256' else ALGORITHM)
             print(json.dumps({'status': 'built_host_container', 'path': str(args.output)}))
         else:
             print(json.dumps(verify_pack(args.pack, args.public_key, args.max_bytes)))

@@ -4,6 +4,9 @@ Status: implemented host prototype, 2026-09-17. **Not a device-installable pack.
 The owner authorized Stage 3 while Stage 2 device verification remains unfinished;
 see [the decision](../verification/pokedex-stage2-deferral-2026-09-17.md).
 
+Later increment: [explicit algorithm 2 (P-256) and installer](pokedex-content-install-v1.md).
+Algorithm 1 and this original host-profile evidence remain valid.
+
 ## Purpose and current boundary
 
 Authenticate a bounded catalog/object index and detect damaged or missing assets

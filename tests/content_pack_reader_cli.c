@@ -46,14 +46,14 @@ static bool hash_finish(void *arg, uint8_t digest[32])
     context_t *c = arg;
     return strcmp(c->fault, "hash-finish") && EVP_DigestFinal_ex(c->hash, digest, &size) == 1 && size == 32;
 }
-static bool verify(void *arg, const uint8_t digest[32], const uint8_t signature[64])
+static bool verify(void *arg, uint16_t algorithm, const uint8_t digest[32], const uint8_t signature[64])
 {
     context_t *c = arg;
     uint8_t message[sizeof(CITY_PACK_DOMAIN) + 32];
     memcpy(message, CITY_PACK_DOMAIN, sizeof(CITY_PACK_DOMAIN));
     memcpy(message + sizeof(CITY_PACK_DOMAIN), digest, 32);
     EVP_MD_CTX *md = EVP_MD_CTX_new();
-    bool ok = md && strcmp(c->fault, "signature") && EVP_PKEY_is_a(c->key, "ED25519") &&
+    bool ok = algorithm == CITY_PACK_ED25519 && md && strcmp(c->fault, "signature") && EVP_PKEY_is_a(c->key, "ED25519") &&
         EVP_DigestVerifyInit(md, NULL, NULL, NULL, c->key) == 1 &&
         EVP_DigestVerify(md, signature, 64, message, sizeof(message)) == 1;
     EVP_MD_CTX_free(md);

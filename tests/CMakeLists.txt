@@ -13,6 +13,7 @@ add_library(city_domain STATIC
     ../components/city_domain/src/bestiary_service.c
     ../components/city_domain/src/catalog_provider.c
     ../components/city_domain/src/content_pack.c
+    ../components/city_domain/src/content_install.c
     ../components/city_domain/src/capture_engine.c
     ../components/city_domain/src/encounter_selector.c
     ../components/city_domain/src/game_loop.c
@@ -138,3 +139,29 @@ endif()
 add_test(NAME test_content_pack_reader
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_content_pack_reader.py"
             "$<TARGET_FILE:content_pack_reader_cli>")
+
+# Actual device crypto adapter also runs on the host (mbedTLS 2.28 or 3.x).
+# Linux: libmbedtls-dev; macOS: mbedTLS prefix via CMAKE_PREFIX_PATH.
+find_path(CITY_MBEDTLS_INCLUDE mbedtls/ecdsa.h REQUIRED)
+find_library(CITY_MBEDCRYPTO mbedcrypto REQUIRED)
+add_library(city_content_crypto STATIC ../components/bsp/src/bsp_content_crypto.c)
+target_include_directories(city_content_crypto PUBLIC ../components/bsp/include ${CITY_MBEDTLS_INCLUDE})
+target_link_libraries(city_content_crypto PUBLIC city_domain ${CITY_MBEDCRYPTO})
+target_compile_options(city_content_crypto PRIVATE -Wall -Wextra -Werror -Wpedantic)
+if(CITY_ENABLE_SANITIZERS AND CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")
+    target_compile_options(city_content_crypto PRIVATE -fsanitize=address,undefined)
+endif()
+add_executable(test_content_install test_content_install.c)
+target_link_libraries(test_content_install PRIVATE city_content_crypto)
+target_compile_options(test_content_install PRIVATE -Wall -Wextra -Werror -Wpedantic)
+if(CITY_ENABLE_SANITIZERS AND CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")
+    target_compile_options(test_content_install PRIVATE -fsanitize=address,undefined)
+    target_link_options(test_content_install PRIVATE -fsanitize=address,undefined)
+endif()
+# Python generates ephemeral P-256 keys and typed packs, then calls the C fixture.
+add_test(NAME test_content_device_crypto
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_content_device_crypto.py"
+            "$<TARGET_FILE:test_content_install>")
+add_city_test(test_content_storage test_content_storage.c)
+target_sources(test_content_storage PRIVATE ../components/bsp/src/bsp_content_storage.c)
+target_include_directories(test_content_storage PRIVATE content_stubs ../components/bsp/include)

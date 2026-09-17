@@ -6,6 +6,8 @@
 #define CITY_PACK_READ_BYTES 512U
 #define CITY_PACK_MAX_BYTES (8U * 1024U * 1024U)
 #define CITY_PACK_MAX_SPECIES 10000U
+#define CITY_PACK_ED25519 1U
+#define CITY_PACK_P256 2U
 #define CITY_PACK_DOMAIN "CityPassport.ContentPack.v1"
 
 /* Storage must be immutable from open through the final read. These callbacks
@@ -16,9 +18,10 @@ typedef struct {
     bool (*begin)(void *);
     bool (*update)(void *, const void *, size_t);
     bool (*finish)(void *, uint8_t digest[32]);
-    /* Verify Ed25519 over CITY_PACK_DOMAIN including NUL, then digest[32],
+    /* Algorithm 1: Ed25519 over DOMAIN including NUL then digest.
+     * Algorithm 2: P-256/SHA256 over that same message, raw big-endian r || s,
      * using an out-of-band trusted public key. No accept-all production stub. */
-    bool (*verify)(void *, const uint8_t digest[32], const uint8_t signature[64]);
+    bool (*verify)(void *, uint16_t algorithm, const uint8_t digest[32], const uint8_t signature[64]);
 } city_pack_crypto_t;
 
 typedef struct {
@@ -35,6 +38,7 @@ typedef struct {
     city_pack_read_fn read;
     void *context;
     uint32_t bytes, revision, count, payload;
+    uint8_t manifest[32];
     bool verified;
 } city_pack_t;
 

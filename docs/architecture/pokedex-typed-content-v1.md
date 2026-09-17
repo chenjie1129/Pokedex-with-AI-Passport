@@ -98,11 +98,11 @@ payload, checks all object SHA-256 values, then checks typed fields and links.
 No partially verified handle is exposed. Missing callbacks and crypto/I/O
 failures are failures, not an unsigned fallback.
 
-The host adapter uses OpenSSL 3 SHA-256 and real Ed25519 verification. The device
-adapter is **unfinished**: Ed25519 support and resource cost have not been
-validated against the installed ESP-IDF 5.5.3 runtime. Choose and measure a supported
-implementation or explicitly version a different signature profile before
-device integration. Do not substitute a callback that returns success.
+The original host adapter uses OpenSSL 3 SHA-256 and real Ed25519 verification.
+The [third increment](pokedex-content-install-v1.md) adds explicit algorithm 2,
+P-256, and the actual mbedTLS BSP verifier with host interoperability tests and
+ESP32-C3 compilation. Production key provisioning and physical resource costs
+remain unverified. No callback substitutes unconditional success.
 
 Storage must remain immutable from open until the reader is discarded. Future
 staging/activation code owns this guarantee and the trusted key. The reader
@@ -127,7 +127,7 @@ package catalogs remains separate work.
   wrong keys, absent/failing crypto callbacks, I/O failure, truncation,
   corruption and out-of-bounds access are rejected.
 - 100/1,000/10,000 typed synthetic entries passed complete verification, four-row
-  iteration and lookup. Host handle: 40 bytes; decoded row: 366 bytes, four rows
+  iteration and lookup. Increment-2 host handle: 40 bytes (72 after increment 3 adds its manifest digest); decoded row: 366 bytes, four rows
   1,464 bytes. The maximum-size sprite/cry case exercised 512-byte reads.
 - ESP-IDF 5.5.3 firmware build passed. The module is compiled into the domain
   library but unused by gameplay and may be removed from the final linked image.
@@ -138,8 +138,8 @@ package catalogs remains separate work.
 - Firmware candidate is a dirty development build; no flash or runtime device
   test was performed. No player save or protected partition was changed.
 
-Next: select/measure device crypto and trusted-key handling, define protected
-staging storage and cache ownership, then add atomic activation/rollback and
-gameplay integration. Stage 3 is still in progress; signed host and typed-reader
+Subsequent crypto/storage/activation work is tracked in the
+[third increment](pokedex-content-install-v1.md). Next: package provider/cache
+ownership, save compatibility, provisioning/migration and physical validation. Stage 3 is still in progress; signed host and typed-reader
 tests do not prove device capacity, physical interruption recovery or full
 catalog playability.
