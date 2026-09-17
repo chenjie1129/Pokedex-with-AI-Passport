@@ -1,4 +1,6 @@
 #include "content_install.h"
+#include "content_compat.h"
+#include "catalog_view.h"
 #include "bsp_content_crypto.h"
 #include <assert.h>
 #include <stdio.h>
@@ -76,17 +78,23 @@ static source_t load(const char *path)
     rewind(f); source_t s = {malloc(size ? (size_t)size : 1), (uint32_t)size}; assert(s.data);
     assert(fread(s.data, 1, s.size, f) == s.size); fclose(f); return s;
 }
+/* Storage-only fixture. Save compatibility has separate real-policy tests. */
+static bool storage_fixture_policy(void *context, const city_pack_t *candidate)
+{ (void)context; return !candidate || candidate->verified; }
+static const city_content_policy_t storage_policy = {NULL, storage_fixture_policy};
 static void restart(city_content_store_t *s, flash_t *f, const city_pack_crypto_t *c)
-{ clear_fault(f); city_content_io_t backend = io(f); assert(city_content_boot(s, &backend, c)); }
+{ clear_fault(f); city_content_io_t backend = io(f); assert(city_content_boot(s, &backend, c, &storage_policy)); }
 static void active(city_content_store_t *s, uint32_t revision)
 {
     const city_pack_t *p = city_content_acquire(s); assert(p && p->revision == revision);
     city_pack_species_t row; assert(city_pack_at(p, 0, &row));
     assert(row.species_id == 1); assert(city_content_release(s, p));
 }
+#include "content_compat_checks.h"
+
 int main(int argc, char **argv)
 {
-    assert(argc == 3 || argc == 5);
+    assert(argc == 3 || argc == 5 || argc == 8);
     source_t key = load(argv[1]), first = load(argv[2]);
     bsp_content_crypto_t backend;
     bool valid_key = bsp_content_crypto_init(&backend, key.data, key.size);
@@ -98,6 +106,13 @@ int main(int argc, char **argv)
         printf("%s\n", valid ? "verified" : "rejected"); return valid ? 0 : 1;
     }
     assert(valid);
+    if (argc == 8) {
+        source_t packs[6] = {first};
+        for (unsigned i = 1; i < 6; ++i) packs[i] = load(argv[i + 2]);
+        check_save_compatibility(&crypto, packs);
+        for (unsigned i = 0; i < 6; ++i) free(packs[i].data);
+        free(key.data); bsp_content_crypto_free(&backend); return 0;
+    }
     source_t second = load(argv[3]), third = load(argv[4]);
     flash_t f; memset(&f, 0xff, sizeof(f)); clear_fault(&f);
     city_content_store_t store; restart(&store, &f, &crypto);
@@ -156,7 +171,7 @@ int main(int argc, char **argv)
     restart(&store, &f, &crypto); active(&store, 2);
     for (int fail = 1; fail <= 2; ++fail) {
         f = baseline; clear_fault(&f); f.fail_call = fail; city_content_io_t broken = io(&f);
-        assert(!city_content_boot(&store, &broken, &crypto)); assert(!store.ready);
+        assert(!city_content_boot(&store, &broken, &crypto, &storage_policy)); assert(!store.ready);
     }
     f = baseline; f.slots[1][second.size - 1] ^= 1;
     restart(&store, &f, &crypto); active(&store, 1); assert(store.high_revision == 2);

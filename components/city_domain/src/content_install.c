@@ -38,16 +38,19 @@ static bool read_slot(void *arg, uint32_t offset, void *out, size_t size)
 static bool open_record(city_content_store_t *s, const record_t *r, city_pack_t *p)
 {
     return city_pack_open(p, read_slot, &s->slots[r->slot], r->bytes, s->io.capacity, &s->crypto) &&
-        p->revision == r->revision && !memcmp(p->manifest, r->manifest, 32);
+        p->revision == r->revision && !memcmp(p->manifest, r->manifest, 32) &&
+        s->policy.accept(s->policy.context, p);
 }
-bool city_content_boot(city_content_store_t *s, const city_content_io_t *io, const city_pack_crypto_t *crypto)
+bool city_content_boot(city_content_store_t *s, const city_content_io_t *io, const city_pack_crypto_t *crypto,
+                       const city_content_policy_t *policy)
 {
-    if (!s || !io || !crypto) return false;
+    if (!s) return false;
     memset(s, 0, sizeof(*s)); s->active_slot = -1; s->active_bank = -1;
+    if (!io || !crypto || !policy || !policy->accept) return false;
     if (!crypto->begin || !crypto->update || !crypto->finish || !crypto->verify) return false;
     if (!io->capacity || io->capacity > CITY_PACK_MAX_BYTES || !io->read || !io->erase ||
         !io->write || !io->read_record || !io->erase_record || !io->write_record) return false;
-    s->io = *io; s->crypto = *crypto;
+    s->io = *io; s->crypto = *crypto; s->policy = *policy;
     s->slots[0] = (city_content_slot_t){s, 0}; s->slots[1] = (city_content_slot_t){s, 1};
     uint32_t chosen = 0;
     for (unsigned bank = 0; bank < 2; ++bank) {
@@ -61,11 +64,12 @@ bool city_content_boot(city_content_store_t *s, const city_content_io_t *io, con
             s->active_bank = (int)bank; chosen = r.generation;
         }
     }
+    if (s->active_slot < 0 && !s->policy.accept(s->policy.context, NULL)) return false;
     s->ready = true; return true;
 }
 static bool commit(city_content_store_t *s, unsigned slot, const city_pack_t *pack)
 {
-    if (s->generation == UINT32_MAX) return false;
+    if (s->generation == UINT32_MAX || !s->policy.accept(s->policy.context, pack)) return false;
     unsigned bank = s->active_bank == 0 ? 1U : 0U;
     uint8_t raw[CITY_CONTENT_RECORD_BYTES] = {0}, check[CITY_CONTENT_RECORD_BYTES];
     memcpy(raw, "CITYACT1", 8); put32(raw + 8, s->generation + 1);
@@ -91,7 +95,7 @@ bool city_content_install(city_content_store_t *s, city_pack_read_fn source, voi
      * immutable while read; staged bytes are independently verified afterward. */
     city_pack_t pack;
     if (!city_pack_open(&pack, source, context, bytes, s->io.capacity, &s->crypto) ||
-        pack.revision <= s->high_revision) return false;
+        pack.revision <= s->high_revision || !s->policy.accept(s->policy.context, &pack)) return false;
     unsigned slot = s->active_slot == 0 ? 1U : 0U;
     if (!s->io.erase(s->io.context, slot)) return false;
     uint8_t block[CITY_PACK_READ_BYTES];

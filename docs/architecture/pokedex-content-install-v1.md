@@ -136,6 +136,13 @@ are still to be wired to this API.
   this does **not** measure the fully linked install feature's flash cost.
 - No flash, USB operation, physical test, catalog activation or save migration.
 
+## Subsequent increment
+
+The [catalog-view increment](pokedex-catalog-view-v1.md) adds a mandatory
+application/save policy to boot, install and rollback, plus bounded read caches.
+The original installer API described above now requires that policy; the
+following remaining-work list records the increment-3 boundary.
+
 ## Remaining before players can use packs
 
 1. Approved trust key/provisioning and a reviewed storage migration with backup

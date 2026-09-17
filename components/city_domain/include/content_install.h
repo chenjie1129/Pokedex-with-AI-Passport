@@ -16,11 +16,19 @@ typedef struct {
     bool (*erase_record)(void *, unsigned bank);
     bool (*write_record)(void *, unsigned bank, const uint8_t bytes[CITY_CONTENT_RECORD_BYTES]);
 } city_content_io_t;
+/* Mandatory application/save compatibility check. NULL candidate means compiled
+ * fallback. Runs on the same worker with a stable save snapshot; no side effects.
+ * Typed/signature verification alone must never approve gameplay activation. */
+typedef struct {
+    void *context;
+    bool (*accept)(void *, const city_pack_t *candidate);
+} city_content_policy_t;
 struct city_content_store;
 typedef struct { struct city_content_store *store; unsigned slot; } city_content_slot_t;
 typedef struct city_content_store {
     city_content_io_t io;
     city_pack_crypto_t crypto;
+    city_content_policy_t policy;
     city_content_slot_t slots[2];
     city_pack_t active;
     uint32_t generation, high_revision, leases;
@@ -29,8 +37,10 @@ typedef struct city_content_store {
 } city_content_store_t;
 
 /* No valid installed pack -> success with active_slot=-1 (compiled fallback).
- * I/O errors -> false. Corrupt records/packs never become active. */
-bool city_content_boot(city_content_store_t *, const city_content_io_t *, const city_pack_crypto_t *);
+ * The policy must accept compiled fallback when needed. I/O errors -> false.
+ * Corrupt records/packs never become active. */
+bool city_content_boot(city_content_store_t *, const city_content_io_t *, const city_pack_crypto_t *,
+                       const city_content_policy_t *);
 /* Copies into inactive slot, verifies readback, then journals activation. Revision
  * must exceed all surviving valid records. A false result after journal I/O makes
  * ready=false: reboot/reconcile before retry because commit can be ambiguous. */

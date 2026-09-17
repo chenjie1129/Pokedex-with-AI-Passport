@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "program_id": "pokedex-six-stage-evolution",
-  "updated_at": "2026-09-17",
+  "updated_at": "2026-09-18",
   "branch": "main",
   "overall_status": "active",
   "accountable": "@chenjie1129",
@@ -86,7 +86,7 @@
       "id": 3,
       "name": "Signed content package and bounded cache",
       "status": "in_progress",
-      "progress_percent": 35,
+      "progress_percent": 45,
       "owner": "@chenjie1129",
       "target_date": "2026-10-21",
       "prerequisites": [
@@ -105,10 +105,12 @@
         "test_content_pack_reader",
         "docs/architecture/pokedex-content-install-v1.md",
         "test_content_device_crypto",
-        "test_content_storage"
+        "test_content_storage",
+        "docs/architecture/pokedex-catalog-view-v1.md",
+        "test_content_compat"
       ],
       "gate_decision": "development_authorized_with_stage2_verification_deferred",
-      "next_action": "P-256 BSP crypto, protected partition adapter and two-slot activation/rollback implemented; 39 host targets and ESP32-C3 compilation passed. Next integrate package provider/cache ownership and sparse save compatibility; approve trust provisioning and storage migration before enabling on hardware, then measure resources and physical update recovery. No packs are installed or used in gameplay. Stage 2 device verification remains deferred."
+      "next_action": "Compiled/pack catalog views, four-row/four-block LRU cache and mandatory schema-12 save compatibility at install/boot/rollback are implemented; 40 host tests and ESP32-C3 compilation passed. Next implement bounded sparse progress and durable migration, then wire package catalog/assets into UI, audio and encounters. Trust provisioning, storage migration and physical verification remain unfinished; no package-only captures or installed packs are enabled. Stage 2 device checks remain deferred."
     },
     {
       "id": 4,

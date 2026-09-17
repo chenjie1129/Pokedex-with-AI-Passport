@@ -1,6 +1,7 @@
 /* Host adapter exercises the exact portable reader with real Ed25519/SHA256.
  * This is not linked into device firmware. */
 #include "content_pack.h"
+#include "catalog_view.h"
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -16,11 +17,15 @@ typedef struct {
     size_t largest_read;
     uint32_t payload, payload_reads;
     bool authenticated;
+    unsigned reads;
+    uint32_t fail_offset;
 } context_t;
 
 static bool read_bytes(void *arg, uint32_t offset, void *out, size_t size)
 {
     context_t *c = arg;
+    ++c->reads;
+    if (offset == c->fail_offset) return false;
     if (size > c->largest_read) c->largest_read = size;
     assert(size <= CITY_PACK_READ_BYTES);
     if (offset >= c->payload) {
@@ -61,10 +66,12 @@ static bool verify(void *arg, uint16_t algorithm, const uint8_t digest[32], cons
     return ok;
 }
 
+#include "catalog_view_checks.h"
+
 int main(int argc, char **argv)
 {
     assert(argc == 3 || argc == 4);
-    context_t c = {.fault = argc == 4 ? argv[3] : "", .payload = UINT32_MAX};
+    context_t c = {.fault = argc == 4 ? argv[3] : "", .payload = UINT32_MAX, .fail_offset = UINT32_MAX};
     c.file = fopen(argv[1], "rb"); assert(c.file);
     assert(!fseek(c.file, 0, SEEK_END)); long bytes = ftell(c.file); assert(bytes >= 0);
     assert(!fseek(c.file, 0, SEEK_SET));
@@ -84,6 +91,7 @@ int main(int argc, char **argv)
     bool ok = city_pack_open(&pack, read_bytes, &c, (uint32_t)bytes,
                             !strcmp(c.fault, "budget") ? 100 : CITY_PACK_MAX_BYTES, &crypto);
     if (ok) {
+        check_catalog_view(&c, &pack);
         /* Four rows at a time, all entries, preserving each caller-owned row. */
         for (uint32_t i = 0; i < pack.count; i += 4) {
             city_pack_species_t rows[4];

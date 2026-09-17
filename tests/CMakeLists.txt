@@ -14,6 +14,8 @@ add_library(city_domain STATIC
     ../components/city_domain/src/catalog_provider.c
     ../components/city_domain/src/content_pack.c
     ../components/city_domain/src/content_install.c
+    ../components/city_domain/src/catalog_view.c
+    ../components/city_domain/src/content_compat.c
     ../components/city_domain/src/capture_engine.c
     ../components/city_domain/src/encounter_selector.c
     ../components/city_domain/src/game_loop.c
@@ -165,3 +167,6 @@ add_test(NAME test_content_device_crypto
 add_city_test(test_content_storage test_content_storage.c)
 target_sources(test_content_storage PRIVATE ../components/bsp/src/bsp_content_storage.c)
 target_include_directories(test_content_storage PRIVATE content_stubs ../components/bsp/include)
+add_test(NAME test_content_compat
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_content_compat.py"
+            "$<TARGET_FILE:test_content_install>")

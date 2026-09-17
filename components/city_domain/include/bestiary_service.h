@@ -30,6 +30,7 @@ typedef struct {
     const char *element;
     /* Encyclopedia display types; element retains the existing game category. */
     const char *type_label;
+    uint8_t type1, type2; /* Stable typed-content IDs; 0 is an absent second type. */
     const char *description;
     uint8_t base_hp;
     uint8_t base_attack;

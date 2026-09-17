@@ -182,9 +182,11 @@ FxxW 可以实施和验证自动化工作，但不能代替人工完成产品门
 - [x] P-256 设备 crypto adapter、受保护分区 adapter 与双 slot activation/rollback；Host 故障注入和 ESP32-C3 编译通过；
 - [ ] production trusted key、分区迁移、实际 cache 与运行时资源验证；
 - [ ] 将签名校验接入设备包验证与安装路径；
-- 实现 compiled provider 与 package provider；
+- [x] compiled/package catalog copy API、四行分页与租约生命周期，Host 验证通过；
+- [x] schema-12 存档兼容性 gate 接入 install/boot/rollback；
+- [ ] 稀疏进度存储与持久化迁移，再接入 UI/audio/encounter；
 - [x] Host 模拟验证 active/rollback journal 切换；真机断电验证未完成；
-- 实现 Flash 有界 LRU；
+- [x] 四条 metadata + 四块 512-byte asset LRU，Host 淘汰/失败测试通过；真机接入与 RAM 测量未完成；
 - [x] Host 100、1,000、10,000 条合成容器校验与有界 Python 分配测试；
 - [ ] 设备分页和缓存淘汰测试（Host 容器测试不能替代）；
 - 保持 recovery、cardid 和 NVS 分区合同。
