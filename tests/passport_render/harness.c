@@ -16,7 +16,8 @@
 #include <assert.h>
 #include <string.h>
 #define ESP_LOGI(...) ((void)0)
-#define CITY_BUILD_VERSION "123456789abc-1234567890-dirty"
+#define CITY_BUILD_VERSION "123456789.123456789.123456789"
+#define CITY_BUILD_ID "123456789abc-dirty"
 #define CITY_BUILD_DIRTY 1
 static lv_obj_t *s_screen, *s_status, *s_battery_label, *s_field;
 static lv_obj_t *s_wild_countdown, *s_place_countdown;
@@ -216,6 +217,12 @@ int main(int argc, char **argv)
         s_pending_write = op;
         char name[40]; snprintf(name,sizeof(name),"storage-error-%u",op); snapshot(name,21);
     }
+    s_settings_draft.language = CITY_LANGUAGE_SIMPLIFIED_CHINESE;
+    for (unsigned op = WRITE_DISCOVERY; op <= WRITE_RELEASE; ++op) {
+        s_pending_write = op;
+        char name[40]; snprintf(name,sizeof(name),"zh-storage-error-%u",op); snapshot(name,21);
+    }
+    s_settings_draft.language = CITY_LANGUAGE_ENGLISH;
     snapshot("ball-fixed", 5);
     snapshot("ball-launch", 6);
     snapshot("home-no-buddy", 1);

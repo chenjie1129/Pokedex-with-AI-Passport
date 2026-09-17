@@ -34,3 +34,12 @@ Evolution artwork (same official prototype source):
 - Ivysaur: https://www.pokemon.com/static-assets/content-assets/cms2/img/pokedex/full/002.png
 - Charmeleon: https://www.pokemon.com/static-assets/content-assets/cms2/img/pokedex/full/005.png
 - Wartortle: https://www.pokemon.com/static-assets/content-assets/cms2/img/pokedex/full/008.png
+
+## Stage 2 original candidate: Mossbit
+
+Mossbit (stable local ID 60000) is an original migration-test creature, not a
+National Pokédex entry. Its authored description, pixel artwork and synthesized
+cry are created for this project and provided under CC0-1.0. Reproduce assets
+with `tools/generate_mossbit.py`; no external image or recording is used.
+It is catalog-visible but excluded from both place and wild encounter pools.
+Existing third-party Pokémon asset rights are unchanged.

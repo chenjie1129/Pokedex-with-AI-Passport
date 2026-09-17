@@ -117,6 +117,11 @@ The normal app must fit the 3 MiB `factory` partition. A size warning for the
 separate 1 MiB recovery partition does not make the normal app a recovery
 image. Install using the app-only guide, not a whole-device `idf.py flash`.
 
+The human-facing firmware version is maintained in the root [`VERSION`](VERSION)
+file using SemVer, such as `0.1.0-dev`. Git commit, source fingerprint, and
+dirty state are separate build metadata; they remain available in the build
+manifest and boot log without making the device version hard to read.
+
 Package a matching clean build outside the repository:
 
 ```sh

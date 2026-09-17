@@ -5,15 +5,32 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
+
+
+SEMVER_RE = re.compile(r'^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$')
 
 
 def git(repo, *args):
     return subprocess.check_output(['git', '-C', str(repo), *args])
 
 
+def read_version(repo):
+    path = repo / 'VERSION'
+    if not path.is_file():
+        raise ValueError('VERSION file is required')
+    version = path.read_text(encoding='ascii').strip()
+    if not SEMVER_RE.fullmatch(version):
+        raise ValueError(f'Invalid semantic version in VERSION: {version!r}')
+    if len(version) > 31:
+        raise ValueError('VERSION must fit the ESP-IDF app version field')
+    return version
+
+
 def identity(repo):
     commit = git(repo, 'rev-parse', 'HEAD').decode().strip()
+    version = read_version(repo)
     names = sorted(set(git(repo, 'ls-files', '--cached', '--others',
                            '--exclude-standard', '-z').split(b'\0')) - {b''})
     digest = hashlib.sha256()
@@ -36,9 +53,10 @@ def identity(repo):
         files.append(name)
     dirty = bool(git(repo, 'status', '--porcelain', '--untracked-files=all'))
     source_hash = digest.hexdigest()
-    version = f'{commit[:12]}-{source_hash[:10]}' + ('-dirty' if dirty else '')
+    build_id = f'{commit[:12]}' + ('-dirty' if dirty else '')
     return dict(git_commit=commit, source_sha256=source_hash,
-                dirty=dirty, version=version, source_files=files)
+                dirty=dirty, version=version, build_id=build_id,
+                source_files=files)
 
 
 def write_if_changed(path, text):
@@ -56,8 +74,14 @@ def generate(repo, output):
     write_if_changed(output / 'build-identity.json',
                      json.dumps(data, indent=2, sort_keys=True) + '\n')
     header = '#pragma once\n'
-    for key in ('git_commit', 'source_sha256', 'version'):
-        header += f'#define CITY_BUILD_{key.upper()} {json.dumps(data[key])}\n'
+    macros = (
+        ('git_commit', 'CITY_BUILD_GIT_COMMIT'),
+        ('source_sha256', 'CITY_BUILD_SOURCE_SHA256'),
+        ('version', 'CITY_BUILD_VERSION'),
+        ('build_id', 'CITY_BUILD_ID'),
+    )
+    for key, macro in macros:
+        header += f'#define {macro} {json.dumps(data[key])}\n'
     header += f'#define CITY_BUILD_DIRTY {int(data["dirty"])}\n'
     write_if_changed(output / 'city_build_identity.h', header)
     dependencies = [repo / name for name in data['source_files']]

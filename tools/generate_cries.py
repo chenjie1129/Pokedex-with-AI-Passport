@@ -24,6 +24,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--ffmpeg', default='ffmpeg')
     parser.add_argument('--check', action='store_true')
+    parser.add_argument('--reuse-pcm', action='store_true', help='Rebuild the table from hash-verified existing PCM')
     args = parser.parse_args()
     manifest = json.loads((ASSETS / 'manifest.json').read_text())
     species = json.loads((ROOT / 'content/species.json').read_text())['species']
@@ -34,11 +35,17 @@ def main():
         sid = row['id']
         expected_url = (f'https://raw.githubusercontent.com/PokeAPI/cries/'
                         f'{manifest["repository_commit"]}/cries/pokemon/latest/{sid}.ogg')
-        assert row['source_url'] == expected_url, sid
+        original = row.get('origin') == 'original'
+        if original:
+            assert sid >= 60000 and row['license'] == 'CC0-1.0'
+            assert row['source_url'] == 'project:tools/generate_mossbit.py'
+        else:
+            assert row['source_url'] == expected_url, sid
         ogg = ASSETS / f'{sid}.ogg'
         pcm = ASSETS / f'{sid}.pcm'
-        assert digest(ogg.read_bytes()) == row['source_sha256'], sid
-        if not args.check:
+        if not original:
+            assert digest(ogg.read_bytes()) == row['source_sha256'], sid
+        if not args.check and not args.reuse_pcm and not original:
             with tempfile.TemporaryDirectory() as directory:
                 out = Path(directory) / 'cry.pcm'
                 subprocess.run([args.ffmpeg, '-nostdin', '-v', 'error', '-i', str(ogg),

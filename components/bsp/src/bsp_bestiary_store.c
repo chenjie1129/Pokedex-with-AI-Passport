@@ -52,7 +52,14 @@ static esp_err_t read_model(nvs_handle_t handle, const char *key, city_bestiary_
     err = nvs_get_blob(handle, key, bytes, &length);
     if (err != ESP_OK) { free(bytes); return err; }
     if (!city_bestiary_decode(bytes, length, model)) { free(bytes); return ESP_ERR_INVALID_STATE; }
-    if (outdated) *outdated = ((uint16_t)bytes[4] | ((uint16_t)bytes[5] << 8)) != CITY_BESTIARY_SCHEMA_VERSION;
+    if (outdated) {
+        const uint16_t stored_schema =
+            (uint16_t)bytes[4] | ((uint16_t)bytes[5] << 8);
+        const uint16_t stored_count =
+            (uint16_t)bytes[6] | ((uint16_t)bytes[7] << 8);
+        *outdated = stored_schema != CITY_BESTIARY_SCHEMA_VERSION ||
+            stored_count != CITY_SPECIES_COUNT;
+    }
     free(bytes);
     return ESP_OK;
 }

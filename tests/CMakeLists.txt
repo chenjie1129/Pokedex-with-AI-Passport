@@ -11,6 +11,7 @@ enable_testing()
 
 add_library(city_domain STATIC
     ../components/city_domain/src/bestiary_service.c
+    ../components/city_domain/src/catalog_provider.c
     ../components/city_domain/src/capture_engine.c
     ../components/city_domain/src/encounter_selector.c
     ../components/city_domain/src/game_loop.c
@@ -66,6 +67,12 @@ target_include_directories(test_battery_driver PRIVATE
 add_city_test(test_passport_progress test_passport_progress.c)
 add_city_test(test_roster_expansion test_roster_expansion.c)
 add_test(NAME test_species_catalog COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/../tools/generate_species.py" --check)
+add_test(NAME test_pokedex_research_sync
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_pokedex_research_sync.py")
+add_test(NAME test_pokedex_research_snapshot
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/../tools/sync_pokedex_research.py" --check)
+add_test(NAME test_pokedex_program
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/../tools/check_pokedex_program.py")
 add_city_test(test_bestiary_adapter test_bestiary_adapter.c)
 target_sources(test_bestiary_adapter PRIVATE ../components/bsp/src/bsp_bestiary_store.c)
 target_include_directories(test_bestiary_adapter PRIVATE battery_stubs ../components/bsp/include)
@@ -105,3 +112,12 @@ add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/navigation_ui.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/../main/main.c" "${CMAKE_CURRENT_BINARY_DIR}/navigation_ui.c"
     DEPENDS ../main/main.c generate_navigation_ui.py navigation_ui_fixture.c)
 add_city_test(test_navigation_ui "${CMAKE_CURRENT_BINARY_DIR}/navigation_ui.c")
+
+add_test(NAME test_nvs_fault_log
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_nvs_fault_log.py")
+
+add_test(NAME test_soak_evidence
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_soak_evidence.py")
+
+add_test(NAME test_program_status
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_program_status.py")

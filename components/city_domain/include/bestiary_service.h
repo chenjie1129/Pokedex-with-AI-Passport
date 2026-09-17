@@ -36,6 +36,7 @@ typedef struct {
     uint8_t base_defense;
     uint8_t place_pool;
     bool wild_eligible;
+    bool place_eligible;
     uint16_t evolves_from;
 } city_species_definition_t;
 

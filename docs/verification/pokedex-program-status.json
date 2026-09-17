@@ -1,0 +1,175 @@
+{
+  "schema_version": 1,
+  "program_id": "pokedex-six-stage-evolution",
+  "updated_at": "2026-09-17",
+  "branch": "main",
+  "overall_status": "active",
+  "accountable": "@chenjie1129",
+  "execution_owner": "FxxW",
+  "current_stage": 3,
+  "cadence": {
+    "engineering_update": "each change",
+    "progress_update": "each working day",
+    "risk_review": "weekly Monday",
+    "gate_review": "end of each stage"
+  },
+  "stages": [
+    {
+      "id": 1,
+      "name": "P0 baseline and governance",
+      "status": "completed",
+      "progress_percent": 100,
+      "owner": "@chenjie1129",
+      "target_date": "2026-09-16",
+      "prerequisites": [],
+      "acceptance": [
+        "Research sources and counts are reproducible",
+        "Capacity and evolution architecture are documented",
+        "Host baseline passes",
+        "Program status and risks are machine-checkable"
+      ],
+      "evidence": [
+        "content/research/pokedex_source_snapshot.json",
+        "docs/architecture/pokedex-research-data-architecture.md",
+        "docs/architecture/pokemon-pokedex-capacity-assessment.md",
+        "docs/architecture/pokemon-pokedex-unbounded-evolution.md",
+        "./tools/test-host.sh"
+      ],
+      "gate_decision": "passed_with_hardware_carryover",
+      "carryover": [
+        "Record firmware size, minimum heap, and physical-device baseline before stage 2 release"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Stable identity and save expansion migration",
+      "status": "verification_deferred",
+      "progress_percent": 60,
+      "owner": "@chenjie1129",
+      "target_date": "2026-09-30",
+      "prerequisites": [
+        1
+      ],
+      "acceptance": [
+        "Smaller old catalogs decode by stable species ID",
+        "New records initialize to UNKNOWN",
+        "NVS migration commits and reads back before publication",
+        "Future, duplicate, unknown, and corrupt records are rejected",
+        "Firmware, render, NVS, and physical-device evidence pass"
+      ],
+      "evidence": [
+        "test_bestiary_service",
+        "test_bestiary_adapter",
+        "docs/architecture/pokedex-save-compatibility.md",
+        "docs/verification/pokedex-stage2-candidate-2026-09-15.md",
+        "docs/verification/pokedex-nvs-fault-2026-09-15.md",
+        "docs/verification/pokedex-single-location-soak.md"
+      ],
+      "gate_decision": "unfinished_owner_authorized_stage3",
+      "next_action": "Deferred device checks remain unfinished; resume them before claiming full device acceptance. Stage 3 development is authorized by the owner decision dated 2026-09-17.",
+      "verification_deferral": {
+        "approved_by": "@chenjie1129",
+        "approved_at": "2026-09-17",
+        "decision": "Defer Stage 2 device tests, mark verification unfinished, publish to main and start Stage 3. This permits development, not a device acceptance pass.",
+        "permits_stage": 3,
+        "evidence": "docs/verification/pokedex-stage2-deferral-2026-09-17.md",
+        "unfinished_checks": [
+          "interactive_two_hour_soak_and_workload_heap",
+          "physical_storage_error_retry_and_back",
+          "physical_power_interruption",
+          "physical_buttons_audio_and_carry_acceptance"
+        ],
+        "verification_status": "unfinished"
+      }
+    },
+    {
+      "id": 3,
+      "name": "Signed content package and bounded cache",
+      "status": "in_progress",
+      "progress_percent": 0,
+      "owner": "@chenjie1129",
+      "target_date": "2026-10-21",
+      "prerequisites": [
+        2
+      ],
+      "acceptance": [
+        "Signed manifest rejects corruption",
+        "Interrupted update preserves the active package",
+        "RAM does not scale with total catalog size",
+        "Installed content remains fully offline"
+      ],
+      "evidence": [],
+      "gate_decision": "development_authorized_with_stage2_verification_deferred",
+      "next_action": "Implement and test the host content-pack format, signing and streaming verification; device provider, storage allocation, atomic activation/rollback and cache remain unfinished."
+    },
+    {
+      "id": 4,
+      "name": "Modular monolith content backend",
+      "status": "blocked",
+      "progress_percent": 0,
+      "owner": "@chenjie1129",
+      "target_date": "2026-11-25",
+      "prerequisites": [
+        3
+      ],
+      "acceptance": [
+        "P0 product gate is approved",
+        "One million synthetic entries pass",
+        "Read load reaches 1000 RPS with P95 below 300 ms",
+        "Backup restore and idempotency tests pass"
+      ],
+      "evidence": [],
+      "gate_decision": "blocked",
+      "blocked_by": [
+        "P0 product gate",
+        "Stage 3 acceptance"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "Horizontal scale and domain services",
+      "status": "blocked",
+      "progress_percent": 0,
+      "owner": "@chenjie1129",
+      "target_date": "2027-01-15",
+      "prerequisites": [
+        4
+      ],
+      "acceptance": [
+        "Stage 4 capacity trigger is observed",
+        "One hundred million synthetic entries pass",
+        "Read load reaches 10000 RPS with measured linear scaling",
+        "Tracing, replay, and failure isolation pass"
+      ],
+      "evidence": [],
+      "gate_decision": "blocked",
+      "blocked_by": [
+        "Stage 4 acceptance",
+        "Measured independent scaling need"
+      ]
+    },
+    {
+      "id": 6,
+      "name": "Sharding, multi-region, and federated catalogs",
+      "status": "blocked",
+      "progress_percent": 0,
+      "owner": "@chenjie1129",
+      "target_date": "2027-03-31",
+      "prerequisites": [
+        5
+      ],
+      "acceptance": [
+        "Stage 5 single-cluster capacity trigger is observed",
+        "One billion synthetic entries pass across shards",
+        "Regional RPO and RTO targets pass",
+        "Region failure and shard split drills pass"
+      ],
+      "evidence": [],
+      "gate_decision": "blocked",
+      "blocked_by": [
+        "Stage 5 acceptance",
+        "Measured capacity, RTO, or compliance need"
+      ]
+    }
+  ]
+}

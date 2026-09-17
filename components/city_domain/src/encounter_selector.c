@@ -17,7 +17,7 @@ static uint32_t mix32(uint32_t value)
 uint8_t city_encounter_place_weight(uint16_t place_id, uint16_t species_id)
 {
     const city_species_definition_t *def = city_species_definition(species_id);
-    if (place_id == 0 || place_id == CITY_PLACE_INVALID_ID || !def || def->evolves_from) return 0;
+    if (place_id == 0 || place_id == CITY_PLACE_INVALID_ID || !def || !def->place_eligible || def->evolves_from) return 0;
     return def->place_pool == (place_id - 1U) % 3U ? 6 : 1;
 }
 

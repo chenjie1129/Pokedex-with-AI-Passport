@@ -1,0 +1,390 @@
+{
+  "automated_source": {
+    "authority_tier": "structured-secondary",
+    "data_commit": "4b82c204ddd19ecb8eda2ea044ccb59e222b721c",
+    "files": {
+      "forms": {
+        "bytes": 63721,
+        "etag": "\"1b51f718b17eab058c9d239fdf21ba28b057193ed3e98d14961b67761d02dddb\"",
+        "filename": "pokemon_forms.csv",
+        "sha256": "99bf8f7ad4dc1f2e291357a090cef6a575623ec3cbf9030d0e33656e6e608ae2"
+      },
+      "pokedex_memberships": {
+        "bytes": 80383,
+        "etag": "\"d3c08dbf24135aa75a8e230ecfa66cd4407cc8cef49ff162c4c47af3a3aa5ddb\"",
+        "filename": "pokemon_dex_numbers.csv",
+        "sha256": "b8fe3353eec2b0ba4fc37e07e94ffa9f33ce96a7f9856c643a18b3ad518cd393"
+      },
+      "pokedexes": {
+        "bytes": 723,
+        "etag": "\"4eed79c670596634d8f13460bfdcf1653e09ea1bc1d729367c8a874bef952da3\"",
+        "filename": "pokedexes.csv",
+        "sha256": "aa6570e15092f80750431a59a8712410cc114d74ffffb75b3334df64b33b3d07"
+      },
+      "pokemon": {
+        "bytes": 47082,
+        "etag": "\"c06c2cf3eb945e45a721f4e32fb1bdec1acce03a1ba51216146f190903753696\"",
+        "filename": "pokemon.csv",
+        "sha256": "16c81c33188b0eac403aa2f759fcbe9e42c611f722d263f5b5a6a5bff9f8ce6b"
+      },
+      "species": {
+        "bytes": 56884,
+        "etag": "\"f4cb53e579ceae2bde87763a0045fea25f63a4b3233c33731f72274c04a28156\"",
+        "filename": "pokemon_species.csv",
+        "sha256": "9878f19c0637095cdd9a4134b4aac8fb2b64776d3bdc599aa68f15c3a011b87c"
+      }
+    },
+    "id": "pokeapi-v2",
+    "repository_url": "https://github.com/PokeAPI/pokeapi.git"
+  },
+  "data_sha256": "c1622b4d1b408a61f16eefe2e5815edaedfb265113d3d176dcfded56df24199c",
+  "generation_counts": [
+    {
+      "id": 1,
+      "name": "generation-i",
+      "species_count": 151,
+      "species_ids_sha256": "421b33c003feaab0f9a9c5ef35458b5e633e94dfe255ed4c1f8ac873672bfd9b"
+    },
+    {
+      "id": 2,
+      "name": "generation-ii",
+      "species_count": 100,
+      "species_ids_sha256": "e60affcf18d49649bbaaf4c8602b05a761a7c0af4a4b3968a7f1e0631d12319b"
+    },
+    {
+      "id": 3,
+      "name": "generation-iii",
+      "species_count": 135,
+      "species_ids_sha256": "ebd939d02aef4858f8dfa6684a91642016e87130b438fd21539e568d5dc999d9"
+    },
+    {
+      "id": 4,
+      "name": "generation-iv",
+      "species_count": 107,
+      "species_ids_sha256": "a6ede6fe6fd93a2c819de7a65256cc7f6e5c332713f6f5bc5831e79c26ad7d90"
+    },
+    {
+      "id": 5,
+      "name": "generation-v",
+      "species_count": 156,
+      "species_ids_sha256": "0c50d8e4933655fd6c3f34be0fdebcf3ea8bc58bdb75768c290190873dff4830"
+    },
+    {
+      "id": 6,
+      "name": "generation-vi",
+      "species_count": 72,
+      "species_ids_sha256": "1bfdb998c48b8f8fd8f98878ea2860567de5265da5cdf2e3b77e8afac0c850c8"
+    },
+    {
+      "id": 7,
+      "name": "generation-vii",
+      "species_count": 88,
+      "species_ids_sha256": "cfc2160e1f0b75d4c97b4e7987121a6a0a462f7dba9766e60b1669b72f9835a1"
+    },
+    {
+      "id": 8,
+      "name": "generation-viii",
+      "species_count": 96,
+      "species_ids_sha256": "7b9ed699e8838ea2c582d32eea7fa5a48d2615cab906934efc74331c985151d2"
+    },
+    {
+      "id": 9,
+      "name": "generation-ix",
+      "species_count": 120,
+      "species_ids_sha256": "2441260c64f7e920b7c11129e742179f1621a6dc1b540cc725aa57f64f1dabf3"
+    }
+  ],
+  "invariants": {
+    "form_ids_unique": true,
+    "forms_reference_known_pokemon": true,
+    "generation_partition_matches_national": true,
+    "memberships_reference_known_species": true,
+    "national_count_matches_species": true,
+    "national_numbers_contiguous": true,
+    "national_numbers_match_species_ids": true,
+    "pokedex_ids_unique": true,
+    "pokedex_names_unique": true,
+    "pokemon_ids_unique": true,
+    "pokemon_reference_known_species": true,
+    "species_ids_contiguous": true,
+    "species_names_unique": true
+  },
+  "national_index": {
+    "first": {
+      "id": 1,
+      "name": "bulbasaur"
+    },
+    "ids_sha256": "ee94685e853b63a2ffd045f2631f20198a1c8669ede4965d374d9d78d234f258",
+    "last": {
+      "id": 1025,
+      "name": "pecharunt"
+    },
+    "names_sha256": "b1ed6767d838412b0b3fbbe75f7e7967108236f781a4d76f4db1b1ac1545dfac"
+  },
+  "observed_at": "2026-09-15T09:00:41Z",
+  "official_cross_check": {
+    "english_name": "Pecharunt",
+    "national_number": 1025,
+    "source_id": "pokemon-official-national-tail",
+    "status": "matched",
+    "url": "https://sg.portal-pokemon.com/play/pokedex/1025/",
+    "verified_on": "2026-09-15"
+  },
+  "pokedex_counts": [
+    {
+      "entries_sha256": "a195761c35aca8cbc827dce3f588928067ac0e3a7bae7bfa25815f1a72694bbf",
+      "entry_count": 1025,
+      "id": 1,
+      "is_main_series": true,
+      "name": "national"
+    },
+    {
+      "entries_sha256": "28e9386a88639c15eca30d333e78b707f2c4ec9bd46fe3840329cda612bcfe44",
+      "entry_count": 151,
+      "id": 2,
+      "is_main_series": true,
+      "name": "kanto"
+    },
+    {
+      "entries_sha256": "d3082b768d5c6e0023e1415fb3db849f32d308cfd38246de57882ed6b9306505",
+      "entry_count": 251,
+      "id": 3,
+      "is_main_series": true,
+      "name": "original-johto"
+    },
+    {
+      "entries_sha256": "f33cff1ae86af288e2b5cb100af2db7b4475967e50e70d897021f4fa70b7a63d",
+      "entry_count": 202,
+      "id": 4,
+      "is_main_series": true,
+      "name": "hoenn"
+    },
+    {
+      "entries_sha256": "607b8f179016d1553327b8bb138a7093b473b9940b747fe1c24e366507592677",
+      "entry_count": 151,
+      "id": 5,
+      "is_main_series": true,
+      "name": "original-sinnoh"
+    },
+    {
+      "entries_sha256": "cf72d74fae9d2ccdc17469209ebb6aba85a3fd29a3381f6e372ac715dd5e4234",
+      "entry_count": 210,
+      "id": 6,
+      "is_main_series": true,
+      "name": "extended-sinnoh"
+    },
+    {
+      "entries_sha256": "8847c8425e3dbc8e1daff048dd7c09466de57acd0ed86026a3fe2618381c6f36",
+      "entry_count": 256,
+      "id": 7,
+      "is_main_series": true,
+      "name": "updated-johto"
+    },
+    {
+      "entries_sha256": "8e3510a3ca0537b8f2b48b3e57b96e88d0e71302eb2593d0ec72cf70d3c0cb73",
+      "entry_count": 156,
+      "id": 8,
+      "is_main_series": true,
+      "name": "original-unova"
+    },
+    {
+      "entries_sha256": "77b710d5ec9dc9832dcc1d57583f8c29e9749eab5d838b0123b49fdef6c28281",
+      "entry_count": 301,
+      "id": 9,
+      "is_main_series": true,
+      "name": "updated-unova"
+    },
+    {
+      "entries_sha256": "2466a53b3ce6b8a2b21b576597892747981917ad9019cc3523eabe7983aa0e33",
+      "entry_count": 200,
+      "id": 11,
+      "is_main_series": false,
+      "name": "conquest-gallery"
+    },
+    {
+      "entries_sha256": "366046ed7476aadc8fed35379a3bb1ac2e911971f1d92978a83df85b84d67ff9",
+      "entry_count": 153,
+      "id": 12,
+      "is_main_series": true,
+      "name": "kalos-central"
+    },
+    {
+      "entries_sha256": "5eb334cf2ffc55e11b8ea9087c28c78d619f78b4568715f66a798e3c71a0d43f",
+      "entry_count": 153,
+      "id": 13,
+      "is_main_series": true,
+      "name": "kalos-coastal"
+    },
+    {
+      "entries_sha256": "61488c23d686ec9cef1d8ca6863da8c9532d6117ebcf3fd66051ffca89d66d19",
+      "entry_count": 151,
+      "id": 14,
+      "is_main_series": true,
+      "name": "kalos-mountain"
+    },
+    {
+      "entries_sha256": "75091882ae3f0d4b5b3e7c99ebad306cff12387341fea4e43bb119b4ba56c893",
+      "entry_count": 211,
+      "id": 15,
+      "is_main_series": true,
+      "name": "updated-hoenn"
+    },
+    {
+      "entries_sha256": "7673831de8cef2f92fef07aee35de577bf48ad17420f3f96236fb1dd2e78ee01",
+      "entry_count": 302,
+      "id": 16,
+      "is_main_series": true,
+      "name": "original-alola"
+    },
+    {
+      "entries_sha256": "0ca2e1e1c224f082e528d6435d7f96f2273cfc70a47a239d5fc89c7eb9379ced",
+      "entry_count": 120,
+      "id": 17,
+      "is_main_series": true,
+      "name": "original-melemele"
+    },
+    {
+      "entries_sha256": "537722b1af0828bbc085bef8e93fe67e55a5ac81af6aa3d53cb1a813da0e4bb6",
+      "entry_count": 130,
+      "id": 18,
+      "is_main_series": true,
+      "name": "original-akala"
+    },
+    {
+      "entries_sha256": "26865de469f317bd897b48fbc73a707b0d39aa64cd7bfd8725cb095d113d7c14",
+      "entry_count": 130,
+      "id": 19,
+      "is_main_series": true,
+      "name": "original-ulaula"
+    },
+    {
+      "entries_sha256": "f429ca76b9038585f8d8f178cf3736b5642bc91f0069bcb0292c70821b642dd6",
+      "entry_count": 100,
+      "id": 20,
+      "is_main_series": true,
+      "name": "original-poni"
+    },
+    {
+      "entries_sha256": "32d080ad02a02ed0324401f0c5aa4e4a2a6b5448a4ff5e30deefc90673541623",
+      "entry_count": 403,
+      "id": 21,
+      "is_main_series": true,
+      "name": "updated-alola"
+    },
+    {
+      "entries_sha256": "4c32aa8352de6b8200b42f565cee37e0ed0d3658494a744402258acddbc2d7f2",
+      "entry_count": 150,
+      "id": 22,
+      "is_main_series": true,
+      "name": "updated-melemele"
+    },
+    {
+      "entries_sha256": "0c436c380c467478357dc2168b2dd716af7a30bfeb3793886ae50cd705d86a71",
+      "entry_count": 160,
+      "id": 23,
+      "is_main_series": true,
+      "name": "updated-akala"
+    },
+    {
+      "entries_sha256": "1be59a0202bc4e2553e6c17859cd9ad8a09c1dfda9bace426670fc040e4e8dca",
+      "entry_count": 160,
+      "id": 24,
+      "is_main_series": true,
+      "name": "updated-ulaula"
+    },
+    {
+      "entries_sha256": "fb8a438c53b4ed862875b42f682a549909e13f8c082c35d0ffda91f2be50f69b",
+      "entry_count": 130,
+      "id": 25,
+      "is_main_series": true,
+      "name": "updated-poni"
+    },
+    {
+      "entries_sha256": "257c46f074d5168db07b2a3a0f1a3fb4c8cfe09a15958d1be4f9c6c76e4d5653",
+      "entry_count": 153,
+      "id": 26,
+      "is_main_series": true,
+      "name": "letsgo-kanto"
+    },
+    {
+      "entries_sha256": "16d728c67824d42067ee5cd0f681388022e413c728527b21c7932527cf0a8afb",
+      "entry_count": 400,
+      "id": 27,
+      "is_main_series": true,
+      "name": "galar"
+    },
+    {
+      "entries_sha256": "1b53a4a445ab58195a365a08bb35d6c31e57a1a238d41e1eddc1c8dab9e24c20",
+      "entry_count": 211,
+      "id": 28,
+      "is_main_series": true,
+      "name": "isle-of-armor"
+    },
+    {
+      "entries_sha256": "eca9ab77f019cb4faf713c1b3a94ad02b188c9f7cf90a519811b111a06a6a1c0",
+      "entry_count": 210,
+      "id": 29,
+      "is_main_series": true,
+      "name": "crown-tundra"
+    },
+    {
+      "entries_sha256": "7a73152f81b035940511c01ae0bab827be261551b0ac30365a499f8474ddfef2",
+      "entry_count": 242,
+      "id": 30,
+      "is_main_series": true,
+      "name": "hisui"
+    },
+    {
+      "entries_sha256": "1db57f3984da204fbd4f46103c97b1ffea13fe265a1bbcdd3bdf2ebcce9214d5",
+      "entry_count": 400,
+      "id": 31,
+      "is_main_series": true,
+      "name": "paldea"
+    },
+    {
+      "entries_sha256": "991682a9d9b6fe7d2645945f3c8c6b0766e92803d6725f4e65da36450d79f2d7",
+      "entry_count": 200,
+      "id": 32,
+      "is_main_series": true,
+      "name": "kitakami"
+    },
+    {
+      "entries_sha256": "faea9e63be3bdd626373814ad1026b1f1623cac95157bac469c71f30932e4cec",
+      "entry_count": 243,
+      "id": 33,
+      "is_main_series": true,
+      "name": "blueberry"
+    },
+    {
+      "entries_sha256": "347d4c19e6a5f061ca71d9c972d45a3050b396ce06927b1d2d3a9663b6cbf7c8",
+      "entry_count": 232,
+      "id": 34,
+      "is_main_series": true,
+      "name": "lumiose-city"
+    },
+    {
+      "entries_sha256": "1f691aedabee566dbb2406437e1abc89d5818b1bfb4e9842bcc2a5379f9c4054",
+      "entry_count": 132,
+      "id": 35,
+      "is_main_series": true,
+      "name": "hyperspace"
+    },
+    {
+      "entries_sha256": "231482a582c581a5af40ae04a37f5f326a7d7562d7e10e505fde92f0ab4b4986",
+      "entry_count": 231,
+      "id": 36,
+      "is_main_series": false,
+      "name": "champions"
+    }
+  ],
+  "schema_version": 1,
+  "source_registry_sha256": "d3b47010cfcb3132e5da73cb0692c1b59572722800f037f33a44ef160cd84ad6",
+  "totals": {
+    "forms": 1579,
+    "generations": 9,
+    "pokedex_memberships": 8010,
+    "pokedex_scopes": 35,
+    "pokemon_varieties": 1351,
+    "species": 1025
+  }
+}
