@@ -32,8 +32,15 @@ static void write_u32_le(uint8_t *data, uint32_t value)
         data[i] = (uint8_t)(value >> (8U * i));
     }
 }
+static void saved_as_v12(void)
+{
+    city_bestiary_t model;
+    assert(city_bestiary_decode(saved, saved_len, &model));
+    assert(city_bestiary_encode(&model, saved)); saved_len = sizeof(saved);
+}
 static void compact_saved_catalog(uint16_t count)
 {
+    saved_as_v12();
     assert(
         count > 0U && count < CITY_SPECIES_COUNT &&
         saved_len == sizeof(saved));
@@ -135,6 +142,7 @@ int main(void)
     assert(bsp_bestiary_store_load(&BSP_BESTIARY_STORE_DEFAULT,&b,&migrated)==ESP_OK);
     assert(b.records[3].capture_count==1 && b.records[1].capture_count==20 && b.wild_cooldown_active);
     /* Upgrade a current-key v6 save in place, only publishing after commit. */
+    saved_as_v12();
     uint8_t current[CITY_BESTIARY_ENCODED_BYTES];memcpy(current,saved,saved_len);
     memset(saved,0,sizeof(saved));memcpy(saved,current,32);saved[4]=6;saved[5]=0;
     for(unsigned i=0;i<CITY_SPECIES_COUNT;++i)memcpy(saved+32+i*20,current+CITY_BESTIARY_HEADER_BYTES+i*CITY_BESTIARY_RECORD_BYTES,20);
@@ -148,7 +156,7 @@ int main(void)
     assert(!migrated && empty.records[1].capture_count==0 && saved[4]==6);
     fail_commit=false;
     assert(bsp_bestiary_store_load(&BSP_BESTIARY_STORE_DEFAULT,&empty,&migrated)==ESP_OK);
-    assert(migrated && saved[4]==CITY_BESTIARY_SCHEMA_VERSION && empty.records[1].capture_count==20 && empty.buddy_species_id==0);
+    assert(migrated && saved[4]==CITY_BESTIARY_STORAGE_VERSION && empty.records[1].capture_count==20 && empty.buddy_species_id==0);
     /* A same-schema save from a smaller catalog upgrades by stable ID. */
     compact_saved_catalog((uint16_t)(CITY_SPECIES_COUNT-1U));
     city_bestiary_init(&empty);
@@ -167,7 +175,7 @@ int main(void)
     fail_commit=false;fail_read_after_commit=true;
     assert(bsp_bestiary_store_load(&BSP_BESTIARY_STORE_DEFAULT,&empty,&migrated)==ESP_FAIL);
     assert(!migrated && memcmp(&empty,&unchanged,sizeof(empty))==0);
-    assert(saved_len==sizeof(saved));
+    assert(saved_len<sizeof(saved) && saved[4]==CITY_BESTIARY_STORAGE_VERSION);
     fail_read_after_commit=false;bad_readback=false;
     count=commits;
     assert(bsp_bestiary_store_load(&BSP_BESTIARY_STORE_DEFAULT,&empty,&migrated)==ESP_OK);
@@ -175,8 +183,8 @@ int main(void)
     compact_saved_catalog((uint16_t)(CITY_SPECIES_COUNT-1U));
     count=commits;city_bestiary_init(&empty);
     assert(bsp_bestiary_store_load(&BSP_BESTIARY_STORE_DEFAULT,&empty,&migrated)==ESP_OK);
-    assert(migrated && commits==count+1U && saved_len==sizeof(saved));
-    assert(((uint16_t)saved[6]|((uint16_t)saved[7]<<8U))==CITY_SPECIES_COUNT);
+    assert(migrated && commits==count+1U && saved_len<sizeof(saved));
+    assert(((uint16_t)saved[6]|((uint16_t)saved[7]<<8U))==2U);
     assert(empty.records[CITY_SPECIES_COUNT-1U].state==CITY_DISCOVERY_UNKNOWN);
     count=commits;city_bestiary_init(&empty);
     assert(bsp_bestiary_store_load(&BSP_BESTIARY_STORE_DEFAULT,&empty,&migrated)==ESP_OK);

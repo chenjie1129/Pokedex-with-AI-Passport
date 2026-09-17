@@ -170,3 +170,12 @@ target_include_directories(test_content_storage PRIVATE content_stubs ../compone
 add_test(NAME test_content_compat
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_content_compat.py"
             "$<TARGET_FILE:test_content_install>")
+add_city_test(test_sparse_bestiary test_sparse_bestiary.c)
+# Explicit read-only CLI for auditing privately extracted device saves.
+add_executable(bestiary_migration_audit bestiary_migration_audit.c)
+target_link_libraries(bestiary_migration_audit PRIVATE city_domain)
+target_compile_options(bestiary_migration_audit PRIVATE -Wall -Wextra -Werror -Wpedantic)
+if(CITY_ENABLE_SANITIZERS AND CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")
+    target_compile_options(bestiary_migration_audit PRIVATE -fsanitize=address,undefined)
+    target_link_options(bestiary_migration_audit PRIVATE -fsanitize=address,undefined)
+endif()

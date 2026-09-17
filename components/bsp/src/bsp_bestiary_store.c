@@ -32,11 +32,12 @@ static esp_err_t encode_and_stage(
 {
     uint8_t *encoded = malloc(CITY_BESTIARY_ENCODED_BYTES);
     if (!encoded) return ESP_ERR_NO_MEM;
-    if (!city_bestiary_encode(bestiary, encoded)) {
+    size_t length = 0;
+    if (!city_bestiary_encode_sparse(bestiary, encoded, CITY_BESTIARY_ENCODED_BYTES, &length)) {
         free(encoded);
         return ESP_ERR_INVALID_ARG;
     }
-    const esp_err_t err = nvs_set_blob(handle, key, encoded, CITY_BESTIARY_ENCODED_BYTES);
+    const esp_err_t err = nvs_set_blob(handle, key, encoded, length);
     free(encoded);
     return err;
 }
@@ -55,10 +56,7 @@ static esp_err_t read_model(nvs_handle_t handle, const char *key, city_bestiary_
     if (outdated) {
         const uint16_t stored_schema =
             (uint16_t)bytes[4] | ((uint16_t)bytes[5] << 8);
-        const uint16_t stored_count =
-            (uint16_t)bytes[6] | ((uint16_t)bytes[7] << 8);
-        *outdated = stored_schema != CITY_BESTIARY_SCHEMA_VERSION ||
-            stored_count != CITY_SPECIES_COUNT;
+        *outdated = stored_schema != CITY_BESTIARY_STORAGE_VERSION;
     }
     free(bytes);
     return ESP_OK;
@@ -78,7 +76,10 @@ esp_err_t bsp_bestiary_store_load(
     err = read_model(handle, store->blob_key, next, &outdated);
     if (err == ESP_OK) {
         if (outdated) goto save_upgrade;
-        nvs_close(handle); *bestiary = *next; free(next); return ESP_OK;
+        nvs_close(handle); *bestiary = *next; free(next);
+        ESP_LOGI(TAG, "BESTIARY_STORAGE_READY format=%u owned=%u",
+                 CITY_BESTIARY_STORAGE_VERSION, bestiary->owned_count);
+        return ESP_OK;
     }
     // Never hide a corrupt/newer save by falling back to stale legacy progress.
     if (err != ESP_ERR_NVS_NOT_FOUND) { nvs_close(handle); free(next); return err; }
@@ -115,8 +116,8 @@ save_upgrade:
     *bestiary = *next;
     free(next);
     if (migrated) *migrated = true;
-    ESP_LOGI(TAG, "Migrated bestiary to schema=%u species=%u",
-             CITY_BESTIARY_SCHEMA_VERSION, CITY_SPECIES_COUNT);
+    ESP_LOGI(TAG, "BESTIARY_STORAGE_MIGRATED format=%u model=%u species=%u",
+             CITY_BESTIARY_STORAGE_VERSION, CITY_BESTIARY_SCHEMA_VERSION, CITY_SPECIES_COUNT);
     return ESP_OK;
 }
 

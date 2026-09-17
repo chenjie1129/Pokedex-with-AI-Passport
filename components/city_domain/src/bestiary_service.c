@@ -608,6 +608,47 @@ bool city_bestiary_encode(
     return true;
 }
 
+bool city_bestiary_encode_sparse(const city_bestiary_t *b, uint8_t *out,
+                                 size_t capacity, size_t *written)
+{
+    if (!out || !written || !city_bestiary_is_valid(b)) return false;
+    uint16_t count = 0;
+    for (unsigned i = 0; i < CITY_SPECIES_COUNT; ++i)
+        count += b->records[i].state != CITY_DISCOVERY_UNKNOWN;
+    size_t bytes = CITY_BESTIARY_HEADER_BYTES + count * CITY_BESTIARY_RECORD_BYTES +
+        b->owned_count * CITY_OWNED_POKEMON_BYTES + 4U;
+    if (capacity < bytes) return false;
+    memset(out, 0, bytes);
+    write_u32_le(out, CITY_BESTIARY_MAGIC);
+    write_u16_le(out + 4, CITY_BESTIARY_STORAGE_VERSION);
+    write_u16_le(out + 6, count);
+    write_u64_le(out + 8, b->last_settled_sequence);
+    out[16] = b->wild_cooldown_active;
+    write_u32_le(out + 20, CITY_CATALOG_VERSION);
+    write_u16_le(out + 24, b->buddy_species_id);
+    write_u16_le(out + 26, b->owned_count);
+    write_u32_le(out + 28, b->next_instance_id);
+    write_u32_le(out + 32, b->buddy_instance_id);
+    write_u64_le(out + 40, b->last_visit_sequence);
+    uint16_t previous = 0;
+    for (unsigned n = 0; n < count; ++n) {
+        const city_creature_record_t *next = NULL;
+        for (unsigned i = 0; i < CITY_SPECIES_COUNT; ++i) {
+            const city_creature_record_t *row = &b->records[i];
+            if (row->state != CITY_DISCOVERY_UNKNOWN && row->species_id > previous &&
+                (!next || row->species_id < next->species_id)) next = row;
+        }
+        /* Validated model has distinct nonzero IDs, so next always exists. */
+        encode_record(out + CITY_BESTIARY_HEADER_BYTES + n * CITY_BESTIARY_RECORD_BYTES, next);
+        previous = next->species_id;
+    }
+    size_t owned = CITY_BESTIARY_HEADER_BYTES + count * CITY_BESTIARY_RECORD_BYTES;
+    for (unsigned i = 0; i < b->owned_count; ++i)
+        encode_owned(out + owned + i * CITY_OWNED_POKEMON_BYTES, &b->owned[i]);
+    write_u32_le(out + bytes - 4, crc32(out, bytes - 4));
+    *written = bytes; return true;
+}
+
 static bool decode_legacy(
     const uint8_t *data,
     uint16_t stored_schema_version,
@@ -697,13 +738,16 @@ static bool decode_into(
     const uint16_t version = read_u16_le(data + 4);
     city_bestiary_t *decoded = bestiary;
     city_bestiary_init(decoded);
-    if (version == 10U || version == 11U || version == CITY_BESTIARY_SCHEMA_VERSION) {
+    if (version == 10U || version == 11U || version == CITY_BESTIARY_SCHEMA_VERSION ||
+        version == CITY_BESTIARY_STORAGE_VERSION) {
+        const bool sparse = version == CITY_BESTIARY_STORAGE_VERSION;
+        if (length < CITY_BESTIARY_HEADER_BYTES && version >= 11U) return false;
         const size_t header_bytes = version == 10U ? 40U : CITY_BESTIARY_HEADER_BYTES;
         const size_t owned_bytes = version == 10U ? 16U : version == 11U ? 20U : CITY_OWNED_POKEMON_BYTES;
         const uint16_t count = read_u16_le(data + 6U);
-        if (count == 0U || count > CITY_SPECIES_COUNT) return false;
+        if ((!sparse && count == 0U) || count > CITY_SPECIES_COUNT) return false;
         const size_t expected_length = header_bytes + count * CITY_BESTIARY_RECORD_BYTES +
-            CITY_MAX_OWNED_POKEMON * owned_bytes + 4U;
+            (sparse ? read_u16_le(data + 26U) : CITY_MAX_OWNED_POKEMON) * owned_bytes + 4U;
         if (length != expected_length ||
             data[16] > 1U || data[17] != 0U || data[18] != 0U || data[19] != 0U ||
             (version == 10U && read_u32_le(data + 32U) != 0U) ||
@@ -719,6 +763,7 @@ static bool decode_into(
         }
         if (decoded->owned_count > CITY_MAX_OWNED_POKEMON) return false;
         bool present[CITY_SPECIES_COUNT] = {false};
+        uint16_t previous = 0;
         for (uint16_t i = 0U; i < count; ++i) {
             city_creature_record_t record;
             const uint8_t *record_data = data + header_bytes +
@@ -729,6 +774,8 @@ static bool decode_into(
             record.friendship = read_u16_le(record_data + 16U);
             record.buddy_places = read_u16_le(record_data + 18U);
             record.current_hp = record_data[20U];
+            if (sparse && (record.state == CITY_DISCOVERY_UNKNOWN || record.species_id <= previous)) return false;
+            previous = record.species_id;
             const uint8_t index = city_species_index(record.species_id);
             if (index == CITY_SPECIES_COUNT || present[index]) return false;
             present[index] = true;

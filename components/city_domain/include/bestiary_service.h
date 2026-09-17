@@ -6,7 +6,9 @@
 #include "wild_reward_guard.h"
 
 #include "species_catalog.h"
+/* Logical model/legacy canonical codec stays v12. Persistence writes sparse v13. */
 #define CITY_BESTIARY_SCHEMA_VERSION 12U
+#define CITY_BESTIARY_STORAGE_VERSION 13U
 #define CITY_BESTIARY_MAGIC UINT32_C(0x31545342)
 #define CITY_BESTIARY_LEGACY_BYTES 156U
 #define CITY_BESTIARY_RECORD_BYTES 22U
@@ -183,6 +185,12 @@ city_bestiary_result_t city_bestiary_capture_with_stats(
 bool city_bestiary_encode(
     const city_bestiary_t *bestiary,
     uint8_t output[CITY_BESTIARY_ENCODED_BYTES]);
+
+/* Compact storage: discovered stable IDs only, followed by actual owned copies.
+ * Unknown catalog entries are implicit. Exact written length includes CRC.
+ * Failure leaves output and written unchanged. No catalog-sized heap allocation. */
+bool city_bestiary_encode_sparse(const city_bestiary_t *, uint8_t *output,
+                                 size_t capacity, size_t *written);
 
 bool city_bestiary_decode(
     const uint8_t *data,
