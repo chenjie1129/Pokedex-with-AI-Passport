@@ -91,7 +91,7 @@ python check_passport_backup.py passport-backup/full-flash.bin
 ```
 
 Proceed only when the validator reports a complete backup and matching
-partitions. The supported layout is:
+partitions. Both the legacy five-entry table and the exact content extension are supported. The protected legacy layout is:
 
 | Region | Address | Size | Update policy |
 |---|---|---|---|
@@ -102,7 +102,7 @@ partitions. The supported layout is:
 | Recovery | `0x700000` | `0x100000` | Preserve |
 
 Keep this backup locally. **Do not share it or use a backup from another
-Passport.** Do not run `erase_flash` or flash a bootloader/partition table.
+Passport.** Do not run `erase_flash` or flash a bootloader. Ordinary app updates do not change the partition table. For the audited content extension, use the [Stage 3 installer](architecture/pokedex-stage3-runtime.md); it checks the exact table and verifies that proposed slots are empty.
 If validation fails, stop and investigate the second device's layout.
 
 ## 5. Install the app only

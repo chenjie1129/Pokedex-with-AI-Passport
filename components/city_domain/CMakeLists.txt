@@ -6,6 +6,7 @@ idf_component_register(
         "src/content_install.c"
         "src/catalog_view.c"
         "src/content_compat.c"
+        "src/content_runtime.c"
         "src/capture_engine.c"
         "src/encounter_selector.c"
         "src/game_loop.c"

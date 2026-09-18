@@ -1,5 +1,7 @@
 # Stage 3 increment 2: typed content and portable bounded reader
 
+**Current integration:** see [Stage 3 runtime](pokedex-stage3-runtime.md). The boundaries and measurements below describe the earlier increment.
+
 Implemented 2026-09-17. Host-verified and ESP32-C3 cross-compiled; **not wired
 into gameplay or installed on hardware**. Stage 2 device checks remain deferred.
 

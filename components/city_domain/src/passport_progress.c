@@ -1,3 +1,4 @@
+#include "catalog_provider.h"
 #include "passport_progress.h"
 #include <stddef.h>
 #include <string.h>
@@ -48,14 +49,16 @@ city_passport_progress_t city_passport_progress(const city_passport_stamps_t *st
     if (!p.places_ready || !p.collection_ready) return p;
     if (p.captured == 0) { p.goal = CITY_PASSPORT_FIRST_CAPTURE; return p; }
     if (p.places < 2) { p.goal = CITY_PASSPORT_NEW_PLACE; p.target = p.places + 1; return p; }
-    if (p.captured < CITY_SPECIES_COUNT) {
+    if (p.captured < city_species_count()) {
         p.goal = CITY_PASSPORT_CATCH_SPECIES;
-        for (unsigned i = 0; i < CITY_SPECIES_COUNT; ++i) {
-            const city_creature_record_t *r = city_bestiary_record_const(bestiary, city_species_id_at(i));
-            if (r->state != CITY_DISCOVERY_CAPTURED) {
-                const uint16_t source = city_species_definition(r->species_id)->evolves_from;
+        for (unsigned i = 0; i < city_species_count(); ++i) {
+            const city_creature_record_t *r = city_bestiary_record_const(bestiary, city_species_runtime_id(i));
+            if (r && r->state != CITY_DISCOVERY_CAPTURED) {
+                city_species_definition_t d;
+                if (!city_species_get_at(i, &d)) return p;
+                const uint16_t source = d.evolves_from;
                 if (source) { p.goal = CITY_PASSPORT_EVOLVE_SPECIES; p.target = source; break; }
-                p.target = city_species_id_at(i); p.target_seen = r->state == CITY_DISCOVERY_SEEN; break;
+                p.target = city_species_runtime_id(i); p.target_seen = r->state == CITY_DISCOVERY_SEEN; break;
             }
         }
         return p;

@@ -1,5 +1,7 @@
 # Stage 3 increment 3: device crypto and transactional content storage
 
+**Current integration:** see [Stage 3 runtime](pokedex-stage3-runtime.md). The boundaries and measurements below describe the earlier increment.
+
 Implemented 2026-09-17. **Host-tested and ESP32-C3 cross-compiled, not installed
 or connected to gameplay.** Stage 2 device verification remains deferred.
 

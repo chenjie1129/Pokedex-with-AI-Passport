@@ -6,8 +6,8 @@ static const layout_t expected[] = {
     {"nvs", 1, 2, 0x9000, 0x6000}, {"phy_init", 1, 1, 0xf000, 0x1000},
     {"factory", 0, 0, 0x10000, 0x300000}, {"cardid", 1, 2, 0x356000, 0x4000},
     {"recovery", 0, 0x20, 0x700000, 0x100000},
-    {"content_a", 1, 0x40, 0x360000, BSP_CONTENT_SLOT_BYTES},
-    {"content_b", 1, 0x40, 0x500000, BSP_CONTENT_SLOT_BYTES},
+    {"content_a", 1, 0x40, 0x420000, BSP_CONTENT_SLOT_BYTES},
+    {"content_b", 1, 0x40, 0x560000, BSP_CONTENT_SLOT_BYTES},
     {"content_ctl", 1, 0x41, 0x6a0000, BSP_CONTENT_SECTOR_BYTES * 2}
 };
 static bool bounds(bsp_content_storage_t *s, unsigned slot, uint32_t offset, size_t size)

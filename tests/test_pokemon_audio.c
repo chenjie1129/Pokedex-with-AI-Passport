@@ -11,6 +11,8 @@ static bool queue_full, queue_failure, task_failure, codec_failure, write_failur
 static uint16_t queued, inject;
 static unsigned writes, volume, audible_starts, samples_written, initializations;
 static const pokemon_cry_t *expected;
+static bool package_enabled, package_read_failure;
+static unsigned package_reads;
 
 QueueHandle_t xQueueCreate(unsigned count, unsigned size)
 {
@@ -81,6 +83,7 @@ static void run_worker(void)
 }
 static void reset(void)
 {
+    package_enabled=false; package_read_failure=false; package_reads=0;
     requests = NULL; atomic_store(&preferences, 60U); queue_full = false; queue_failure = false; task_failure = false;
     codec_failure = false; write_failure = false; queued = 0; inject = 0;
     writes = 0; audible_starts = 0; samples_written = 0; initializations = 0;
@@ -129,6 +132,26 @@ int main(void)
     pokemon_audio_set_preferences(30, false); assert(effective_volume() == 30);
     reset(); assert(pokemon_audio_init()); expected = pokemon_cry_find(1); inject = UINT16_MAX - 1;
     pokemon_audio_play(1); run_worker(); assert(audible_starts == 1 && samples_written == 320);
+    reset(); assert(pokemon_audio_init()); expected=pokemon_cry_find(25); package_enabled=true;
+    pokemon_audio_play(60001); run_worker();
+    assert(package_reads>1 && samples_written==expected->sample_count);
+    reset(); assert(pokemon_audio_init()); expected=pokemon_cry_find(25); package_enabled=true; package_read_failure=true;
+    pokemon_audio_play(60001); run_worker(); assert(package_reads==1 && samples_written==0 && volume==0);
+    reset(); assert(pokemon_audio_init()); expected=pokemon_cry_find(25); package_enabled=true; inject=UINT16_MAX;
+    pokemon_audio_play(60001); run_worker(); assert(samples_written==256 && package_reads==1);
     puts("Audio mapping, PCM integrity, volume, mute, cancellation and failures passed");
     return 0;
+}
+
+bool pokemon_content_cry_size(uint16_t id, uint32_t *n)
+{
+    if (!package_enabled || id!=60001) return false;
+    *n=(uint32_t)expected->sample_count; return true;
+}
+bool pokemon_content_cry_read(uint16_t id, uint32_t sample, void *out, size_t n)
+{
+    assert(package_enabled && id==60001 && n<=512 && n%2==0);
+    assert(sample+n/2<=expected->sample_count); ++package_reads;
+    if (package_read_failure) return false;
+    memcpy(out,expected->samples+sample,n); return true;
 }

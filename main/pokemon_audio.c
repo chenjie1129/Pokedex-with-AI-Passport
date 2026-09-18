@@ -1,5 +1,6 @@
 #include "pokemon_audio.h"
 #include "pokemon_cries.h"
+#include "pokemon_content_audio.h"
 #include "bsp_audio.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
@@ -31,15 +32,18 @@ static void audio_task(void *argument)
         uint16_t species_id;
         if (xQueueReceive(requests, &species_id, portMAX_DELAY) != pdTRUE) continue;
         const pokemon_cry_t *cry = pokemon_cry_find(species_id);
-        if (!ready || !cry || effective_volume() == 0) continue;
+        uint32_t pack_samples = 0;
+        bool packaged = pokemon_content_cry_size(species_id, &pack_samples);
+        size_t sample_count = packaged ? pack_samples : cry ? cry->sample_count : 0;
+        if (!ready || !sample_count || effective_volume() == 0) continue;
         uint16_t pending;
         if (xQueuePeek(requests, &pending, 0) == pdTRUE) continue;
         uint8_t playing_volume = effective_volume();
         bsp_audio_set_volume(playing_volume);
-        ESP_LOGI(TAG, "CRY_START species=%u samples=%u", species_id, (unsigned)cry->sample_count);
+        ESP_LOGI(TAG, "CRY_START species=%u samples=%u", species_id, (unsigned)sample_count);
         size_t offset = 0;
         bool failed = false;
-        while (offset < cry->sample_count) {
+        while (offset < sample_count) {
             if (xQueuePeek(requests, &pending, 0) == pdTRUE) break;
             const uint8_t next_volume = effective_volume();
             if (next_volume == 0) break;
@@ -47,9 +51,12 @@ static void audio_task(void *argument)
                 bsp_audio_set_volume(next_volume);
                 playing_volume = next_volume;
             }
-            size_t count = cry->sample_count - offset;
-            if (count > 320) count = 320;
-            memcpy(buffer, cry->samples + offset, count * sizeof(int16_t));
+            size_t count = sample_count - offset;
+            const size_t block = packaged ? 256 : 320;
+            if (count > block) count = block;
+            if (packaged) {
+                if (!pokemon_content_cry_read(species_id, offset, buffer, count * sizeof(int16_t))) { failed = true; break; }
+            } else memcpy(buffer, cry->samples + offset, count * sizeof(int16_t));
             if (bsp_audio_write(buffer, count * sizeof(int16_t)) != ESP_OK) {
                 failed = true;
                 break;
@@ -58,13 +65,13 @@ static void audio_task(void *argument)
         }
         /* Flush the six 240-frame DMA buffers with silence so the tail finishes
            and stale sound cannot reappear when unmuting the next request. */
-        if (offset < cry->sample_count || failed) bsp_audio_set_volume(0);
+        if (offset < sample_count || failed) bsp_audio_set_volume(0);
         memset(buffer, 0, sizeof(buffer));
         for (unsigned i = 0; i < 6; ++i)
             if (bsp_audio_write(buffer, sizeof(buffer)) != ESP_OK) { failed = true; break; }
         bsp_audio_set_volume(0);
         ESP_LOGI(TAG, "CRY_END species=%u complete=%u failed=%u", species_id,
-                 offset == cry->sample_count && !failed, failed);
+                 offset == sample_count && !failed, failed);
     }
 }
 

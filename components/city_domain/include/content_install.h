@@ -52,3 +52,7 @@ bool city_content_rollback(city_content_store_t *);
  * reject outstanding leases. Do not retain handles or assets after release. */
 const city_pack_t *city_content_acquire(city_content_store_t *);
 bool city_content_release(city_content_store_t *, const city_pack_t *);
+/* Boot-only USB staging path: independently authenticate already-written inactive
+ * bytes, then commit the journal. Never erases/writes either content slot. A torn
+ * host upload cannot replace active content. No live readers are permitted. */
+bool city_content_activate_staged(city_content_store_t *, unsigned slot, uint32_t bytes);

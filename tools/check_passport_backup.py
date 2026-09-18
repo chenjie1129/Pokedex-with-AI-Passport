@@ -13,6 +13,12 @@ EXPECTED = {
 }
 
 
+CONTENT = {
+    "content_a": (1, 0x40, 0x420000, 0x140000),
+    "content_b": (1, 0x40, 0x560000, 0x140000),
+    "content_ctl": (1, 0x41, 0x6a0000, 0x2000),
+}
+
 def check_backup(path):
     blob = Path(path).read_bytes()
     if len(blob) != 0x800000:
@@ -26,7 +32,7 @@ def check_backup(path):
         if label in found or flags != 0:
             raise ValueError('Unsupported duplicate or flagged partition')
         found[label] = (kind, subtype, address, size)
-    if found != EXPECTED:
+    if found not in (EXPECTED, {**EXPECTED, **CONTENT}):
         raise ValueError('Partition layout differs from the supported AI Passport layout; do not flash this app')
     if blob[0x10000] != 0xE9:
         raise ValueError('Expected an existing app in the factory partition')

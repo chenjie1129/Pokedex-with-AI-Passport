@@ -13,6 +13,9 @@
 #define CITY_BESTIARY_LEGACY_BYTES 156U
 #define CITY_BESTIARY_RECORD_BYTES 22U
 #define CITY_MAX_OWNED_POKEMON 160U
+/* Bounded discovered progress, independent of total installed catalog size. */
+#define CITY_MAX_PROGRESS_RECORDS 64U
+#define CITY_BESTIARY_STORAGE_MAX_BYTES (48U + CITY_MAX_PROGRESS_RECORDS * 22U + 160U * 32U + 4U)
 #define CITY_OWNED_POKEMON_BYTES 32U
 #define CITY_BESTIARY_HEADER_BYTES 48U
 #define CITY_BESTIARY_ENCODED_BYTES (CITY_BESTIARY_HEADER_BYTES + \
@@ -99,7 +102,7 @@ typedef struct {
 
 typedef struct {
     uint16_t schema_version;
-    city_creature_record_t records[CITY_SPECIES_COUNT];
+    city_creature_record_t records[CITY_MAX_PROGRESS_RECORDS];
     uint64_t last_settled_sequence;
     bool wild_cooldown_active;
     uint16_t buddy_species_id; /* Zero means no buddy selected. */
@@ -255,3 +258,6 @@ uint8_t city_friendship_band(uint8_t points);
 
 uint8_t city_companion_place_count(const city_owned_pokemon_t *);
 city_companion_invitation_t city_companion_invitation(const city_owned_pokemon_t *);
+
+/* Capacity check before admitting a previously unknown package species. */
+bool city_bestiary_can_discover(const city_bestiary_t *, uint16_t);

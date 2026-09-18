@@ -6,6 +6,7 @@ idf_component_register(
         "assets/city_font_20.c"
         "place_scan_coordinator.c"
         "pokemon_audio.c"
+        "pokemon_content.c"
         "assets/pokemon_cries.c"
         "assets/charmander_sprite.c"
         "assets/starter_sprites.c"
@@ -44,4 +45,14 @@ endif()
 option(CITY_PERSONALITY_SMOKE "Exercise individual personality without player-save mutations" OFF)
 if(CITY_PERSONALITY_SMOKE)
     target_compile_definitions(${COMPONENT_LIB} PRIVATE CITY_PERSONALITY_SMOKE=1)
+endif()
+
+option(CITY_CONTENT_SMOKE "Run no-save signed content workload on the device" OFF)
+set(CITY_CONTENT_SMOKE_MS "1800000" CACHE STRING "Content diagnostic duration in milliseconds")
+if(CITY_CONTENT_SMOKE)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE CITY_CONTENT_SMOKE=1 CITY_CONTENT_SMOKE_MS=${CITY_CONTENT_SMOKE_MS})
+endif()
+option(CITY_CONTENT_PERSIST_SMOKE "Verify package-only NVS in an isolated scratch namespace across reboot" OFF)
+if(CITY_CONTENT_PERSIST_SMOKE)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE CITY_CONTENT_PERSIST_SMOKE=1)
 endif()

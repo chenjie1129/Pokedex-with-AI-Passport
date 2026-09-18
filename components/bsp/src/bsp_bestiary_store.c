@@ -30,10 +30,10 @@ static esp_err_t encode_and_stage(
     const char *key,
     const city_bestiary_t *bestiary)
 {
-    uint8_t *encoded = malloc(CITY_BESTIARY_ENCODED_BYTES);
+    uint8_t *encoded = malloc(CITY_BESTIARY_STORAGE_MAX_BYTES);
     if (!encoded) return ESP_ERR_NO_MEM;
     size_t length = 0;
-    if (!city_bestiary_encode_sparse(bestiary, encoded, CITY_BESTIARY_ENCODED_BYTES, &length)) {
+    if (!city_bestiary_encode_sparse(bestiary, encoded, CITY_BESTIARY_STORAGE_MAX_BYTES, &length)) {
         free(encoded);
         return ESP_ERR_INVALID_ARG;
     }
@@ -47,8 +47,8 @@ static esp_err_t read_model(nvs_handle_t handle, const char *key, city_bestiary_
     size_t length = 0;
     esp_err_t err = nvs_get_blob(handle, key, NULL, &length);
     if (err != ESP_OK) return err;
-    if (length > CITY_BESTIARY_ENCODED_BYTES || length < 12) return ESP_ERR_INVALID_SIZE;
-    uint8_t *bytes = malloc(CITY_BESTIARY_ENCODED_BYTES);
+    if (length > CITY_BESTIARY_STORAGE_MAX_BYTES || length < 12) return ESP_ERR_INVALID_SIZE;
+    uint8_t *bytes = malloc(CITY_BESTIARY_STORAGE_MAX_BYTES);
     if (!bytes) return ESP_ERR_NO_MEM;
     err = nvs_get_blob(handle, key, bytes, &length);
     if (err != ESP_OK) { free(bytes); return err; }
@@ -99,13 +99,15 @@ save_upgrade:
     if (err == ESP_OK) err = nvs_commit(handle);
     if (err == ESP_OK) {
         city_bestiary_t *readback = malloc(sizeof(*readback));
-        uint8_t *expected = malloc(CITY_BESTIARY_ENCODED_BYTES);
-        uint8_t *actual = malloc(CITY_BESTIARY_ENCODED_BYTES);
+        uint8_t *expected = malloc(CITY_BESTIARY_STORAGE_MAX_BYTES);
+        uint8_t *actual = malloc(CITY_BESTIARY_STORAGE_MAX_BYTES);
         if (!readback || !expected || !actual) err = ESP_ERR_NO_MEM;
         if (err == ESP_OK) err = read_model(handle, store->blob_key, readback, NULL);
         if (err == ESP_OK) {
-            if (!city_bestiary_encode(next, expected) || !city_bestiary_encode(readback, actual) ||
-                memcmp(expected, actual, CITY_BESTIARY_ENCODED_BYTES) != 0) err = ESP_ERR_INVALID_STATE;
+            size_t expected_length = 0, actual_length = 0;
+            if (!city_bestiary_encode_sparse(next, expected, CITY_BESTIARY_STORAGE_MAX_BYTES, &expected_length) ||
+                !city_bestiary_encode_sparse(readback, actual, CITY_BESTIARY_STORAGE_MAX_BYTES, &actual_length) ||
+                expected_length != actual_length || memcmp(expected, actual, actual_length) != 0) err = ESP_ERR_INVALID_STATE;
         }
         free(actual);
         free(expected);

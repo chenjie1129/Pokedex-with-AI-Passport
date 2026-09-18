@@ -1,3 +1,7 @@
+#include "catalog_provider.h"
+static uint32_t s_bestiary_selection;
+static bool s_storage_capacity_full;
+
 #include "lvgl.h"
 #include "ui_fonts.h"
 #include "src/misc/lv_text_private.h"
@@ -34,7 +38,7 @@ static uint8_t s_companion_selection;
 static uint64_t s_encounter_sequence;
 static uint8_t s_visit_gain, s_visit_context;
 static bool s_companion_recovered;
-static uint8_t s_encounter_selection, s_bestiary_selection;
+static uint8_t s_encounter_selection;
 static uint16_t s_current_species_id;
 static city_creature_stats_t s_current_stats;
 static city_discovery_state_t s_encounter_previous_state;
@@ -66,6 +70,30 @@ static city_language_t visible_language(void) { return s_settings_draft.language
 static const char *tr(const char *english) { return ui_text(visible_language(), english); }
 static const char *species_name(const city_species_definition_t *definition)
 { return ui_species_name(visible_language(), definition->name); }
+static const city_species_definition_t *runtime_definition(uint16_t id)
+{
+    const city_species_definition_t *compiled=city_species_definition(id);
+    if (compiled) return compiled;
+    static city_species_definition_t extra;
+    extra=(city_species_definition_t){.species_id=id,.name="Mossbud",.description="A small original forest spirit.",
+        .element="Grass",.type_label="Grass",.type1=5,.base_hp=45,.base_attack=40,.base_defense=50,
+        .wild_eligible=true,.place_eligible=true};
+    return &extra;
+}
+static bool render_catalog_at(void *ctx,uint32_t i,city_species_definition_t *out)
+{
+    (void)ctx;
+    if (i>=1000) return false;
+    if (i<CITY_SPECIES_COUNT) *out=*CITY_CATALOG_DEFAULT.at(i);
+    else *out=*runtime_definition((uint16_t)(60001+i-CITY_SPECIES_COUNT));
+    return true;
+}
+static bool render_catalog_find(void *ctx,uint16_t id,city_species_definition_t *out)
+{
+    (void)ctx;
+    if (!city_species_definition(id) && (id<60001 || id>=60985)) return false;
+    *out=*runtime_definition(id);return true;
+}
 /* PRODUCTION */
 static uint16_t framebuffer[240 * 320], draw_buffer[240 * 20];
 static void flush(lv_display_t *d, const lv_area_t *a, uint8_t *pixels)
@@ -436,6 +464,18 @@ int main(int argc, char **argv)
         char name[80];snprintf(name,sizeof(name),"memory-last-page-%u",lang);snapshot(name,35);
         s_companion_instance_id=0;snprintf(name,sizeof(name),"memory-no-buddy-%u",lang);snapshot(name,35);
     }
+    const city_runtime_catalog_t large={NULL,1000,render_catalog_at,render_catalog_find};
+    assert(city_catalog_bind(&large));city_bestiary_init(&s_bestiary);s_bestiary_ready=true;
+    assert(city_bestiary_capture(&s_bestiary,1,60001,1,persist,NULL)==CITY_BESTIARY_APPLIED);
+    for (unsigned lang=0;lang<2;++lang) {
+        s_settings_draft.language=lang;
+        uint32_t cursors[]={0,16,252,256,996,1000};
+        for (unsigned n=0;n<6;++n) { char name[60];s_bestiary_selection=cursors[n];
+            snprintf(name,sizeof(name),"large-catalog-%u-%lu",lang,(unsigned long)cursors[n]);snapshot(name,3); }
+        s_bestiary_selection=16;char name[60];snprintf(name,sizeof(name),"package-detail-%u",lang);snapshot(name,4);
+    }
+    assert(city_catalog_bind(NULL));city_bestiary_init(&s_bestiary);
+    s_storage_capacity_full=true;snapshot("collection-full",21);s_storage_capacity_full=false;
     have_places = false; s_bestiary_ready = false;
     snapshot("passport-unavailable", false);
     puts("Production renders passed: text fit, glyphs, parent bounds, and no text overlaps");

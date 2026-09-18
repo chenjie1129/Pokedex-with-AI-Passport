@@ -17,13 +17,13 @@ static ui_state_t s_state;
 static uint64_t s_state_started_ms;
 static struct { uint64_t last_activity_ms; } s_pocket;
 static uint16_t s_current_species_id;
-static uint8_t s_bestiary_selection;
+static uint32_t s_bestiary_selection;
 static unsigned commands;
 static uint16_t last_id;
 static uint64_t now_ms(void) { return 1; }
 static void build_state(void) {}
 static void lv_obj_delete(lv_obj_t *obj) { (void)obj; }
-static uint16_t city_species_id_at(uint8_t i) { assert(i == 3); return 25; }
+static uint16_t city_species_runtime_id(uint32_t i) { assert(i == 3); return 25; }
 static void pokemon_audio_play(uint16_t id) { ++commands; last_id = id; }
 static void pokemon_audio_stop(void) { pokemon_audio_play(0); }
 /* PRODUCTION */

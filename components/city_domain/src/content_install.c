@@ -129,3 +129,13 @@ bool city_content_release(city_content_store_t *s, const city_pack_t *pack)
     if (!s || pack != &s->active || !s->leases) return false;
     --s->leases; return true;
 }
+
+bool city_content_activate_staged(city_content_store_t *s, unsigned slot, uint32_t bytes)
+{
+    if (!s || !s->ready || s->leases || slot > 1 || slot == (unsigned)s->active_slot ||
+        bytes > s->io.capacity || s->generation == UINT32_MAX) return false;
+    city_pack_t pack;
+    if (!city_pack_open(&pack, read_slot, &s->slots[slot], bytes, s->io.capacity, &s->crypto) ||
+        pack.revision <= s->high_revision || !s->policy.accept(s->policy.context, &pack)) return false;
+    return commit(s, slot, &pack);
+}

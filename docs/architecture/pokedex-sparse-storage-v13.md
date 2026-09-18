@@ -1,5 +1,7 @@
 # Stage 3 increment 5: sparse save storage
 
+**Current integration:** see [Stage 3 runtime](pokedex-stage3-runtime.md). The boundaries and measurements below describe the earlier increment.
+
 Implemented 2026-09-18. Storage format **13** omits undiscovered species and unused
 owned-copy slots. The gameplay model remains version 12 with its current compiled
 roster and 160-owned-copy bound. This is the durable-storage migration increment;

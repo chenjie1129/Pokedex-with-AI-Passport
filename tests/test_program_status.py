@@ -29,6 +29,31 @@ class ProgramStatusTests(unittest.TestCase):
         status['stages'][1]['progress_percent'] = 100
         with self.assertRaises(ValueError):
             validate_status(status)
+
+    def completed_stage3(self):
+        status = copy.deepcopy(self.status)
+        status['overall_status'] = 'waiting_for_product_gate'
+        status['current_stage'] = 3
+        stage = status['stages'][2]
+        stage.update(status='completed', progress_percent=100,
+                     gate_decision='automated_acceptance_passed_stage2_deferred')
+        stage['evidence'] = ['docs/verification/pokedex-stage3-device-2026-09-18.md']
+        return status
+
+    def test_completed_engineering_does_not_unlock_product_gate(self):
+        validate_status(self.completed_stage3())
+        for key, value in [('status', 'in_progress'), ('progress_percent', 99),
+                           ('gate_decision', 'passed'), ('evidence', [])]:
+            with self.subTest(key=key):
+                status = self.completed_stage3()
+                status['stages'][2][key] = value
+                with self.assertRaises(ValueError):
+                    validate_status(status)
+        status = self.completed_stage3()
+        status['current_stage'] = 4
+        status['stages'][3]['status'] = 'in_progress'
+        with self.assertRaises(ValueError):
+            validate_status(status)
         status = copy.deepcopy(self.status)
         status['stages'][3]['status'] = 'planned'
         with self.assertRaises(ValueError):

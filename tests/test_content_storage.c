@@ -9,8 +9,8 @@ static const esp_partition_t expected[] = {
     {.label="factory", .type=0, .subtype=0, .address=0x10000, .size=0x300000},
     {.label="cardid", .type=1, .subtype=2, .address=0x356000, .size=0x4000},
     {.label="recovery", .type=0, .subtype=0x20, .address=0x700000, .size=0x100000},
-    {.label="content_a", .type=1, .subtype=0x40, .address=0x360000, .size=0x1a0000},
-    {.label="content_b", .type=1, .subtype=0x40, .address=0x500000, .size=0x1a0000},
+    {.label="content_a", .type=1, .subtype=0x40, .address=0x420000, .size=0x140000},
+    {.label="content_b", .type=1, .subtype=0x40, .address=0x560000, .size=0x140000},
     {.label="content_ctl", .type=1, .subtype=0x41, .address=0x6a0000, .size=0x2000}
 };
 struct test_iterator { unsigned index; };

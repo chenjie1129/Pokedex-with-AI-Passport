@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define CAPACITY 4096U
+#define CAPACITY 16384U
 typedef struct { uint8_t *data; uint32_t size; } source_t;
 typedef struct {
     uint8_t slots[2][CAPACITY], records[2][CITY_CONTENT_RECORD_BYTES];
@@ -91,16 +91,21 @@ static void active(city_content_store_t *s, uint32_t revision)
     assert(row.species_id == 1); assert(city_content_release(s, p));
 }
 #include "content_compat_checks.h"
+#include "runtime_content_checks.h"
 
 int main(int argc, char **argv)
 {
-    assert(argc == 3 || argc == 5 || argc == 8);
+    assert(argc == 3 || argc == 4 || argc == 5 || argc == 8);
     source_t key = load(argv[1]), first = load(argv[2]);
     bsp_content_crypto_t backend;
     bool valid_key = bsp_content_crypto_init(&backend, key.data, key.size);
     city_pack_crypto_t crypto = bsp_content_crypto_callbacks(&backend);
     city_pack_t p;
     bool valid = valid_key && city_pack_open(&p, source_read, &first, first.size, CAPACITY, &crypto);
+    if (argc == 5 && !strcmp(argv[3],"--runtime")) {
+        source_t changed=load(argv[4]);check_runtime_content(&crypto,first,changed);free(changed.data);
+        bsp_content_crypto_free(&backend);free(key.data);free(first.data);return 0;
+    }
     if (argc == 3) {
         bsp_content_crypto_free(&backend); free(key.data); free(first.data);
         printf("%s\n", valid ? "verified" : "rejected"); return valid ? 0 : 1;
@@ -182,6 +187,30 @@ int main(int argc, char **argv)
     store.generation = UINT32_MAX; before = f.calls;
     assert(!city_content_install(&store, source_read, &third, third.size));
     assert(!city_content_rollback(&store)); assert(f.calls == before);
+    /* USB staged activation never rewrites either slot. Torn uploads and journal
+     * interruptions preserve the prior authenticated package. */
+    for (uint32_t cut=0; cut<third.size; ++cut) {
+        f=baseline; memset(f.slots[0],0xff,CAPACITY); memcpy(f.slots[0],third.data,cut);
+        restart(&store,&f,&crypto);
+        assert(!city_content_activate_staged(&store,0,third.size));
+        restart(&store,&f,&crypto); active(&store,2);
+        assert(!memcmp(f.slots[1],baseline.slots[1],CAPACITY));
+    }
+    for (int kind=3;kind<=4;++kind) for (int cut=0;cut<=(int)CITY_CONTENT_RECORD_BYTES;++cut) {
+        f=baseline; memset(f.slots[0],0xff,CAPACITY); memcpy(f.slots[0],third.data,third.size);
+        restart(&store,&f,&crypto); f.fault_kind=kind; f.cut=cut;
+        assert(!city_content_activate_staged(&store,0,third.size));
+        restart(&store,&f,&crypto);
+        assert(store.active.revision==2 || store.active.revision==3);
+        assert(!memcmp(f.slots[1],baseline.slots[1],CAPACITY));
+    }
+    f=baseline; memset(f.slots[0],0xff,CAPACITY); memcpy(f.slots[0],third.data,third.size);
+    restart(&store,&f,&crypto);
+    lease=city_content_acquire(&store); assert(lease);
+    assert(!city_content_activate_staged(&store,0,third.size));
+    assert(city_content_release(&store,lease));
+    assert(city_content_activate_staged(&store,0,third.size)); active(&store,3);
+    restart(&store,&f,&crypto); active(&store,3);
     printf("P-256 adapter + installer: %d I/O failures, %u torn mutations, leases, rollback, reboot passed\n", operations, cuts);
     bsp_content_crypto_free(&backend); free(key.data); free(first.data); free(second.data); free(third.data);
     return 0;

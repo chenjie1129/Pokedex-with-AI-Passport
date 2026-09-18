@@ -24,7 +24,8 @@ def require(condition, message):
 
 def validate_status(status):
     require(status.get("schema_version") == 1, "Unsupported status schema")
-    require(status.get("overall_status") == "active", "Program is not active")
+    waiting = status.get("overall_status") == "waiting_for_product_gate"
+    require(waiting or status.get("overall_status") == "active", "Invalid program state")
     require(status.get("branch") in {"feat/pokemon-pokedex", "main"}, "Wrong publication branch")
     require(bool(status.get("accountable")), "Missing accountable owner")
     stages = status.get("stages")
@@ -36,7 +37,17 @@ def validate_status(status):
     in_progress = [
         stage["id"] for stage in stages if stage.get("status") == "in_progress"
     ]
-    require(in_progress == [current], "Exactly the current stage must be active")
+    if waiting:
+        require(current == 3 and not in_progress,
+                "Only completed Stage 3 may wait for the product gate")
+        completed = stages[2]
+        require(completed.get("status") == "completed" and completed.get("progress_percent") == 100
+                and completed.get("gate_decision") == "automated_acceptance_passed_stage2_deferred",
+                "Stage 3 automated acceptance must pass before waiting for the product gate")
+        require("docs/verification/pokedex-stage3-device-2026-09-18.md" in completed.get("evidence", []),
+                "Completed Stage 3 needs its device acceptance report")
+    else:
+        require(in_progress == [current], "Exactly the current stage must be active")
 
     previous_date = None
     allowed_statuses = {"completed", "in_progress", "planned", "blocked", "verification_deferred"}

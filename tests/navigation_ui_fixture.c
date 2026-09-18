@@ -1,3 +1,7 @@
+#include "catalog_provider.h"
+static uint32_t s_bestiary_selection;
+static bool s_storage_capacity_full;
+#define runtime_definition city_species_definition
 #include "bestiary_service.h"
 #include "capture_engine.h"
 #include "game_loop.h"
@@ -35,7 +39,7 @@ static uint32_t s_companion_instance_id, s_visit_buddy_id;
 static uint8_t s_visit_context, s_visit_gain;
 static uint8_t s_companion_selection, s_personality_draw;
 static bool s_companion_recovered;
-static uint8_t s_attempts, s_home_selection, s_bestiary_selection, s_passport_page,
+static uint8_t s_attempts, s_home_selection, s_passport_page,
     s_settings_selection, s_encounter_selection, s_evolution_selection, s_action_selection, s_release_selection;
 static bool s_settings_editing, s_settings_error, s_settings_saving, s_save_in_progress,
     s_throw_hit, s_bestiary_ready = true, fail_store;

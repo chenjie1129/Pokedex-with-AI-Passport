@@ -1,5 +1,7 @@
 # Stage 3 increment 4: bounded catalog views and save compatibility
 
+**Current integration:** see [Stage 3 runtime](pokedex-stage3-runtime.md). The boundaries and measurements below describe the earlier increment.
+
 Implemented 2026-09-18. **Host-tested, ESP32-C3 cross-compiled; application UI,
 audio and encounter loops still use the compiled catalog.** No content pack was
 installed or activated on hardware. Stage 2 physical verification remains deferred.

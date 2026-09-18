@@ -16,6 +16,7 @@ add_library(city_domain STATIC
     ../components/city_domain/src/content_install.c
     ../components/city_domain/src/catalog_view.c
     ../components/city_domain/src/content_compat.c
+    ../components/city_domain/src/content_runtime.c
     ../components/city_domain/src/capture_engine.c
     ../components/city_domain/src/encounter_selector.c
     ../components/city_domain/src/game_loop.c
@@ -179,3 +180,6 @@ if(CITY_ENABLE_SANITIZERS AND CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")
     target_compile_options(bestiary_migration_audit PRIVATE -fsanitize=address,undefined)
     target_link_options(bestiary_migration_audit PRIVATE -fsanitize=address,undefined)
 endif()
+add_city_test(test_runtime_progress test_runtime_progress.c)
+add_test(NAME test_content_install_plan
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_content_install_plan.py")
