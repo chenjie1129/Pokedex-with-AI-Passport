@@ -1,6 +1,6 @@
 # Pokédex 六阶段实施计划
 
-状态：执行中
+状态：阶段 3 工程验收完成；等待产品门槛
 启动日期：2026-09-15
 发布分支：`main`
 项目负责人（A）：`@chenjie1129`
@@ -54,7 +54,7 @@ FxxW 可以实施和验证自动化工作，但不能代替人工完成产品门
 4. 相关 schema、API 和迁移有失败路径测试；
 5. 隐私规则没有回退；
 6. firmware build 与真机测试单独报告；
-7. Gate Review 由 Accountable DRI 批准；
+7. Gate Review 由 Accountable DRI 批准；2026-09-18 负责人明确委托阶段 3 自动化工程验收及发布，人工验收和 P0 产品门槛仍由负责人批准；
 8. 后续阶段的输入合同已固定。
 
 ## 3. 阶段 1：P0 基线与治理
@@ -172,24 +172,24 @@ FxxW 可以实施和验证自动化工作，但不能代替人工完成产品门
 | 密钥与签名审批 | `@chenjie1129` |
 | 真机性能 | 人工设备测试人 |
 
-目标完成时间：2026-10-21。已按 2026-09-17 负责人例外决定启动开发；
-第一增量是 Host 内容包格式、签名和校验，设备加载/回滚/缓存另行验证。
+目标完成时间：2026-10-21。2026-09-18 按负责人授权完成阶段 3 工程验收。
+[验收报告](../verification/pokedex-stage3-device-2026-09-18.md) 记录自动化真机证据；阶段 2 延期的人工检查仍未完成。
 
 ### 工作项
 
 - [x] 第一增量：Host compact binary container、Ed25519 签名和流式 SHA-256 校验；
 - [x] Typed metadata/asset profile 与有界 C reader，Host 真签名校验和 ESP32-C3 编译；
 - [x] P-256 设备 crypto adapter、受保护分区 adapter 与双 slot activation/rollback；Host 故障注入和 ESP32-C3 编译通过；
-- [ ] production trusted key、分区迁移、实际 cache 与运行时资源验证；
-- [ ] 将签名校验接入设备包验证与安装路径；
+- [x] production P-256 trusted key、受保护分区扩展、实际 cache 与运行时资源验证；
+- [x] 签名校验接入真实设备 USB 安装、启动验证和双 slot activation；
 - [x] compiled/package catalog copy API、四行分页与租约生命周期，Host 验证通过；
 - [x] schema-12 存档兼容性 gate 接入 install/boot/rollback；
 - [x] 稀疏 wire format 13 与 NVS 持久化迁移，41 项 Host 测试及真机 app-only 安装/全量回读通过；20 只持有副本完整保留，重启不重复迁移（[证据](../verification/pokedex-sparse-device-2026-09-18.md)）；
-- [ ] 目录驱动的有界稀疏运行时模型，再接入 UI/audio/encounter；
-- [x] Host 模拟验证 active/rollback journal 切换；真机断电验证未完成；
-- [x] 四条 metadata + 四块 512-byte asset LRU，Host 淘汰/失败测试通过；真机接入与 RAM 测量未完成；
+- [x] 目录驱动的有界稀疏运行时模型，接入 UI/audio/encounter 和真实 NVS 重启持久化；
+- [x] Host 验证所有中断写入位置；真机拒绝部分上传、错误签名，损坏 active slot 后回退。实体断电验证仍属于阶段 2 延期项；
+- [x] UI/audio 独立的四条 metadata + 四块 512-byte asset LRU；真机逐页及资产缓存验证、RAM 和 stack 测量通过；
 - [x] Host 100、1,000、10,000 条合成容器校验与有界 Python 分配测试；
-- [ ] 设备分页和缓存淘汰测试（Host 容器测试不能替代）；
+- [x] 设备 1,000 条合成目录分页、缓存淘汰、图像/声音及 30 分钟连续负载通过；16 条正常内容已恢复，20 只原有副本完整保留；
 - 保持 recovery、cardid 和 NVS 分区合同。
 
 ### 验收标准
@@ -329,11 +329,11 @@ FxxW 可以实施和验证自动化工作，但不能代替人工完成产品门
 
 ## 10. 当前状态
 
-截至 2026-09-17：
+截至 2026-09-18：
 
 - 阶段 1：Host 范围 `COMPLETED`；
 - 阶段 2：`VERIFICATION_DEFERRED`，实现和已有证据保留，剩余真机验证未完成；
-- 阶段 3：`IN_PROGRESS`，负责人允许带验证欠项开始开发；
+- 阶段 3：工程范围 `COMPLETED`，43 项 Host、render、firmware 和自动化真机验收通过；阶段 2 延期项未被替代；
 - 阶段 4–6：`BLOCKED`，继续等待 P0 gate 和容量条件。
 
 main 合并/发布不代表固件发布验收。原阶段 2 工作项中的未勾选项继续有效。

@@ -3,7 +3,7 @@
   "program_id": "pokedex-six-stage-evolution",
   "updated_at": "2026-09-18",
   "branch": "main",
-  "overall_status": "active",
+  "overall_status": "waiting_for_product_gate",
   "accountable": "@chenjie1129",
   "execution_owner": "FxxW",
   "current_stage": 3,
@@ -85,8 +85,8 @@
     {
       "id": 3,
       "name": "Signed content package and bounded cache",
-      "status": "in_progress",
-      "progress_percent": 50,
+      "status": "completed",
+      "progress_percent": 100,
       "owner": "@chenjie1129",
       "target_date": "2026-10-21",
       "prerequisites": [
@@ -110,10 +110,15 @@
         "test_content_compat",
         "docs/architecture/pokedex-sparse-storage-v13.md",
         "test_sparse_bestiary",
-        "docs/verification/pokedex-sparse-device-2026-09-18.md"
+        "docs/verification/pokedex-sparse-device-2026-09-18.md",
+        "docs/architecture/pokedex-stage3-runtime.md",
+        "test_runtime_progress",
+        "test_content_install_plan",
+        "docs/verification/pokedex-stage3-device-2026-09-18.md"
       ],
-      "gate_decision": "development_authorized_with_stage2_verification_deferred",
-      "next_action": "Sparse storage format 13 passed 41 host tests, a clean ESP32-C3 build, app-only device installation, full flash readback and exact preservation of all 20 owned copies. Repeat boot leaves NVS unchanged. The in-memory model is still the compiled roster; next implement catalog-dependent sparse progress before enabling package-only captures and UI/audio/encounter integration. Trust provisioning and content-partition migration remain unfinished. Stage 2 acceptance stays deferred."
+      "gate_decision": "automated_acceptance_passed_stage2_deferred",
+      "next_action": "Stage 3 engineering acceptance passed: 43 host targets, production-derived renders, clean ESP32-C3 firmware, 1000-entry 30-minute device workload, real NVS reboot, controlled failed updates/fallback, and full protected-byte/save audit. Normal firmware and two baseline signed packs are installed. Resume deferred Stage 2 physical checks and validate repeat-carry value before Stage 4; no cloud stage is authorized.",
+      "completion_authority": "2026-09-18 owner instruction: finish Stage 3 autonomously, pass all tests, publish all local changes, and verify the connected device. This delegates engineering verification; it is not manual acceptance or P0 product approval."
     },
     {
       "id": 4,
@@ -135,7 +140,8 @@
       "gate_decision": "blocked",
       "blocked_by": [
         "P0 product gate",
-        "Stage 3 acceptance"
+        "Deferred Stage 2 physical acceptance",
+        "Public content licensing decision"
       ]
     },
     {

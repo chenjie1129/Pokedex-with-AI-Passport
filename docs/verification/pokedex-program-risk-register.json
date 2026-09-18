@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "program_id": "pokedex-six-stage-evolution",
-  "updated_at": "2026-09-17",
+  "updated_at": "2026-09-18",
   "review_cadence": "weekly Monday and every stage gate",
   "risks": [
     {
@@ -23,15 +23,15 @@
       "id": "R-002",
       "title": "Catalog growth can overflow the factory partition",
       "severity": "high",
-      "probability": "high",
+      "probability": "medium",
       "owner": "@chenjie1129",
       "affected_stages": [
         2,
         3
       ],
       "trigger": "Factory headroom falls below 256 KiB",
-      "mitigation": "Stop adding compiled assets and require signed content packages or approved compression",
-      "status": "open"
+      "mitigation": "Content updates use signed 1.25 MiB slots. The clean Stage 3 app leaves 291456 bytes in the factory partition, only 29312 above the 256 KiB reserve. Keep new assets out of the compiled app; package capacity still bounds authored content.",
+      "status": "monitoring"
     },
     {
       "id": "R-003",
@@ -40,10 +40,11 @@
       "probability": "medium",
       "owner": "FxxW",
       "affected_stages": [
-        2
+        2,
+        3
       ],
       "trigger": "Old catalog count differs from the current compiled catalog",
-      "mitigation": "Decode by stable species ID, initialize missing records, commit and read back before UI publication",
+      "mitigation": "Stable-ID sparse saves, authenticated pack compatibility, fixed 64-record progress and 160-copy bounds. Stage 3 real package-only NVS reboot and exact preservation of all prior player values passed; deferred Stage 2 physical checks remain visible.",
       "status": "mitigating"
     },
     {
@@ -72,8 +73,8 @@
         3
       ],
       "trigger": "No current firmware size, minimum heap, DMA block, or physical-device trace",
-      "mitigation": "Record existing clean build and idle/reset evidence; track unfinished interactive heap and physical checks under the explicit 2026-09-17 owner deferral. Development/main publication is authorized; full device acceptance remains unverified.",
-      "status": "open"
+      "mitigation": "Stage 3 now records clean firmware size, 17/1000-entry activation heap, a 30-minute 1000-entry render/audio/cache workload, stack watermark, real NVS reboot and full flash readback. Two-hour interactive and physical acceptance remain unfinished under the Stage 2 deferral.",
+      "status": "mitigating"
     },
     {
       "id": "R-006",

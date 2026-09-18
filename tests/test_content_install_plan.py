@@ -6,10 +6,13 @@ import re
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
+from types import SimpleNamespace
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT/'tools'))
 import plan_content_install as planner
 from check_passport_backup import EXPECTED,CONTENT
 import pokedex_content_pack as pack
+import install_content_usb as installer
 
 def table(entries):
     rows=b''.join(struct.pack('<HBBII16sI',0x50aa,*entry[:2],*entry[2:],name.encode(),0)
@@ -17,6 +20,24 @@ def table(entries):
     return (rows+b'\xeb\xeb'+b'\xff'*14+hashlib.md5(rows).digest()).ljust(3072,b'\xff')
 
 class InstallPlan(unittest.TestCase):
+    def test_usb_reset_deasserts_dtr_before_boot_capture(self):
+        events=[]
+        class Port:
+            def __init__(self,*args,**kwargs):events.append('open')
+            def __enter__(self):return self
+            def __exit__(self,*args):events.append('close')
+            def setDTR(self,value):events.append(('dtr',value))
+            def reset_input_buffer(self):events.append('clear')
+            def read(self,size):events.append('read');return b'boot'
+        def reset(port,uses_usb):
+            self.assertTrue(uses_usb)
+            return lambda: events.append('reset')
+        with patch.dict(sys.modules,{'serial':SimpleNamespace(Serial=Port),
+                                     'esptool.reset':SimpleNamespace(HardReset=reset)}), \
+             patch.object(installer.time,'monotonic',side_effect=[0,0,21]):
+            self.assertEqual(installer.capture_boot('fixture'),b'boot')
+        self.assertEqual(events,['open',('dtr',False),'clear','reset','read','close'])
+
     def test_public_trust_is_identical_in_publisher_and_device(self):
         raw=pack.check_key(planner.TRUST,private=False,algorithm=pack.P256)
         self.assertEqual(raw,(ROOT/'content/trust/owner-p256-public.bin').read_bytes())

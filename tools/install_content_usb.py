@@ -15,6 +15,19 @@ import sys
 import time
 from plan_content_install import plan
 
+def capture_boot(port_name, duration=20):
+    import serial
+    from esptool.reset import HardReset
+    with serial.Serial(port_name,115200,timeout=.2) as port:
+        # USB Serial/JTAG must leave DTR deasserted before the RTS reset pulse.
+        # Opening with pyserial's default DTR can otherwise yield no boot output.
+        port.setDTR(False)
+        port.reset_input_buffer()
+        HardReset(port,uses_usb=True)()
+        start=time.monotonic();boot=bytearray()
+        while time.monotonic()-start<duration:boot.extend(port.read(8192))
+    return boot
+
 
 def install(args):
     directory=args.backup_directory.resolve();directory.mkdir(parents=True,exist_ok=False);directory.chmod(0o700)
@@ -46,12 +59,9 @@ def install(args):
         if original[cursor:start]!=readback[cursor:start]:raise ValueError('Protected flash changed')
         cursor=end
     if original[cursor:]!=readback[cursor:]:raise ValueError('Protected flash changed')
-    import serial
-    from esptool.reset import HardReset
-    with serial.Serial(args.port,115200,timeout=.2) as port:
-        HardReset(port,uses_usb=True)();start=time.monotonic();boot=bytearray()
-        while time.monotonic()-start<20:boot.extend(port.read(8192))
+    boot=capture_boot(args.port)
     (directory/'boot.log').write_bytes(boot)
+    if not boot:raise ValueError('No boot output received; inspect USB reset/connection and retain the verified readback')
     if b'panic' in boot or b'Guru Meditation' in boot:raise ValueError('Device boot failed; retain backup and logs')
     if args.content:
         revision=int.from_bytes(args.content.read_bytes()[12:16],'little')

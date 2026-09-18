@@ -45,6 +45,9 @@ input locked until it publishes a result.
 The container supports up to 10,000 entries, tested on the host. Physical pack
 capacity is **1,310,720 bytes per slot**; asset sizes determine the usable count.
 A 1,000-entry synthetic pack is a resource test, not 1,000 newly authored Pokémon.
+The current 16-species pack occupies 1,021,188 bytes, leaving 289,532 bytes per
+slot for additional metadata/media. The demonstrated extra full-size species
+costs 46,158 bytes; that asset size would allow six more entries in this layout.
 
 ## Storage migration and protection
 
@@ -86,7 +89,7 @@ Build a pack from the existing exact generated artwork and hash-verified cries:
 
 ```sh
 python3 tools/build_builtin_pack.py /private/path/pack-build \
-  --private-key secrets/content-signing.pem --revision 12
+  --private-key secrets/content-signing.pem --revision 13
 ```
 
 For additional authored species, use `tools/encode_pokedex_content.py`, then
@@ -126,7 +129,8 @@ higher revision; it never lowers the high-water revision.
 
 Stage 3 automated acceptance covers host faults, production-derived renders,
 ESP32-C3 compilation, connected-device verification/activation, package-only
-in-memory gameplay and serialization, protected-byte readback, and a sustained
+in-memory gameplay and serialization, isolated real NVS persistence across reboot,
+protected-byte readback, and a sustained
 no-player-save workload. This does not turn Stage 2's deferred physical buttons,
 subjective audio, carry, power-loss or two-hour interactive acceptance into passes.
 See the final device report for exact tested commits, images, timings and scope.

@@ -69,7 +69,9 @@ class CompatibilityTests(unittest.TestCase):
             target=root/'content.pack';pack.build_pack(recipe,key,target,pack.P256)
             # A legitimately signed update must not rewrite a discovered package's traits.
             changed_meta=root/'60001-1'
-            row['hp']+=1;changed_meta.write_bytes(typed.metadata(row))
+            # Lowering the base still leaves the saved individual within its
+            # valid stats range; rejection must come from the update policy.
+            row['hp']-=1;changed_meta.write_bytes(typed.metadata(row))
             changed=root/'changed.pack';pack.build_pack(recipe,key,changed,pack.P256)
             result=subprocess.run([CLI,str(rawkey),str(target),'--runtime',str(changed)],capture_output=True,text=True)
             self.assertEqual(result.returncode,0,result.stdout+result.stderr)
